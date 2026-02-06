@@ -1,0 +1,28 @@
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Card, CardContent } from "@/components/ui/card";
+import { Receipt } from "lucide-react";
+
+export default function Transactions() {
+  return (
+    <AppLayout>
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Transactions</h1>
+          <p className="text-muted-foreground">
+            View and manage your transactions
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-medium mb-2">No transactions yet</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-sm">
+              Add transactions manually or connect your bank account to import them automatically.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </AppLayout>
+  );
+}
