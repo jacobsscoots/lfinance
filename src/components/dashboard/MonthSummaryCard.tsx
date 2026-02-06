@@ -1,14 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowDownLeft, ArrowUpRight, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
+import { useMonthSummary } from "@/hooks/useDashboardData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function MonthSummaryCard() {
   const currentMonth = format(new Date(), "MMMM yyyy");
+  const { data, isLoading } = useMonthSummary();
   
-  // Placeholder data - will be connected to actual data later
-  const income = 2500;
-  const outgoings = 1850;
-  const net = income - outgoings;
+  const income = data?.income || 0;
+  const outgoings = data?.outgoings || 0;
+  const net = data?.net || 0;
 
   return (
     <Card className="overflow-hidden">
@@ -28,9 +30,13 @@ export function MonthSummaryCard() {
               </div>
               <span className="text-sm text-muted-foreground">Income</span>
             </div>
-            <span className="font-semibold text-success">
-              £{income.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
-            </span>
+            {isLoading ? (
+              <Skeleton className="h-5 w-24" />
+            ) : (
+              <span className="font-semibold text-success">
+                £{income.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+              </span>
+            )}
           </div>
 
           {/* Outgoings */}
@@ -41,18 +47,26 @@ export function MonthSummaryCard() {
               </div>
               <span className="text-sm text-muted-foreground">Outgoings</span>
             </div>
-            <span className="font-semibold text-destructive">
-              -£{outgoings.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
-            </span>
+            {isLoading ? (
+              <Skeleton className="h-5 w-24" />
+            ) : (
+              <span className="font-semibold text-destructive">
+                -£{outgoings.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+              </span>
+            )}
           </div>
 
           {/* Net position */}
           <div className="pt-4 border-t">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Net position</span>
-              <span className={`text-lg font-bold ${net >= 0 ? "text-success" : "text-destructive"}`}>
-                {net >= 0 ? "+" : "-"}£{Math.abs(net).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
-              </span>
+              {isLoading ? (
+                <Skeleton className="h-7 w-28" />
+              ) : (
+                <span className={`text-lg font-bold ${net >= 0 ? "text-success" : "text-destructive"}`}>
+                  {net >= 0 ? "+" : "-"}£{Math.abs(net).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+                </span>
+              )}
             </div>
           </div>
         </div>
