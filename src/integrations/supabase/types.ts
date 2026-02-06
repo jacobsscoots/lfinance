@@ -18,9 +18,12 @@ export type Database = {
         Row: {
           account_type: string | null
           balance: number
+          connection_id: string | null
           created_at: string
+          external_id: string | null
           id: string
           is_primary: boolean | null
+          last_synced_at: string | null
           name: string
           updated_at: string
           user_id: string
@@ -28,9 +31,12 @@ export type Database = {
         Insert: {
           account_type?: string | null
           balance?: number
+          connection_id?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
           is_primary?: boolean | null
+          last_synced_at?: string | null
           name: string
           updated_at?: string
           user_id: string
@@ -38,10 +44,60 @@ export type Database = {
         Update: {
           account_type?: string | null
           balance?: number
+          connection_id?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
           is_primary?: boolean | null
+          last_synced_at?: string | null
           name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "bank_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_connections: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          provider: string
+          refresh_token: string | null
+          status: string
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          provider?: string
+          refresh_token?: string | null
+          status?: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          provider?: string
+          refresh_token?: string | null
+          status?: string
+          token_expires_at?: string | null
           updated_at?: string
           user_id?: string
         }
