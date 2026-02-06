@@ -1,37 +1,11 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Settings as SettingsIcon, User, Palette, CreditCard, Tag, CalendarDays } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { User, Palette, CreditCard, Tag, CalendarDays, Package, Target } from "lucide-react";
+import { ProductSettings } from "@/components/settings/ProductSettings";
+import { NutritionTargetSettings } from "@/components/settings/NutritionTargetSettings";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Settings() {
-  const settingsSections = [
-    { 
-      title: "Account", 
-      description: "Manage your profile and preferences",
-      icon: User 
-    },
-    { 
-      title: "Appearance", 
-      description: "Customize the app theme and display",
-      icon: Palette 
-    },
-    { 
-      title: "Bank Accounts", 
-      description: "Add, edit, or remove bank accounts",
-      icon: CreditCard 
-    },
-    { 
-      title: "Categories", 
-      description: "Manage transaction categories",
-      icon: Tag 
-    },
-    { 
-      title: "Payday Settings", 
-      description: "Configure your pay cycle rules",
-      icon: CalendarDays 
-    },
-  ];
-
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
@@ -42,21 +16,74 @@ export default function Settings() {
           </p>
         </div>
 
-        <div className="grid gap-4">
-          {settingsSections.map((section) => (
-            <Card key={section.title} className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="flex items-center gap-4 py-4">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <section.icon className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-medium">{section.title}</h3>
-                  <p className="text-sm text-muted-foreground">{section.description}</p>
-                </div>
+        <Tabs defaultValue="nutrition" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto">
+            <TabsTrigger value="nutrition" className="flex items-center gap-2">
+              <Target className="h-4 w-4" />
+              <span className="hidden sm:inline">Nutrition</span>
+            </TabsTrigger>
+            <TabsTrigger value="products" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Products</span>
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="flex items-center gap-2">
+              <Tag className="h-4 w-4" />
+              <span className="hidden sm:inline">Categories</span>
+            </TabsTrigger>
+            <TabsTrigger value="payday" className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              <span className="hidden sm:inline">Payday</span>
+            </TabsTrigger>
+            <TabsTrigger value="account" className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Account</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="nutrition">
+            <NutritionTargetSettings />
+          </TabsContent>
+
+          <TabsContent value="products">
+            <ProductSettings />
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Tag className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-medium mb-2">Transaction Categories</h3>
+                <p className="text-sm text-muted-foreground text-center max-w-sm">
+                  Category management coming soon. Your default categories are already set up.
+                </p>
               </CardContent>
             </Card>
-          ))}
-        </div>
+          </TabsContent>
+
+          <TabsContent value="payday">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <CalendarDays className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-medium mb-2">Payday Settings</h3>
+                <p className="text-sm text-muted-foreground text-center max-w-sm">
+                  Configure your pay cycle rules to help with bill forecasting.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="account">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-medium mb-2">Account Settings</h3>
+                <p className="text-sm text-muted-foreground text-center max-w-sm">
+                  Manage your profile, email, and account preferences.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );

@@ -234,42 +234,117 @@ export type Database = {
         }
         Relationships: []
       }
+      meal_plan_items: {
+        Row: {
+          created_at: string
+          id: string
+          is_locked: boolean
+          meal_plan_id: string
+          meal_type: string
+          product_id: string
+          quantity_grams: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_locked?: boolean
+          meal_plan_id: string
+          meal_type: string
+          product_id: string
+          quantity_grams?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_locked?: boolean
+          meal_plan_id?: string
+          meal_type?: string
+          product_id?: string
+          quantity_grams?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plan_items_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_plan_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meal_plans: {
         Row: {
           breakfast: string | null
+          breakfast_status: string
           created_at: string
           dinner: string | null
+          dinner_status: string
+          eating_out_breakfast_calories: number | null
+          eating_out_dinner_calories: number | null
+          eating_out_lunch_calories: number | null
+          eating_out_snack_calories: number | null
           grocery_cycle_id: string | null
           id: string
           lunch: string | null
+          lunch_status: string
           meal_date: string
           notes: string | null
+          snack_status: string
           snacks: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           breakfast?: string | null
+          breakfast_status?: string
           created_at?: string
           dinner?: string | null
+          dinner_status?: string
+          eating_out_breakfast_calories?: number | null
+          eating_out_dinner_calories?: number | null
+          eating_out_lunch_calories?: number | null
+          eating_out_snack_calories?: number | null
           grocery_cycle_id?: string | null
           id?: string
           lunch?: string | null
+          lunch_status?: string
           meal_date: string
           notes?: string | null
+          snack_status?: string
           snacks?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           breakfast?: string | null
+          breakfast_status?: string
           created_at?: string
           dinner?: string | null
+          dinner_status?: string
+          eating_out_breakfast_calories?: number | null
+          eating_out_dinner_calories?: number | null
+          eating_out_lunch_calories?: number | null
+          eating_out_snack_calories?: number | null
           grocery_cycle_id?: string | null
           id?: string
           lunch?: string | null
+          lunch_status?: string
           meal_date?: string
           notes?: string | null
+          snack_status?: string
           snacks?: string | null
           updated_at?: string
           user_id?: string
@@ -283,6 +358,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      products: {
+        Row: {
+          calories_per_100g: number
+          carbs_per_100g: number
+          created_at: string
+          fat_per_100g: number
+          fixed_portion_grams: number | null
+          id: string
+          ignore_macros: boolean
+          name: string
+          pack_size_grams: number | null
+          price: number
+          product_type: string
+          protein_per_100g: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories_per_100g?: number
+          carbs_per_100g?: number
+          created_at?: string
+          fat_per_100g?: number
+          fixed_portion_grams?: number | null
+          id?: string
+          ignore_macros?: boolean
+          name: string
+          pack_size_grams?: number | null
+          price?: number
+          product_type?: string
+          protein_per_100g?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calories_per_100g?: number
+          carbs_per_100g?: number
+          created_at?: string
+          fat_per_100g?: number
+          fixed_portion_grams?: number | null
+          id?: string
+          ignore_macros?: boolean
+          name?: string
+          pack_size_grams?: number | null
+          price?: number
+          product_type?: string
+          protein_per_100g?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       transactions: {
         Row: {
@@ -353,6 +479,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_nutrition_settings: {
+        Row: {
+          carbs_target_grams: number | null
+          created_at: string
+          daily_calorie_target: number | null
+          fat_target_grams: number | null
+          id: string
+          mode: string
+          protein_target_grams: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          carbs_target_grams?: number | null
+          created_at?: string
+          daily_calorie_target?: number | null
+          fat_target_grams?: number | null
+          id?: string
+          mode?: string
+          protein_target_grams?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          carbs_target_grams?: number | null
+          created_at?: string
+          daily_calorie_target?: number | null
+          fat_target_grams?: number | null
+          id?: string
+          mode?: string
+          protein_target_grams?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
