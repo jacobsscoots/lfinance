@@ -16,6 +16,10 @@ export type Transaction = Tables<"transactions"> & {
     id: string;
     name: string;
   } | null;
+  bill?: {
+    id: string;
+    name: string;
+  } | null;
 };
 
 export type TransactionInsert = Omit<TablesInsert<"transactions">, "id" | "created_at" | "updated_at">;
@@ -59,7 +63,8 @@ export function useTransactions(filters?: TransactionFilters) {
         .select(`
           *,
           category:categories(id, name, color, icon),
-          account:bank_accounts(id, name)
+          account:bank_accounts(id, name),
+          bill:bills(id, name)
         `)
         .in("account_id", filters?.accountId ? [filters.accountId] : accountIds)
         .gte("transaction_date", format(dateFrom, "yyyy-MM-dd"))

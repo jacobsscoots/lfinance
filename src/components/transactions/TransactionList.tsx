@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Pencil, Trash2, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Receipt } from "lucide-react";
 import { Transaction } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
 
@@ -82,8 +82,14 @@ function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) 
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm truncate">{transaction.description}</p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
             {transaction.merchant && <span>{transaction.merchant}</span>}
+            {transaction.bill && (
+              <Badge variant="secondary" className="text-xs py-0 gap-1">
+                <Receipt className="h-3 w-3" />
+                {transaction.bill.name}
+              </Badge>
+            )}
             {transaction.category && (
               <Badge
                 variant="outline"
