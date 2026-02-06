@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -29,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { Transaction, TransactionInsert, useTransactions } from "@/hooks/useTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useBills } from "@/hooks/useBills";
 
 const transactionSchema = z.object({
   description: z.string().trim().min(1, "Description is required").max(200, "Description must be less than 200 characters"),
@@ -38,6 +38,7 @@ const transactionSchema = z.object({
   account_id: z.string().min(1, "Account is required"),
   category_id: z.string().optional(),
   merchant: z.string().trim().max(100, "Merchant must be less than 100 characters").optional(),
+  bill_id: z.string().optional(),
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -52,8 +53,12 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
   const { createTransaction, updateTransaction } = useTransactions();
   const { data: categories = [] } = useCategories();
   const { accounts } = useAccounts();
+  const { bills } = useBills();
   const isEditing = !!transaction;
   const [date, setDate] = useState<Date>(new Date());
+
+  // Filter only active bills for linking
+  const activeBills = bills.filter(b => b.is_active);
 
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -65,6 +70,7 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
       account_id: "",
       category_id: "",
       merchant: "",
+      bill_id: "",
     },
   });
 
@@ -80,6 +86,7 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
         account_id: transaction.account_id,
         category_id: transaction.category_id || "",
         merchant: transaction.merchant || "",
+        bill_id: transaction.bill_id || "",
       });
     } else {
       const today = new Date();
@@ -92,9 +99,26 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
         account_id: accounts[0]?.id || "",
         category_id: "",
         merchant: "",
+        bill_id: "",
       });
     }
   }, [transaction, form, open, accounts]);
+
+  // Auto-fill amount and description when a bill is selected
+  const handleBillSelect = (billId: string) => {
+    form.setValue("bill_id", billId === "none" ? "" : billId);
+    if (billId && billId !== "none") {
+      const selectedBill = activeBills.find(b => b.id === billId);
+      if (selectedBill) {
+        form.setValue("description", `${selectedBill.name} payment`);
+        form.setValue("amount", Number(selectedBill.amount));
+        form.setValue("type", "expense");
+        if (selectedBill.category_id) {
+          form.setValue("category_id", selectedBill.category_id);
+        }
+      }
+    }
+  };
 
   const onSubmit = async (data: TransactionFormData) => {
     const txData: TransactionInsert = {
@@ -105,6 +129,7 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
       account_id: data.account_id,
       category_id: data.category_id || null,
       merchant: data.merchant || null,
+      bill_id: data.bill_id || null,
     };
 
     if (isEditing && transaction) {
@@ -118,7 +143,7 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
           <DialogDescription>
@@ -126,6 +151,32 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {/* Link to Bill */}
+          {activeBills.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="bill">Link to Bill</Label>
+              <Select
+                value={form.watch("bill_id") || "none"}
+                onValueChange={handleBillSelect}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a bill (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No bill linked</SelectItem>
+                  {activeBills.map((bill) => (
+                    <SelectItem key={bill.id} value={bill.id}>
+                      {bill.name} (£{Number(bill.amount).toFixed(2)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Linking to a bill marks it as paid for this month
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
             <Input
@@ -198,6 +249,7 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
                       }
                     }}
                     initialFocus
+                    className={cn("p-3 pointer-events-auto")}
                   />
                 </PopoverContent>
               </Popover>
