@@ -1,19 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CreditCard, Plus, Wallet } from "lucide-react";
+import { CreditCard, Plus, Wallet, Loader2 } from "lucide-react";
 import { useAccounts, BankAccount, CreateAccountInput, UpdateAccountInput } from "@/hooks/useAccounts";
+import { useBankConnections } from "@/hooks/useBankConnections";
 import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountFormDialog } from "@/components/accounts/AccountFormDialog";
 import { DeleteAccountDialog } from "@/components/accounts/DeleteAccountDialog";
+import { BankConnectionCard } from "@/components/accounts/BankConnectionCard";
 
 export default function Accounts() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { accounts, isLoading, totalBalance, createAccount, updateAccount, deleteAccount } = useAccounts();
+  const { completeConnection } = useBankConnections();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
+  const [isProcessingCallback, setIsProcessingCallback] = useState(false);
+
+  // Handle TrueLayer OAuth callback
+  useEffect(() => {
+    const isCallback = searchParams.get('truelayer_callback');
+    const code = searchParams.get('code');
+    const connectionId = localStorage.getItem('pending_bank_connection_id');
+
+    if (isCallback && code && connectionId && !isProcessingCallback) {
+      setIsProcessingCallback(true);
+      
+      // Clear URL params
+      setSearchParams({});
+      
+      // Complete the connection
+      completeConnection.mutate(
+        { code, connectionId },
+        {
+          onSettled: () => {
+            setIsProcessingCallback(false);
+          },
+        }
+      );
+    }
+  }, [searchParams, setSearchParams, completeConnection, isProcessingCallback]);
 
   const handleAdd = () => {
     setSelectedAccount(null);
@@ -46,6 +76,21 @@ export default function Accounts() {
     }
   };
 
+  // Show loading state while processing OAuth callback
+  if (isProcessingCallback || completeConnection.isPending) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Connecting your bank...</h2>
+          <p className="text-muted-foreground">
+            We're syncing your accounts and transactions. This may take a moment.
+          </p>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
@@ -62,6 +107,9 @@ export default function Accounts() {
             Add Account
           </Button>
         </div>
+
+        {/* Bank Connection Card */}
+        <BankConnectionCard />
 
         {/* Total Balance Card */}
         <Card className="bg-primary text-primary-foreground">
@@ -106,11 +154,11 @@ export default function Accounts() {
               <CreditCard className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-medium mb-2">No accounts yet</h3>
               <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
-                Add your bank accounts to start tracking your finances and see your spending patterns.
+                Add your bank accounts manually or connect your bank for automatic syncing.
               </p>
               <Button onClick={handleAdd} variant="outline" className="gap-2">
                 <Plus className="h-4 w-4" />
-                Add Your First Account
+                Add Account Manually
               </Button>
             </CardContent>
           </Card>

@@ -1,1 +1,7 @@
 project_id = "ekahzylmgbngjngkirhl"
+
+[functions.truelayer-auth]
+verify_jwt = false
+
+[functions.truelayer-sync]
+verify_jwt = false
