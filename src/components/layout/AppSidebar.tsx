@@ -6,10 +6,13 @@ import {
   ShoppingCart, 
   UtensilsCrossed,
   Settings,
-  TrendingUp
+  TrendingUp,
+  LogOut
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -24,6 +27,7 @@ const navigation = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { signOut, user } = useAuth();
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-sidebar">
@@ -62,8 +66,21 @@ export function AppSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-sidebar-border">
-        <p className="text-xs text-sidebar-foreground/60">
+      <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
+        {user && (
+          <div className="px-3 py-2 text-xs text-sidebar-foreground/60 truncate">
+            {user.email}
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-3 text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+          onClick={signOut}
+        >
+          <LogOut className="h-5 w-5" />
+          Sign Out
+        </Button>
+        <p className="text-xs text-sidebar-foreground/60 px-3">
           © 2026 Life Tracker
         </p>
       </div>

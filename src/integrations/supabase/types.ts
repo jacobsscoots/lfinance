@@ -14,7 +14,290 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bank_accounts: {
+        Row: {
+          account_type: string | null
+          balance: number
+          created_at: string
+          id: string
+          is_primary: boolean | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_type?: string | null
+          balance?: number
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_type?: string | null
+          balance?: number
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      bills: {
+        Row: {
+          amount: number
+          category_id: string | null
+          created_at: string
+          due_day: number
+          end_date: string | null
+          frequency: Database["public"]["Enums"]["bill_frequency"]
+          id: string
+          is_active: boolean | null
+          name: string
+          next_review_date: string | null
+          notes: string | null
+          provider: string | null
+          start_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category_id?: string | null
+          created_at?: string
+          due_day: number
+          end_date?: string | null
+          frequency?: Database["public"]["Enums"]["bill_frequency"]
+          id?: string
+          is_active?: boolean | null
+          name: string
+          next_review_date?: string | null
+          notes?: string | null
+          provider?: string | null
+          start_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          due_day?: number
+          end_date?: string | null
+          frequency?: Database["public"]["Enums"]["bill_frequency"]
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          next_review_date?: string | null
+          notes?: string | null
+          provider?: string | null
+          start_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bills_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      grocery_cycles: {
+        Row: {
+          actual_spend: number | null
+          budget: number
+          created_at: string
+          end_date: string
+          id: string
+          notes: string | null
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_spend?: number | null
+          budget: number
+          created_at?: string
+          end_date: string
+          id?: string
+          notes?: string | null
+          start_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_spend?: number | null
+          budget?: number
+          created_at?: string
+          end_date?: string
+          id?: string
+          notes?: string | null
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meal_plans: {
+        Row: {
+          breakfast: string | null
+          created_at: string
+          dinner: string | null
+          grocery_cycle_id: string | null
+          id: string
+          lunch: string | null
+          meal_date: string
+          notes: string | null
+          snacks: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          breakfast?: string | null
+          created_at?: string
+          dinner?: string | null
+          grocery_cycle_id?: string | null
+          id?: string
+          lunch?: string | null
+          meal_date: string
+          notes?: string | null
+          snacks?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          breakfast?: string | null
+          created_at?: string
+          dinner?: string | null
+          grocery_cycle_id?: string | null
+          id?: string
+          lunch?: string | null
+          meal_date?: string
+          notes?: string | null
+          snacks?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plans_grocery_cycle_id_fkey"
+            columns: ["grocery_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "grocery_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          account_id: string
+          amount: number
+          bill_id: string | null
+          category_id: string | null
+          created_at: string
+          description: string
+          external_id: string | null
+          id: string
+          is_pending: boolean | null
+          merchant: string | null
+          transaction_date: string
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          bill_id?: string | null
+          category_id?: string | null
+          created_at?: string
+          description: string
+          external_id?: string | null
+          id?: string
+          is_pending?: boolean | null
+          merchant?: string | null
+          transaction_date?: string
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          bill_id?: string | null
+          category_id?: string | null
+          created_at?: string
+          description?: string
+          external_id?: string | null
+          id?: string
+          is_pending?: boolean | null
+          merchant?: string | null
+          transaction_date?: string
+          type?: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +306,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      bill_frequency:
+        | "weekly"
+        | "fortnightly"
+        | "monthly"
+        | "quarterly"
+        | "yearly"
+      transaction_type: "income" | "expense"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +439,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      bill_frequency: [
+        "weekly",
+        "fortnightly",
+        "monthly",
+        "quarterly",
+        "yearly",
+      ],
+      transaction_type: ["income", "expense"],
+    },
   },
 } as const
