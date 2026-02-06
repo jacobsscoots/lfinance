@@ -1,17 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Receipt, AlertCircle } from "lucide-react";
-import { format, addDays } from "date-fns";
-
-// Placeholder data - will be connected to actual bills data later
-const upcomingBills = [
-  { id: 1, name: "Netflix", amount: 15.99, dueDate: addDays(new Date(), 2), category: "Entertainment" },
-  { id: 2, name: "Spotify", amount: 10.99, dueDate: addDays(new Date(), 3), category: "Entertainment" },
-  { id: 3, name: "Phone Bill", amount: 35.00, dueDate: addDays(new Date(), 5), category: "Utilities" },
-  { id: 4, name: "Internet", amount: 45.00, dueDate: addDays(new Date(), 7), category: "Utilities" },
-];
+import { format } from "date-fns";
+import { useUpcomingBills } from "@/hooks/useDashboardData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function UpcomingBillsCard() {
-  const totalUpcoming = upcomingBills.reduce((sum, bill) => sum + bill.amount, 0);
+  const { data, isLoading } = useUpcomingBills(7);
+  const upcomingBills = data?.bills || [];
+  const totalUpcoming = data?.total || 0;
 
   return (
     <Card className="overflow-hidden">
@@ -25,7 +21,19 @@ export function UpcomingBillsCard() {
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        {upcomingBills.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center justify-between py-2">
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+                <Skeleton className="h-5 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : upcomingBills.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <Receipt className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No bills due in the next 7 days</p>
@@ -40,11 +48,12 @@ export function UpcomingBillsCard() {
                 <div>
                   <p className="font-medium text-sm">{bill.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {format(bill.dueDate, "EEE, d MMM")} • {bill.category}
+                    {bill.dueDate && format(bill.dueDate, "EEE, d MMM")}
+                    {bill.category && ` • ${bill.category.name}`}
                   </p>
                 </div>
                 <span className="font-semibold">
-                  £{bill.amount.toFixed(2)}
+                  £{Number(bill.amount).toFixed(2)}
                 </span>
               </div>
             ))}

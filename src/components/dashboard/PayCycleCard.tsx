@@ -1,12 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, TrendingUp } from "lucide-react";
+import { CalendarDays, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { getNextPayday, getDaysUntilPayday, getCurrentPayCycle } from "@/lib/payday";
+import { usePayCycleSummary } from "@/hooks/useDashboardData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function PayCycleCard() {
   const nextPayday = getNextPayday();
   const daysUntil = getDaysUntilPayday();
   const { start, end } = getCurrentPayCycle();
+  const { data, isLoading } = usePayCycleSummary();
+
+  const percentUsed = data?.percentUsed || 0;
+  const isOnTrack = percentUsed <= 75;
+  const isWarning = percentUsed > 75 && percentUsed <= 90;
 
   return (
     <Card className="overflow-hidden">
@@ -42,24 +49,52 @@ export function PayCycleCard() {
             </span>
           </div>
 
-          {/* Spending pace indicator - placeholder */}
+          {/* Spending pace indicator */}
           <div className="pt-3 border-t">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Spending pace</span>
-              <span className="text-sm font-medium text-success flex items-center gap-1">
-                <TrendingUp className="h-4 w-4" />
-                On track
-              </span>
+              {isLoading ? (
+                <Skeleton className="h-5 w-20" />
+              ) : (
+                <span className={`text-sm font-medium flex items-center gap-1 ${
+                  isOnTrack ? "text-success" : isWarning ? "text-warning" : "text-destructive"
+                }`}>
+                  {isOnTrack ? (
+                    <>
+                      <TrendingUp className="h-4 w-4" />
+                      On track
+                    </>
+                  ) : isWarning ? (
+                    <>
+                      <AlertTriangle className="h-4 w-4" />
+                      Caution
+                    </>
+                  ) : (
+                    <>
+                      <TrendingDown className="h-4 w-4" />
+                      Over budget
+                    </>
+                  )}
+                </span>
+              )}
             </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-success rounded-full transition-all duration-500" 
-                style={{ width: "45%" }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              45% of budget used • 55% remaining
-            </p>
+            {isLoading ? (
+              <Skeleton className="h-2 w-full rounded-full" />
+            ) : (
+              <>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isOnTrack ? "bg-success" : isWarning ? "bg-warning" : "bg-destructive"
+                    }`}
+                    style={{ width: `${Math.min(percentUsed, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {percentUsed.toFixed(0)}% of budget used • {(100 - percentUsed).toFixed(0)}% remaining
+                </p>
+              </>
+            )}
           </div>
         </div>
       </CardContent>
