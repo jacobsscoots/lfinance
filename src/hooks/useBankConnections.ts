@@ -12,6 +12,44 @@ interface BankConnection {
   created_at: string;
 }
 
+// Helper to extract meaningful error messages from Supabase function errors
+function normalizeError(error: unknown, functionName: string): string {
+  if (!error) return "Unknown error";
+
+  // Handle FunctionsHttpError or similar
+  if (typeof error === "object" && error !== null) {
+    const err = error as Record<string, unknown>;
+
+    // Check for context.body which contains the actual error response
+    if (err.context && typeof err.context === "object") {
+      const ctx = err.context as Record<string, unknown>;
+      if (ctx.body && typeof ctx.body === "string") {
+        try {
+          const parsed = JSON.parse(ctx.body);
+          if (parsed.error) {
+            const stage = parsed.stage ? ` [${parsed.stage}]` : "";
+            return `${functionName}${stage}: ${parsed.error}`;
+          }
+        } catch {
+          // Not JSON, use as-is
+          return `${functionName}: ${ctx.body}`;
+        }
+      }
+    }
+
+    // Direct error message
+    if (err.message && typeof err.message === "string") {
+      return `${functionName}: ${err.message}`;
+    }
+  }
+
+  if (typeof error === "string") {
+    return `${functionName}: ${error}`;
+  }
+
+  return `${functionName}: Connection failed`;
+}
+
 export function useBankConnections() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -52,27 +90,38 @@ export function useBankConnections() {
 
       if (connError) throw connError;
 
-      // Get auth URL from edge function
-      const { data, error } = await supabase.functions.invoke("truelayer-auth", {
-        body: { redirectUri },
-        headers: { "Content-Type": "application/json" },
-      });
+      try {
+        // Get auth URL from edge function - explicitly pass action in body
+        const { data, error } = await supabase.functions.invoke("truelayer-auth", {
+          body: { action: "auth-url", redirectUri },
+        });
 
-      if (error) throw error;
+        if (error) throw error;
+        if (!data?.authUrl) throw new Error("No auth URL returned from server");
 
-      // Store connection ID for callback
-      localStorage.setItem("pending_bank_connection_id", connection.id);
+        // Store connection ID for callback
+        localStorage.setItem("pending_bank_connection_id", connection.id);
 
-      return { authUrl: data.authUrl, connectionId: connection.id };
+        return { authUrl: data.authUrl, connectionId: connection.id };
+      } catch (invokeError) {
+        // Clean up pending connection if auth URL fetch fails
+        await supabase
+          .from("bank_connections")
+          .delete()
+          .eq("id", connection.id);
+        
+        throw invokeError;
+      }
     },
     onSuccess: ({ authUrl }) => {
       // Redirect to TrueLayer
       window.location.href = authUrl;
     },
     onError: (error) => {
+      const message = normalizeError(error, "truelayer-auth");
       toast({
         title: "Connection failed",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },
@@ -82,16 +131,16 @@ export function useBankConnections() {
     mutationFn: async ({ code, connectionId }: { code: string; connectionId: string }) => {
       const redirectUri = `${window.location.origin}/accounts?truelayer_callback=true`;
 
-      // Exchange code for tokens
+      // Exchange code for tokens - explicitly pass action
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
         "truelayer-auth",
         {
-          body: { code, redirectUri },
-          headers: { "Content-Type": "application/json" },
+          body: { action: "exchange-code", code, redirectUri },
         }
       );
 
       if (tokenError) throw tokenError;
+      if (!tokenData?.access_token) throw new Error("No access token returned");
 
       // Update connection with tokens
       const expiresAt = new Date();
@@ -117,7 +166,6 @@ export function useBankConnections() {
           accessToken: tokenData.access_token,
         },
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${session.data.session?.access_token}`,
         },
       });
@@ -138,9 +186,10 @@ export function useBankConnections() {
       });
     },
     onError: (error) => {
+      const message = normalizeError(error, "truelayer-auth");
       toast({
         title: "Connection failed",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },
@@ -164,8 +213,7 @@ export function useBankConnections() {
         const { data: tokenData, error: refreshError } = await supabase.functions.invoke(
           "truelayer-auth",
           {
-            body: { refreshToken: connection.refresh_token },
-            headers: { "Content-Type": "application/json" },
+            body: { action: "refresh-token", refreshToken: connection.refresh_token },
           }
         );
 
@@ -195,7 +243,6 @@ export function useBankConnections() {
           accessToken,
         },
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${session.data.session?.access_token}`,
         },
       });
@@ -215,9 +262,10 @@ export function useBankConnections() {
       });
     },
     onError: (error) => {
+      const message = normalizeError(error, "truelayer-sync");
       toast({
         title: "Sync failed",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },
@@ -242,7 +290,7 @@ export function useBankConnections() {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
     },
