@@ -281,23 +281,68 @@ function extractFromText(text: string): ExtractedNutrition {
 }
 
 async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNutrition> {
-  // Fetch the webpage
+  const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
+  
   let html: string;
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; NutritionBot/1.0)",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.status}`);
+  
+  // Try Firecrawl first if available (handles anti-bot protection)
+  if (FIRECRAWL_API_KEY) {
+    try {
+      console.log("Using Firecrawl to fetch URL:", url);
+      const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${FIRECRAWL_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url,
+          formats: ["html", "markdown"],
+          onlyMainContent: false,
+        }),
+      });
+
+      const firecrawlData = await firecrawlResponse.json();
+
+      if (!firecrawlResponse.ok) {
+        console.error("Firecrawl API error:", firecrawlData);
+        // Fall through to direct fetch
+      } else if (firecrawlData.success && firecrawlData.data?.html) {
+        html = firecrawlData.data.html;
+        console.log("Successfully fetched via Firecrawl");
+      }
+    } catch (e) {
+      console.error("Firecrawl fetch failed:", e);
+      // Fall through to direct fetch
     }
-    
-    html = await response.text();
-  } catch (e) {
-    throw new Error("Could not access this URL. The website may be blocking automated access.");
+  }
+
+  // Fallback to direct fetch if Firecrawl didn't work
+  if (!html!) {
+    try {
+      console.log("Attempting direct fetch for URL:", url);
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-GB,en;q=0.9",
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 403 || response.status === 429) {
+          throw new Error("This website is blocking automated access. Please try using 'Upload Photo' or 'Paste Text' instead.");
+        }
+        throw new Error(`Failed to fetch URL (status ${response.status}). Try 'Upload Photo' or 'Paste Text' instead.`);
+      }
+      
+      html = await response.text();
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("blocking")) {
+        throw e;
+      }
+      throw new Error("Could not access this URL. The website may be blocking automated access. Try 'Upload Photo' or 'Paste Text' instead.");
+    }
   }
 
   // Try to find JSON-LD first
@@ -319,7 +364,7 @@ async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNut
     }
   }
 
-  // Use AI to extract from HTML if no structured data
+  // Use AI to extract from HTML
   const systemPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this HTML content.
 
 Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
@@ -378,19 +423,19 @@ For UK supermarkets (Tesco, Sainsbury's, Asda, etc.), the format is usually cons
   const aiData = await aiResponse.json();
   const content = aiData.choices?.[0]?.message?.content || "";
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Could not extract product data from this URL");
+  const jsonMatch2 = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch2) {
+    throw new Error("Could not extract product data from this URL. Try 'Upload Photo' or 'Paste Text' instead.");
   }
 
   try {
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch2[0]);
     return {
       ...parsed,
       source_url: url,
       confidence: parsed.confidence || {},
     };
   } catch {
-    throw new Error("Could not parse product data from URL");
+    throw new Error("Could not parse product data from URL. Try 'Upload Photo' or 'Paste Text' instead.");
   }
 }
