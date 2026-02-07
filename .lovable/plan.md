@@ -1,224 +1,273 @@
-# Transactions Module – Receipt Uploading & Attachments
+Settings Module: Payday Rules & Payslip Upload (Safe, Additive)
+Overview
 
-## Overview
+Extend the Settings module with two additive features:
 
-Extend the Transactions module to support receipt uploads (image/PDF), attachment to transactions, and manual viewing/replacement.
+Editable Payday Rules – user-configurable payday date and adjustment logic
 
-This implementation must **not** affect:
-- transaction syncing
-- bills auto-matching
-- account balances
-- historical transactions
+Payslip Upload & Extraction – upload payslips (PDF/image), extract pay data, and optionally match to income transactions
 
-All receipt functionality is strictly additive and optional.
+⚠️ Hard rule:
+These features must not modify existing balances, transactions, bill logic, or calculations. All changes are opt-in, additive, and reversible.
 
----
+Feature 1: Editable Payday Rules
+Current State (Baseline)
 
-## Assumptions (Locked)
+Payday defaults to 20th of the month
 
-| Area | Decision |
-|----|----|
-| Storage | Supabase Storage |
-| Bucket access | Private |
-| File types | JPG, PNG, WebP, PDF |
-| Max file size | 10MB |
-| Receipts per transaction | One (v1) |
-| OCR | Not implemented |
-| Auto-attach | Not implemented (future prompt) |
-| Delete behaviour | Soft delete (DB cleared, file removed) |
-| URL handling | Signed URLs generated on demand |
+UK working-day logic already exists
 
----
+Some dashboards and calendars already depend on this behaviour
 
-## Database Changes
+Target State (v1 – Safe)
 
-### Extend `transactions` Table
+User can:
 
-```sql
-ALTER TABLE transactions
-ADD COLUMN IF NOT EXISTS receipt_path text,
-ADD COLUMN IF NOT EXISTS receipt_uploaded_at timestamp with time zone,
-ADD COLUMN IF NOT EXISTS receipt_source text;
-Column meanings
+Set payday date (1–28 only)
 
-receipt_path: storage path only (NOT a public URL)
+Choose adjustment rule:
 
-receipt_uploaded_at: timestamp of upload
+previous_working_day (default)
 
-receipt_source: 'manual' | 'auto' (auto reserved for future)
+next_working_day
 
-⚠️ Important: Do not store signed URLs in the database.
-Always generate signed URLs at runtime.
+closest_working_day
 
-Storage Setup
-Supabase Storage Bucket
-Create private bucket:
+no_adjustment
 
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-  'transaction-receipts',
-  'transaction-receipts',
-  false,
-  10485760,
-  ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+Monthly frequency only (explicitly locked for v1)
+
+If no settings exist, system must behave exactly as it does today
+
+Database Changes
+
+Create a separate, optional table for payday settings:
+
+CREATE TABLE public.user_payday_settings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  payday_date integer NOT NULL DEFAULT 20 CHECK (payday_date BETWEEN 1 AND 28),
+  adjustment_rule text NOT NULL DEFAULT 'previous_working_day'
+    CHECK (adjustment_rule IN (
+      'previous_working_day',
+      'next_working_day',
+      'closest_working_day',
+      'no_adjustment'
+    )),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id)
 );
-Folder Structure
-transaction-receipts/
-  user_id/
-    transaction_id/
-      receipt.ext
-Storage RLS Policies
-Principle: Users may only access receipts inside their own folder.
 
-Policies:
 
-INSERT: user_id folder only
+Enable RLS (read/update own row only).
 
-SELECT: user_id folder only
+Payday Calculation Rules (Critical Guardrail)
 
-UPDATE: user_id folder only
+All payday functions must accept optional settings
 
-DELETE: user_id folder only
+If settings are missing → use current hardcoded logic
 
-No cross-user access. No public reads.
+No existing callers should break
 
-Files to Create
-File	Purpose
-src/lib/receiptUpload.ts	Storage + validation utilities
-src/hooks/useReceiptUpload.ts	Upload/remove state handling
-src/components/transactions/ReceiptPreviewDialog.tsx	View / upload / replace receipts
-Files to Modify
-File	Change
-src/hooks/useTransactions.ts	Include receipt fields
-src/components/transactions/TransactionList.tsx	Receipt icon + menu actions
-src/components/transactions/TransactionRow.tsx	Paperclip indicator
-Implementation Details
-Receipt Upload Utility
-src/lib/receiptUpload.ts
+export function getPayday(
+  year: number,
+  month: number,
+  settings?: {
+    paydayDate: number;
+    adjustmentRule: AdjustmentRule;
+  }
+): Date {
+  const effectiveDate = settings?.paydayDate ?? 20;
+  const rule = settings?.adjustmentRule ?? 'previous_working_day';
+  // existing logic reused internally
+}
 
-Responsibilities:
 
-validateReceiptFile(file)
+⚠️ No global state. No mutation. No overrides.
 
-MIME type check
+Files to Create / Modify (Payday)
+File	Action
+src/hooks/usePaydaySettings.ts	CREATE
+src/components/settings/PaydaySettings.tsx	CREATE
+src/lib/payday.ts	MODIFY (accept settings param only)
+src/lib/ukWorkingDays.ts	MODIFY (add rule helpers)
+src/pages/Settings.tsx	MODIFY
+src/hooks/useDashboardData.ts	MODIFY (pass settings if present)
+Feature 2: Payslip Upload & Extraction
+Scope (v1 – Locked)
 
-10MB size limit
+Included
 
-uploadTransactionReceipt(file, userId, transactionId)
+Upload payslip (PDF/image)
 
-uploads to storage
+Extract key fields
 
-returns storage path only
+Store extracted data
 
-deleteTransactionReceipt(userId, transactionId)
+Optionally match to income transaction
 
-removes file from storage
+Explicitly Excluded
 
-getReceiptSignedUrl(path)
-
-generates short-lived signed URL (e.g. 1 hour)
-
-isReceiptPdf(path)
-
-helper for preview rendering
-
-Receipt Upload Hook
-src/hooks/useReceiptUpload.ts
-
-Exposes:
-
-uploadReceipt({ file, transactionId })
-
-removeReceipt(transactionId)
-
-isUploading
-
-isRemoving
-
-uploadProgress
-
-Behaviour:
-
-Updates transactions.receipt_path
-
-Sets receipt_uploaded_at
-
-Sets receipt_source = 'manual'
-
-Invalidates transactions query on success
-
-Receipt Preview Dialog
-Component: ReceiptPreviewDialog.tsx
-
-Features:
-
-Image preview (responsive)
-
-PDF embedded viewer (or download fallback)
-
-Actions:
-
-Upload
-
-Replace
-
-Download
-
-Remove
-
-Notes:
-
-Uses signed URL generated at open time
-
-No URLs stored long-term
-
-Transaction List UI
-Changes:
-
-📎 Paperclip icon shown when receipt_path exists
-
-Tooltip: “Receipt attached”
-
-Dropdown menu options:
-
-Upload receipt (if none)
-
-View receipt (if exists)
-
-Clicking icon opens preview dialog.
-
-Safety Guarantees
-No balance impact: receipts do not affect amounts
-
-No sync impact: syncing logic unchanged
-
-No bill impact: auto-matching untouched
-
-Backward compatible: all new fields nullable
-
-Deterministic: no auto-matching or guessing
-
-Explicit Non-Goals (Do Not Implement)
-OCR
-
-Receipt text extraction
-
-Multiple receipts per transaction
-
-Auto-attach logic
+OCR correction UI
 
 Expense categorisation
 
-These require separate prompts.
+Auto-creation of transactions
 
-Success Criteria
-Users can upload receipts to transactions
+Balance changes
 
-Receipts can be viewed, replaced, removed
+Multi-payslip per transaction
 
-UI clearly indicates receipt presence
+Database: Payslips Table
+CREATE TABLE public.payslips (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
-No regressions in syncing, bills, or balances
+  file_path text NOT NULL,
+  uploaded_at timestamptz NOT NULL DEFAULT now(),
 
-Signed URLs expire and are regenerated safely
+  gross_pay numeric(10,2),
+  net_pay numeric(10,2),
+  tax_deducted numeric(10,2),
+  ni_deducted numeric(10,2),
+  pension_deducted numeric(10,2),
 
+  pay_period_start date,
+  pay_period_end date,
+  employer_name text,
+
+  extraction_confidence text CHECK (extraction_confidence IN ('high','medium','low')),
+  extraction_raw jsonb,
+
+  matched_transaction_id uuid REFERENCES transactions(id) ON DELETE SET NULL,
+  match_status text DEFAULT 'pending'
+    CHECK (match_status IN ('pending','auto_matched','manual_matched','no_match')),
+  matched_at timestamptz,
+
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+
+RLS: user can only access their own rows.
+
+Storage (Payslips)
+
+Bucket: payslips (private)
+
+Path format: {userId}/{payslipId}/original.ext
+
+Max size: 10MB
+
+MIME types: JPG, PNG, WebP, PDF
+
+Payslip Extraction (Edge Function)
+Guardrails (Very Important)
+
+Extraction runs once per upload
+
+No re-processing unless user explicitly requests
+
+Raw model output always stored (extraction_raw)
+
+Confidence score required
+
+Never overwrite manually edited fields
+
+// supabase/functions/extract-payslip/index.ts
+// Vision-based structured extraction
+// Returns JSON only (no free text)
+
+Auto-Matching Rules (Income Only)
+
+A payslip may auto-match only if ALL are true:
+
+Transaction type = income
+
+Amount within ±£0.50 of extracted net_pay
+
+Date within ±2 days of pay_period_end
+
+Transaction not already linked to another payslip
+
+Exactly one match exists
+
+Otherwise → match_status = 'pending'
+
+⚠️ Never modify the transaction amount. Never affect balances.
+
+UI Components
+Settings → Payslips
+
+Upload button
+
+List of past payslips
+
+Status badges:
+
+Auto-matched
+
+Pending review
+
+No match
+
+Payslip Detail Dialog
+
+Read-only extracted values
+
+Confidence indicator
+
+Link / unlink transaction
+
+View original file
+
+Delete payslip
+
+Files to Create / Modify (Payslips)
+File	Action
+supabase/functions/extract-payslip/index.ts	CREATE
+src/lib/payslipUpload.ts	CREATE
+src/hooks/usePayslips.ts	CREATE
+src/components/settings/PayslipSettings.tsx	CREATE
+src/components/settings/PayslipPreviewDialog.tsx	CREATE
+src/pages/Settings.tsx	MODIFY
+Safety Guarantees (Non-Negotiable)
+
+No balance changes
+
+No transaction edits
+
+No bill logic changes
+
+Payday defaults preserved if settings missing
+
+AI extraction is single-pass and stored
+
+All features opt-in
+
+Clarification Questions (Must Be Answered Before Build)
+
+Should payslip matching ignore refunds/reversals?
+
+If multiple income transactions match, should we always force manual review?
+
+Should employer name be used as a secondary hint for matching (read-only)?
+
+Should users be allowed to manually override extracted values?
+
+Should extraction be disabled entirely if confidence = low?
+
+(Implementation must pause until these are confirmed.)
+
+Implementation Order
+
+Payday settings (DB → hook → logic → UI)
+
+Payslip storage + upload
+
+Extraction edge function
+
+Matching logic
+
+UI review flow
