@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +13,7 @@ interface RequestBody {
   action?: 'auth-url' | 'exchange-code' | 'refresh-token';
   redirectUri?: string;
   code?: string;
-  refreshToken?: string;
+  connectionId?: string;
 }
 
 function jsonResponse(data: object, status = 200) {
@@ -44,6 +45,27 @@ serve(async (req) => {
         500
       );
     }
+
+    // Validate JWT authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return errorResponse('Missing or invalid Authorization header', 'auth', 401);
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return errorResponse('Invalid or expired token', 'auth', 401);
+    }
+
+    const userId = claimsData.claims.sub as string;
+    console.log(`[auth] Authenticated user: ${userId}`);
 
     // Parse action from query string OR body (body takes precedence)
     const url = new URL(req.url);
@@ -100,16 +122,35 @@ serve(async (req) => {
       return jsonResponse({ authUrl });
     }
 
-    // Exchange authorization code for tokens
+    // Exchange authorization code for tokens - stores tokens server-side only
     if (action === 'exchange-code') {
       const code = body.code || url.searchParams.get('code');
       const redirectUri = body.redirectUri || url.searchParams.get('redirectUri');
+      const connectionId = body.connectionId;
 
       if (!code) {
         return errorResponse('Missing code parameter', 'exchange-code', 400);
       }
       if (!redirectUri) {
         return errorResponse('Missing redirectUri parameter', 'exchange-code', 400);
+      }
+      if (!connectionId) {
+        return errorResponse('Missing connectionId parameter', 'exchange-code', 400);
+      }
+
+      // Verify the connection belongs to this user
+      const { data: connection, error: connError } = await supabase
+        .from('bank_connections')
+        .select('id, user_id')
+        .eq('id', connectionId)
+        .single();
+
+      if (connError || !connection) {
+        return errorResponse('Connection not found', 'exchange-code', 404);
+      }
+
+      if (connection.user_id !== userId) {
+        return errorResponse('Connection does not belong to this user', 'exchange-code', 403);
       }
 
       console.log('[exchange-code] Exchanging code for tokens...');
@@ -139,20 +180,58 @@ serve(async (req) => {
         );
       }
 
-      console.log('[exchange-code] Token exchange successful');
-      return jsonResponse({
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        expires_in: tokenData.expires_in,
+      // Store tokens server-side in the database - NEVER send to client
+      const expiresAt = new Date();
+      expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
+
+      const { error: updateError } = await supabase
+        .from('bank_connections')
+        .update({
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token,
+          token_expires_at: expiresAt.toISOString(),
+          status: 'connected',
+        })
+        .eq('id', connectionId);
+
+      if (updateError) {
+        console.error('[exchange-code] Failed to store tokens:', updateError);
+        return errorResponse('Failed to store connection tokens', 'exchange-code', 500);
+      }
+
+      console.log('[exchange-code] Token exchange and storage successful');
+      // Return success but NOT the tokens - they stay server-side
+      return jsonResponse({ 
+        success: true,
+        connectionId,
       });
     }
 
-    // Refresh access token
+    // Refresh access token - only called server-side by sync function
     if (action === 'refresh-token') {
-      const refreshToken = body.refreshToken || url.searchParams.get('refreshToken');
+      const connectionId = body.connectionId;
 
-      if (!refreshToken) {
-        return errorResponse('Missing refreshToken parameter', 'refresh-token', 400);
+      if (!connectionId) {
+        return errorResponse('Missing connectionId parameter', 'refresh-token', 400);
+      }
+
+      // Get the connection and verify ownership
+      const { data: connection, error: connError } = await supabase
+        .from('bank_connections')
+        .select('id, user_id, refresh_token')
+        .eq('id', connectionId)
+        .single();
+
+      if (connError || !connection) {
+        return errorResponse('Connection not found', 'refresh-token', 404);
+      }
+
+      if (connection.user_id !== userId) {
+        return errorResponse('Connection does not belong to this user', 'refresh-token', 403);
+      }
+
+      if (!connection.refresh_token) {
+        return errorResponse('No refresh token available', 'refresh-token', 400);
       }
 
       console.log('[refresh-token] Refreshing access token...');
@@ -166,7 +245,7 @@ serve(async (req) => {
           grant_type: 'refresh_token',
           client_id: TRUELAYER_CLIENT_ID,
           client_secret: TRUELAYER_CLIENT_SECRET,
-          refresh_token: refreshToken,
+          refresh_token: connection.refresh_token,
         }),
       });
 
@@ -181,12 +260,21 @@ serve(async (req) => {
         );
       }
 
+      // Update tokens in database
+      const expiresAt = new Date();
+      expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
+
+      await supabase
+        .from('bank_connections')
+        .update({
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token,
+          token_expires_at: expiresAt.toISOString(),
+        })
+        .eq('id', connectionId);
+
       console.log('[refresh-token] Token refresh successful');
-      return jsonResponse({
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        expires_in: tokenData.expires_in,
-      });
+      return jsonResponse({ success: true });
     }
 
     return errorResponse('Invalid action', 'validation', 400);
