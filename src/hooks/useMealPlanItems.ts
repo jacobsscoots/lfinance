@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
+import { addDays } from "date-fns";
 import { Product, ProductType } from "./useProducts";
 import { NutritionSettings } from "./useNutritionSettings";
 import { getTargetsForDate } from "@/lib/mealCalculations";
@@ -55,16 +56,15 @@ export interface MealPlanItemFormData {
   is_locked?: boolean;
 }
 
+import { getShoppingWeekRange, getShoppingWeekDateStrings, ShoppingWeekRange } from "@/lib/mealPlannerWeek";
+
 export function useMealPlanItems(weekStart: Date) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Get 7 days starting from weekStart
-  const weekDates = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(weekStart);
-    date.setDate(date.getDate() + i);
-    return date.toISOString().split("T")[0];
-  });
+  // Get shopping week range (Sun→Mon, 9 days)
+  const weekRange = getShoppingWeekRange(weekStart);
+  const weekDates = getShoppingWeekDateStrings(weekRange);
 
   const { data: mealPlans = [], isLoading, error } = useQuery({
     queryKey: ["meal-plans", user?.id, weekStart.toISOString()],
@@ -378,10 +378,9 @@ export function useMealPlanItems(weekStart: Date) {
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
       
-      // Get previous week dates
-      const prevWeekDates = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(weekStart);
-        date.setDate(date.getDate() - 7 + i);
+      // Get previous week dates (using the shopping week range - 9 days)
+      const prevWeekDates = Array.from({ length: 9 }, (_, i) => {
+        const date = addDays(weekRange.start, -9 + i);
         return date.toISOString().split("T")[0];
       });
 
@@ -626,6 +625,8 @@ export function useMealPlanItems(weekStart: Date) {
 
   return {
     mealPlans,
+    weekRange,
+    weekDates,
     isLoading,
     error,
     addItem,

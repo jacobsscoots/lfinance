@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,8 @@ interface MealDayCardProps {
   products: Product[];
   settings: NutritionSettings | null | undefined;
   weekStart: Date;
+  isBlackout?: boolean;
+  blackoutReason?: string | null;
 }
 
 const MEAL_LABELS: Record<MealType, string> = {
@@ -37,7 +39,7 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
   eating_out: <ExternalLink className="h-3 w-3 text-primary" />,
 };
 
-export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: MealDayCardProps) {
+export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason }: MealDayCardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -49,7 +51,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
   const isTargetMode = settings?.mode === "target_based";
-  const isSaturday = date.getDay() === 6; // Can't copy to next day on Saturday (end of week)
+  const isLastDayOfWeek = date.getDay() === 1; // Monday is end of shopping week, can't copy to next
   const hasItems = items.length > 0;
   
   // Get targets for this specific date
@@ -61,6 +63,38 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
   const hasUncalculatedItems = items.some(item => 
     item.quantity_grams === 0 && item.product?.product_type === "editable"
   );
+
+  // If this is a blackout day, show holiday card
+  if (isBlackout) {
+    return (
+      <Card className={cn(
+        "flex flex-col",
+        isToday && "ring-2 ring-primary",
+        "bg-muted/30"
+      )}>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between text-sm">
+            <div>
+              <div className="font-semibold">{format(date, "EEEE")}</div>
+              <div className="text-xs font-normal text-muted-foreground">
+                {format(date, "d MMM")}
+              </div>
+            </div>
+            <Badge variant="secondary" className="gap-1">
+              <Palmtree className="h-3 w-3" />
+              Holiday
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col items-center justify-center py-8 text-center">
+          <Palmtree className="h-8 w-8 text-muted-foreground/50 mb-2" />
+          <div className="text-sm text-muted-foreground">
+            {blackoutReason || "No meal prep"}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const getMealStatus = (mealType: MealType): MealStatus => {
     switch (mealType) {
@@ -174,7 +208,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem 
                     onClick={handleCopyToNextDay}
-                    disabled={isSaturday || items.length === 0 || copyDayToNext.isPending}
+                    disabled={isLastDayOfWeek || items.length === 0 || copyDayToNext.isPending}
                   >
                     <Copy className="h-4 w-4 mr-2" />
                     Copy to Next Day

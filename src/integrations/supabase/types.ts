@@ -467,6 +467,36 @@ export type Database = {
           },
         ]
       }
+      meal_plan_blackout_ranges: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          reason: string | null
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          reason?: string | null
+          start_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          reason?: string | null
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       meal_plan_items: {
         Row: {
           created_at: string

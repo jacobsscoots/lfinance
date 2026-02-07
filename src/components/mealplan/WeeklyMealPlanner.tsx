@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { format, startOfWeek, addDays, addWeeks, subWeeks, formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Palmtree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,10 +23,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useMealPlanItems, MealPlan, MealType } from "@/hooks/useMealPlanItems";
+import { useMealPlanBlackouts } from "@/hooks/useMealPlanBlackouts";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { useProducts } from "@/hooks/useProducts";
 import { calculateDayMacros, calculateWeeklyAverages, DayMacros, getBalanceWarnings } from "@/lib/mealCalculations";
 import { DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
+import { 
+  getShoppingWeekRange, 
+  formatShoppingWeekRange,
+  getNextShoppingWeek,
+  getPreviousShoppingWeek,
+  isCurrentShoppingWeek,
+  isDateBlackout,
+  getBlackoutReason,
+  getActiveDateStringsInRange,
+} from "@/lib/mealPlannerWeek";
 import { MealDayCard } from "./MealDayCard";
 import { GroceryListPanel } from "./GroceryListPanel";
 import { WeeklySummaryCard } from "./WeeklySummaryCard";
@@ -37,35 +48,44 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 const MEAL_TYPES: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
-const DAY_ABBREVS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_ABBREVS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
 
 export function WeeklyMealPlanner() {
-  const [weekStart, setWeekStart] = useState(() => 
-    startOfWeek(new Date(), { weekStartsOn: 1 }) // Monday
-  );
+  // Start with current shopping week
+  const [weekRange, setWeekRange] = useState(() => getShoppingWeekRange(new Date()));
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [resetWeekOpen, setResetWeekOpen] = useState(false);
   const isMobile = useIsMobile();
   
-  const { mealPlans, isLoading, copyFromPreviousWeek, clearWeek, recalculateAll, lastCalculated } = useMealPlanItems(weekStart);
+  const { mealPlans, weekDates, isLoading, copyFromPreviousWeek, clearWeek, recalculateAll, lastCalculated } = useMealPlanItems(weekRange.start);
+  const { blackouts } = useMealPlanBlackouts();
   const { settings, isLoading: settingsLoading, isTargetMode } = useNutritionSettings();
   const { products, isLoading: productsLoading } = useProducts();
 
-  const goToPreviousWeek = () => setWeekStart(prev => subWeeks(prev, 1));
-  const goToNextWeek = () => setWeekStart(prev => addWeeks(prev, 1));
-  const goToCurrentWeek = () => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  // Navigation
+  const goToPreviousWeek = () => setWeekRange(prev => getPreviousShoppingWeek(prev));
+  const goToNextWeek = () => setWeekRange(prev => getNextShoppingWeek(prev));
+  const goToCurrentWeek = () => setWeekRange(getShoppingWeekRange(new Date()));
 
-  // Calculate macros for all days
-  const dayMacros: DayMacros[] = mealPlans.map(plan => calculateDayMacros(plan, settings));
-  const weeklyAverages = calculateWeeklyAverages(dayMacros);
-  // Check if week has any items
-  const weekHasItems = mealPlans.some(plan => (plan.items?.length || 0) > 0);
+  const isCurrentWeek = isCurrentShoppingWeek(weekRange);
   
-  // Collect all warnings
-  const allWarnings = dayMacros.flatMap(dm => getBalanceWarnings(dm, settings));
+  // Get active dates (excluding blackouts)
+  const activeDates = getActiveDateStringsInRange(weekRange, blackouts);
 
-  const isCurrentWeek = format(weekStart, "yyyy-MM-dd") === 
-    format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  // Calculate macros for all days (excluding blackout days from warnings)
+  const dayMacros: DayMacros[] = mealPlans.map(plan => calculateDayMacros(plan, settings));
+  
+  // Only include active days in weekly averages
+  const activeDayMacros = dayMacros.filter(dm => activeDates.includes(dm.date));
+  const weeklyAverages = calculateWeeklyAverages(activeDayMacros);
+  
+  // Check if week has any items on active days
+  const weekHasItems = mealPlans.some(plan => 
+    activeDates.includes(plan.meal_date) && (plan.items?.length || 0) > 0
+  );
+  
+  // Collect warnings only from active days
+  const allWarnings = activeDayMacros.flatMap(dm => getBalanceWarnings(dm, settings));
 
   const handleRecalculate = () => {
     if (!settings) return;
@@ -99,8 +119,8 @@ export function WeeklyMealPlanner() {
           <Button variant="outline" size="icon" onClick={goToPreviousWeek}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="text-base sm:text-lg font-medium min-w-[180px] sm:min-w-[200px] text-center">
-            {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM yyyy")}
+          <div className="text-base sm:text-lg font-medium min-w-[220px] sm:min-w-[280px] text-center">
+            {formatShoppingWeekRange(weekRange)}
           </div>
           <Button variant="outline" size="icon" onClick={goToNextWeek}>
             <ChevronRight className="h-4 w-4" />
@@ -267,7 +287,7 @@ export function WeeklyMealPlanner() {
                       )}
                       onClick={() => setSelectedDayIndex(index)}
                     >
-                      <span className="text-xs font-normal">{DAY_ABBREVS[index]}</span>
+                      <span className="text-xs font-normal">{format(date, "EEE")}</span>
                       <span className="text-sm font-semibold">{format(date, "d")}</span>
                     </Button>
                   );
@@ -281,7 +301,9 @@ export function WeeklyMealPlanner() {
                   dayMacros={dayMacros[selectedDayIndex]}
                   products={products}
                   settings={settings}
-                  weekStart={weekStart}
+                  weekStart={weekRange.start}
+                  isBlackout={isDateBlackout(mealPlans[selectedDayIndex].meal_date, blackouts)}
+                  blackoutReason={getBlackoutReason(mealPlans[selectedDayIndex].meal_date, blackouts)}
                 />
               )}
             </div>
@@ -295,7 +317,9 @@ export function WeeklyMealPlanner() {
                   dayMacros={dayMacros[index]}
                   products={products}
                   settings={settings}
-                  weekStart={weekStart}
+                  weekStart={weekRange.start}
+                  isBlackout={isDateBlackout(plan.meal_date, blackouts)}
+                  blackoutReason={getBlackoutReason(plan.meal_date, blackouts)}
                 />
               ))}
             </div>
@@ -303,7 +327,7 @@ export function WeeklyMealPlanner() {
         </TabsContent>
 
         <TabsContent value="grocery" className="mt-4">
-          <GroceryListPanel plans={mealPlans} />
+          <GroceryListPanel plans={mealPlans} blackouts={blackouts} />
         </TabsContent>
 
         <TabsContent value="summary" className="mt-4">
