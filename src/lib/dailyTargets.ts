@@ -140,7 +140,9 @@ export function getDailyTargetsFromDateString(
  *   remainingCalories = targetCalories - (protein × 4) - (carbs × 4)
  *   fatGrams = remainingCalories / 9
  * 
- * Clamps to minimum 0g if calories are too low.
+ * IMPORTANT: Enforces a minimum of 30g fat to ensure feasibility.
+ * Real foods (chicken, yogurt, eggs, etc.) contain unavoidable fat.
+ * Targets below 30g are physically impossible to hit with whole foods.
  */
 export function deriveFatFromCalories(
   targetCalories: number,
@@ -152,9 +154,12 @@ export function deriveFatFromCalories(
   const remainingCalories = targetCalories - proteinCalories - carbsCalories;
   
   // Fat = remaining calories / 9
-  const fatGrams = Math.max(0, Math.round(remainingCalories / 9));
+  const calculatedFat = Math.max(0, Math.round(remainingCalories / 9));
   
-  return fatGrams;
+  // Enforce minimum 30g fat floor for feasibility
+  // Real foods contain unavoidable fat that the algorithm cannot remove
+  const MIN_FAT_FLOOR = 30;
+  return Math.max(calculatedFat, MIN_FAT_FLOOR);
 }
 
 /**

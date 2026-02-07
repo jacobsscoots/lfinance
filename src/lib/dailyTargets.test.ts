@@ -101,20 +101,20 @@ describe("deriveFatFromCalories", () => {
     expect(fat).toBe(44);
   });
 
-  it("clamps fat to minimum 0g when calories too low", () => {
+  it("enforces minimum 30g fat floor when calculated fat would be too low", () => {
     // 1000 cal, 150g protein (600 cal), 200g carbs (800 cal)
-    // Remaining = 1000 - 600 - 800 = -400 cal
-    // Fat = clamped to 0
+    // Remaining = 1000 - 600 - 800 = -400 cal → calculated fat = 0
+    // But minimum 30g floor enforced for feasibility
     const fat = deriveFatFromCalories(1000, 150, 200);
-    expect(fat).toBe(0);
+    expect(fat).toBe(30); // Minimum floor
   });
 
-  it("handles edge case of exactly zero remaining", () => {
+  it("enforces minimum 30g fat floor when exactly zero remaining", () => {
     // 1400 cal, 150g protein (600 cal), 200g carbs (800 cal)
-    // Remaining = 1400 - 600 - 800 = 0 cal
-    // Fat = 0
+    // Remaining = 1400 - 600 - 800 = 0 cal → calculated fat = 0
+    // But minimum 30g floor enforced for feasibility
     const fat = deriveFatFromCalories(1400, 150, 200);
-    expect(fat).toBe(0);
+    expect(fat).toBe(30); // Minimum floor
   });
 });
 

@@ -1660,33 +1660,34 @@ export function calculateDayPortions(
   const fatDiff = Math.abs(totalAchieved.fat - dailyTargets.fat);
 
   // Tolerances:
-  // - Calories can be up to 50 kcal over target (user preference)
-  // - Macros within ±1g (inclusive) - STRICT SUCCESS CRITERIA
-  // - Macros within ±3g = "near match" - still saves, but warns
-  const CAL_TOLERANCE = 50;
+  // - Calories: strict ±50 kcal, relaxed ±150 kcal (for impossible zigzag targets)
+  // - Macros: strict ±1g, relaxed ±25g (to handle infeasible protein/carb/fat combos)
+  // The relaxed tier ensures days are NEVER blank - they populate with warnings.
+  const CAL_TOLERANCE_STRICT = 50;
+  const CAL_TOLERANCE_RELAXED = 150; // Wider for mathematically inconsistent targets
   const MACRO_TOLERANCE_STRICT = 1;
-  const MACRO_TOLERANCE_RELAXED = 3; // Still persists, but shows warning
+  const MACRO_TOLERANCE_RELAXED = 25; // Wide enough to handle any edge case (e.g., weekend 343g carbs)
   
-  // Calories: allow up to 50 over, but not under by more than a small margin
-  const caloriesWithinTolerance = calDiff <= CAL_TOLERANCE;
-  
-  // Strict tolerance: ±1g
+  // Strict: ±50 cal, ±1g macros
+  const caloriesWithinStrictTolerance = calDiff <= CAL_TOLERANCE_STRICT;
   const macrosWithinStrictTolerance =
     proDiff <= MACRO_TOLERANCE_STRICT &&
     carbDiff <= MACRO_TOLERANCE_STRICT &&
     fatDiff <= MACRO_TOLERANCE_STRICT;
   
-  // Relaxed tolerance: ±3g (still saves to DB with warning)
+  // Relaxed: ±150 cal, ±20g macros (guarantees no blank days)
+  const caloriesWithinRelaxedTolerance = calDiff <= CAL_TOLERANCE_RELAXED;
   const macrosWithinRelaxedTolerance =
     proDiff <= MACRO_TOLERANCE_RELAXED &&
     carbDiff <= MACRO_TOLERANCE_RELAXED &&
     fatDiff <= MACRO_TOLERANCE_RELAXED;
 
-  // Success = strict macros ±1g AND calories within tolerance
-  const success = macrosWithinStrictTolerance && caloriesWithinTolerance;
+  // Success = strict macros ±1g AND strict calories ±50
+  const success = macrosWithinStrictTolerance && caloriesWithinStrictTolerance;
   
-  // Near match = within relaxed tolerance but not strict - we still save these
-  const nearMatch = !success && macrosWithinRelaxedTolerance && caloriesWithinTolerance;
+  // Near match = within relaxed tolerance - we still save these with warnings
+  // This ensures days are NEVER blank, even with impossible targets
+  const nearMatch = !success && macrosWithinRelaxedTolerance && caloriesWithinRelaxedTolerance;
 
   if (!success) {
     // Show warnings for any macro outside ±1g
@@ -1702,7 +1703,7 @@ export function calculateDayPortions(
       const delta = totalAchieved.fat - dailyTargets.fat;
       warnings.push(`Fat: ${Math.round(totalAchieved.fat)}g (target: ${dailyTargets.fat}g, ${delta >= 0 ? "+" : ""}${Math.round(delta)}g)`);
     }
-    if (!caloriesWithinTolerance) warnings.push(`Calories: ${Math.round(totalAchieved.calories)} (target: ${dailyTargets.calories}, max +${CAL_TOLERANCE})`);
+    if (!caloriesWithinStrictTolerance) warnings.push(`Calories: ${Math.round(totalAchieved.calories)} (target: ${dailyTargets.calories}, max +${CAL_TOLERANCE_STRICT})`);
   }
 
   // Add informational calorie variance warning if >10 kcal off (but doesn't affect success if within 50)
