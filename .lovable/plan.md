@@ -1,200 +1,222 @@
 
-# Plan: Multi-Target Precision Solver for Zero-Tolerance Macro Matching
 
-## Problem Analysis
+# Plan: Fix Topper Minimums, Smart Seasonings, Reset Day & Reset Week
 
-The current algorithm has structural flaws causing macro drift:
+## Overview
 
-1. **Sequential adjustment** - Fixes protein first, then tries to fix calories separately, which disrupts the balance
-2. **Single-macro focus** - Each phase only considers one macro at a time
-3. **No simultaneous constraints** - Doesn't solve protein + carbs + fat + calories together
-
-Looking at the MyFitnessPal reference, realistic portions are:
-- Breakfast: 290g yogurt, 130g fruit, 40g granola (~620 kcal, 31g protein)
-- Lunch: 550g meal prep pack (~868 kcal, 93g protein)
-- Dinner: 170g chicken, 210g rice, veg, seasoning (~859 kcal, 79g protein)
-
-The key insight: **macros are mathematically linked** - every gram of food contributes to ALL macros simultaneously. We need a solver that respects this.
+This plan addresses four key improvements:
+1. **Topper minimum portions** - Ensure fruit/granola always gets sensible non-zero grams (not 0g)
+2. **Smart seasoning logic** - Match seasonings to protein types with realistic quantities  
+3. **Reset Day button** - Already exists as "Clear All Items" - rename for clarity
+4. **Reset Week button** - New feature to clear the entire week's plan in one action
 
 ---
 
-## Solution: Iterative Multi-Target Optimization
+## 1. Fix Topper Items Showing 0g
 
-Replace the current sequential approach with a **gradient descent / iterative refinement** algorithm that:
+### Problem
+The breakfast algorithm correctly caps granola at 35g but the **secondary items (fruit)** can end up at 0g when:
+- The base (yogurt) is large enough to hit all calorie targets
+- The `afterBaseCals` remaining is zero or negative
 
-1. Treats ALL targets (calories, protein, carbs, fat) as simultaneous constraints
-2. Uses weighted error minimization to balance all macros together
-3. Iterates until error across ALL dimensions is below tolerance
-4. Applies realistic portion constraints (min/max grams, breakfast composition rules)
+### Solution
+Add minimum portion enforcement for all breakfast roles:
 
-### Algorithm Overview
+| Role | Minimum | Maximum |
+|------|---------|---------|
+| Base (yogurt) | 100g | 500g |
+| Secondary (fruit) | 80g | 250g |
+| Topper (granola) | 25g | 40g |
 
+**Logic change in `solveSimultaneous` (lines 289-340):**
+
+```typescript
+// Step 3.5: Ensure secondary items get minimum portion
+breakfastSecondary.forEach(idx => {
+  if (grams[idx] < 80) {
+    grams[idx] = 80; // Minimum 80g fruit
+  }
+});
+
+// Step 1: Cap granola at 35g but ensure minimum 25g if included
+breakfastTopper.forEach(idx => {
+  grams[idx] = Math.max(25, Math.min(35, grams[idx] || 30));
+});
 ```
-1. Calculate fixed contributions (locked/fixed items)
-2. Calculate remaining targets for each macro
-3. Initialize portions based on role (protein sources, carbs, etc.)
-4. LOOP until convergence (all macros within 0.5g/1kcal):
-   a. Calculate current error for each macro
-   b. Compute weighted gradient for each adjustable item
-   c. Adjust grams proportionally to reduce total error
-   d. Apply constraints (min/max, breakfast caps)
-5. Final polish pass to eliminate any remaining drift
-```
 
-### Key Improvements
-
-| Current Approach | New Approach |
-|------------------|--------------|
-| Fix protein, then fix calories | Solve all macros simultaneously |
-| Adjust one item at a time | Distribute adjustments across items |
-| Ignores carb/fat targets | Considers all 4 dimensions |
-| Single pass | Iterates until exact match |
+This ensures any item the user adds will always have a visible, sensible portion.
 
 ---
 
-## Technical Implementation
+## 2. Smart Seasoning Logic
 
-### File: `src/lib/autoPortioning.ts`
+### Problem
+Seasonings are currently set to a fixed 15g regardless of what they pair with. This creates:
+- Random/bland combinations
+- Unrealistic quantities (15g paprika on fish?)
 
-#### 1. New Multi-Macro Error Function
+### Solution
+Create a **seasoning-to-protein pairing map** with realistic quantities:
+
 ```typescript
-interface MacroError {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  totalWeighted: number;
-}
+const SEASONING_PAIRINGS: Record<string, { proteins: string[], grams: number }> = {
+  "schwartz": { proteins: ["chicken", "beef", "pork"], grams: 8 },
+  "paprika": { proteins: ["chicken", "pork"], grams: 3 },
+  "garlic": { proteins: ["chicken", "fish", "prawn"], grams: 6 },
+  "herbs": { proteins: ["fish", "chicken", "lamb"], grams: 5 },
+  "lemon": { proteins: ["fish", "salmon", "cod"], grams: 10 },
+  "pepper": { proteins: ["beef", "steak", "chicken"], grams: 2 },
+  "curry": { proteins: ["chicken", "tofu", "prawn"], grams: 10 },
+  "soy": { proteins: ["fish", "tofu", "prawn", "salmon"], grams: 15 },
+  "teriyaki": { proteins: ["salmon", "chicken"], grams: 20 },
+  "cajun": { proteins: ["chicken", "fish", "prawn"], grams: 5 },
+};
 
-function calculateMacroError(achieved: MacroTotals, targets: MacroTotals): MacroError {
-  // Weight priorities: Calories 1.0, Protein 1.5, Carbs 0.8, Fat 0.8
-  const calError = targets.calories - achieved.calories;
-  const proError = targets.protein - achieved.protein;
-  const carbError = targets.carbs - achieved.carbs;
-  const fatError = targets.fat - achieved.fat;
-  
-  return {
-    calories: calError,
-    protein: proError,
-    carbs: carbError,
-    fat: fatError,
-    totalWeighted: Math.abs(calError) + 1.5 * Math.abs(proError) + 
-                   0.8 * Math.abs(carbError) + 0.8 * Math.abs(fatError)
-  };
-}
+const DEFAULT_SEASONING_GRAMS = 10; // If no match
 ```
 
-#### 2. Iterative Solver with Simultaneous Constraints
+**New function: `getSeasoningPortion`**
+
 ```typescript
-function solveSimultaneous(
-  items: EditableItem[],
-  targets: MacroTotals,
-  settings: PortioningSettings
-): Map<string, number> {
-  const n = items.length;
-  const grams = new Array(n).fill(50); // Initial guess
+function getSeasoningPortion(
+  seasoning: Product,
+  mealItems: EditableItem[]
+): number {
+  const seasoningName = seasoning.name.toLowerCase();
+  const proteins = mealItems.filter(i => isHighProteinSource(i.product));
   
-  const MAX_ITERATIONS = 100;
-  const TOLERANCE = 0.5; // Within 0.5g/kcal of target
-  
-  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-    const current = sumMacros(items, grams);
-    const error = calculateMacroError(current, targets);
-    
-    // Check convergence
-    if (Math.abs(error.calories) < 1 && 
-        Math.abs(error.protein) < TOLERANCE &&
-        Math.abs(error.carbs) < TOLERANCE &&
-        Math.abs(error.fat) < TOLERANCE) {
-      break;
-    }
-    
-    // Compute adjustment for each item based on its macro contribution
-    for (let i = 0; i < n; i++) {
-      const item = items[i];
-      
-      // Calculate this item's "influence" on each macro
-      const calInfluence = item.caloriesPer100g / 100;
-      const proInfluence = item.proteinPer100g / 100;
-      const carbInfluence = item.carbsPer100g / 100;
-      const fatInfluence = item.fatPer100g / 100;
-      
-      // Weighted gradient: how much should this item change?
-      const gradient = 
-        error.calories * calInfluence * 1.0 +
-        error.protein * proInfluence * 1.5 +
-        error.carbs * carbInfluence * 0.8 +
-        error.fat * fatInfluence * 0.8;
-      
-      // Apply damped adjustment (prevent oscillation)
-      const learningRate = 0.3;
-      grams[i] += gradient * learningRate;
-      grams[i] = Math.max(settings.minGrams, Math.min(settings.maxGrams, grams[i]));
+  // Find best match
+  for (const [key, config] of Object.entries(SEASONING_PAIRINGS)) {
+    if (seasoningName.includes(key)) {
+      // Check if any protein in meal matches
+      const hasMatchingProtein = proteins.some(p => 
+        config.proteins.some(pName => p.product.name.toLowerCase().includes(pName))
+      );
+      if (hasMatchingProtein) {
+        return config.grams;
+      }
     }
   }
   
-  // Final precision pass: fine-tune to hit exact targets
-  return fineTuneToExact(items, grams, targets, settings);
+  // Default: small portion if no specific match
+  return DEFAULT_SEASONING_GRAMS;
 }
 ```
 
-#### 3. Breakfast Composition Rules (Preserved)
-- **Yogurt (base)**: ~55% of breakfast calories, sized to hit protein
-- **Fruit (secondary)**: ~30% of breakfast calories
-- **Granola (topper)**: Max 40g regardless (capped)
+**Integration**: Replace the fixed `15g` seasoning assignment with the dynamic calculation.
 
-These rules run BEFORE the multi-macro solver to establish reasonable starting portions.
+---
 
-#### 4. Final Precision Pass
+## 3. Reset Day Button (Rename + Confirm)
+
+### Current State
+- Already exists as "Clear All Items" in the day card dropdown
+- Works correctly - deletes all `meal_plan_items` for that day's plan
+
+### Change
+- Rename to **"Reset Day"** for consistency with new Reset Week button
+- Add confirmation dialog to prevent accidental deletion
+
+---
+
+## 4. Reset Week Button (New Feature)
+
+### Location
+Add to the **week header actions** area (next to "Copy Previous Week" button)
+
+### UI Design
+
+```
+Week Navigation                      [Target Mode] [Generate] [↻ Reset Week] [Copy Prev Week]
+```
+
+Mobile: Add to the ⋮ dropdown menu
+
+### Implementation
+
+**New mutation in `useMealPlanItems.ts`:**
+
 ```typescript
-function fineTuneToExact(
-  items: EditableItem[],
-  grams: number[],
-  targets: MacroTotals,
-  settings: PortioningSettings
-): Map<string, number> {
-  // After iterative solve, make micro-adjustments to hit EXACT targets
-  // Prioritize items by their dominant macro contribution
-  
-  // 1. Adjust highest-protein item to hit protein exactly
-  // 2. Adjust highest-carb item to hit carbs exactly
-  // 3. Adjust highest-fat item to hit fat exactly
-  // 4. Micro-adjust any item to hit calories exactly
-  
-  // Each adjustment is tiny (0.1-2g) to preserve overall balance
-}
+const clearWeek = useMutation({
+  mutationFn: async () => {
+    if (!user) throw new Error("Not authenticated");
+    
+    // Get all plan IDs for this week
+    const planIds = mealPlans.map(p => p.id);
+    
+    // Delete all items from all plans
+    const { error } = await supabase
+      .from("meal_plan_items")
+      .delete()
+      .eq("user_id", user.id)
+      .in("meal_plan_id", planIds);
+    
+    if (error) throw error;
+    
+    return { plansCleared: planIds.length };
+  },
+  onSuccess: (result) => {
+    queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+    toast.success(`Reset ${result.plansCleared} days`);
+  },
+});
+```
+
+**UI in `WeeklyMealPlanner.tsx`:**
+
+Add Reset Week button with confirmation:
+
+```typescript
+const [resetWeekOpen, setResetWeekOpen] = useState(false);
+
+// In header actions area:
+<AlertDialog open={resetWeekOpen} onOpenChange={setResetWeekOpen}>
+  <AlertDialogTrigger asChild>
+    <Button variant="outline" size="sm">
+      <RotateCcw className="h-4 w-4 mr-1" />
+      Reset Week
+    </Button>
+  </AlertDialogTrigger>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Reset entire week?</AlertDialogTitle>
+      <AlertDialogDescription>
+        This will clear all meals and portions for the week. 
+        Your saved foods and settings will not be affected.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction onClick={() => clearWeek.mutate()}>
+        Reset Week
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
 ```
 
 ---
 
-## Changes Required
+## Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/lib/autoPortioning.ts` | Replace `solveExactPortions` with new simultaneous solver |
-| `src/lib/autoPortioning.ts` | Update `calculateDayPortions` to use new solver |
-| `src/lib/autoPortioning.ts` | Add `calculateMacroError` and `fineTuneToExact` functions |
+| File | Changes |
+|------|---------|
+| `src/lib/autoPortioning.ts` | Add minimum portion enforcement for breakfast roles; Add seasoning pairing logic |
+| `src/hooks/useMealPlanItems.ts` | Add `clearWeek` mutation |
+| `src/components/mealplan/WeeklyMealPlanner.tsx` | Add Reset Week button with confirmation dialog |
+| `src/components/mealplan/MealDayCard.tsx` | Rename "Clear All Items" to "Reset Day" |
 
 ---
 
 ## Testing Plan
 
 After implementation:
-1. Open `/meal-plan` and add items to a day
-2. Click "Generate Portions"
-3. Verify ALL macros show green (within tolerance):
-   - Calories: exactly 2302 (or user's target)
-   - Protein: exactly 149g (or target)
-   - Carbs: exactly 259g (or target)
-   - Fat: exactly 51g (or target)
-4. Check alert bar shows no warnings (no "under/over target" messages)
+1. Add yogurt + fruit + granola to breakfast → click Generate → verify:
+   - Fruit gets ≥80g (not 0g)
+   - Granola gets 25-35g
+   - Yogurt sized appropriately for protein
+2. Add chicken + Schwartz seasoning → click Generate → verify seasoning gets ~8g (not 15g)
+3. Test Reset Day on a single day → confirm items cleared
+4. Test Reset Week → confirm all 7 days cleared but settings preserved
+5. Verify macros still hit targets exactly (no alert warnings)
 
----
-
-## Expected Outcome
-
-The final day totals will match targets with zero tolerance:
-- No more "22g under protein" warnings
-- No calorie overshoot from carb/fat compensation
-- Realistic gram portions (similar to the MyFitnessPal reference ranges)
-- All progress bars show green (success state)
