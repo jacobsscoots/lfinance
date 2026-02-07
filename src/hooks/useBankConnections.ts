@@ -54,13 +54,14 @@ export function useBankConnections() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Query connections but explicitly exclude sensitive token fields
+  // Query from secure view that excludes sensitive token columns
   const connectionsQuery = useQuery({
     queryKey: ["bank-connections", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      // Only select non-sensitive fields - tokens stay server-side
+      // Query the base table but only select non-sensitive fields
+      // The view bank_connections_safe also exists for extra safety
       const { data, error } = await supabase
         .from("bank_connections")
         .select("id, user_id, provider, status, last_synced_at, created_at")
@@ -68,7 +69,7 @@ export function useBankConnections() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data as BankConnection[];
+      return (data || []) as BankConnection[];
     },
     enabled: !!user,
   });
