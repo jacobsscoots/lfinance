@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Tag, CalendarDays, Package, Target, FileText, Calendar } from "lucide-react";
+import { User, Tag, CalendarDays, Package, Target, FileText, Calendar, Mail } from "lucide-react";
 import { ProductSettings } from "@/components/settings/ProductSettings";
 import { NutritionTargetSettings } from "@/components/settings/NutritionTargetSettings";
 import { PaydaySettings } from "@/components/settings/PaydaySettings";
 import { PayslipSettings } from "@/components/settings/PayslipSettings";
 import { PayslipPreviewDialog } from "@/components/settings/PayslipPreviewDialog";
 import { ZigzagCalculator } from "@/components/settings/ZigzagCalculator";
+import { GmailSettings } from "@/components/settings/GmailSettings";
 import { Card, CardContent } from "@/components/ui/card";
 import { Payslip } from "@/hooks/usePayslips";
 
@@ -56,6 +57,10 @@ export default function Settings() {
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Payslips</span>
             </TabsTrigger>
+            <TabsTrigger value="gmail" className="flex items-center gap-2 flex-1 sm:flex-none">
+              <Mail className="h-4 w-4" />
+              <span className="hidden sm:inline">Gmail</span>
+            </TabsTrigger>
             <TabsTrigger value="account" className="flex items-center gap-2 flex-1 sm:flex-none">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Account</span>
@@ -92,6 +97,10 @@ export default function Settings() {
 
           <TabsContent value="payslips">
             <PayslipSettings onViewPayslip={handleViewPayslip} />
+          </TabsContent>
+
+          <TabsContent value="gmail">
+            <GmailSettings />
           </TabsContent>
 
           <TabsContent value="account">

@@ -1,0 +1,212 @@
+import { useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  MoreVertical, 
+  Pencil, 
+  Trash2,
+  Building,
+  Calendar,
+  Percent
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { InvestmentAccount } from "@/hooks/useInvestments";
+import { InvestmentTransaction } from "@/hooks/useInvestmentTransactions";
+import { 
+  calculateContributionTotal, 
+  calculateReturn, 
+  calculateDailyChange,
+  calculateDailyValues
+} from "@/lib/investmentCalculations";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+
+interface InvestmentCardProps {
+  investment: InvestmentAccount;
+  transactions: InvestmentTransaction[];
+  onClick?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}
+
+export function InvestmentCard({
+  investment,
+  transactions,
+  onClick,
+  onEdit,
+  onDelete,
+}: InvestmentCardProps) {
+  const metrics = useMemo(() => {
+    const formattedTransactions = transactions.map(tx => ({
+      id: tx.id,
+      transaction_date: tx.transaction_date,
+      type: tx.type as 'deposit' | 'withdrawal' | 'fee' | 'dividend',
+      amount: tx.amount,
+    }));
+
+    // Calculate current value using daily values
+    const today = new Date();
+    const startDate = new Date(investment.start_date);
+    const dailyValues = calculateDailyValues(
+      formattedTransactions,
+      [],
+      startDate,
+      today,
+      investment.expected_annual_return
+    );
+
+    const currentValue = dailyValues.length > 0 
+      ? dailyValues[dailyValues.length - 1].value 
+      : 0;
+    
+    const totalContributions = calculateContributionTotal(formattedTransactions);
+    const returnPercentage = calculateReturn(currentValue, totalContributions);
+    const totalReturn = currentValue - totalContributions;
+    const dailyChange = calculateDailyChange(currentValue, investment.expected_annual_return);
+
+    return {
+      currentValue,
+      totalContributions,
+      returnPercentage,
+      totalReturn,
+      dailyChange,
+    };
+  }, [investment, transactions]);
+
+  const isPositive = metrics.totalReturn >= 0;
+
+  return (
+    <Card 
+      className="group cursor-pointer hover:shadow-md transition-shadow"
+      onClick={onClick}
+    >
+      <CardHeader className="flex flex-row items-start justify-between pb-2">
+        <div>
+          <CardTitle className="text-lg">{investment.name}</CardTitle>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+            {investment.provider && (
+              <div className="flex items-center gap-1">
+                <Building className="h-3 w-3" />
+                <span>{investment.provider}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              <span>{format(new Date(investment.start_date), "MMM yyyy")}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={investment.status === 'active' ? 'default' : 'secondary'}>
+            {investment.status}
+          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={onEdit}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {/* Current Value */}
+          <div>
+            <p className="text-xs text-muted-foreground">Current Value</p>
+            <p className="text-xl font-bold">
+              £{metrics.currentValue.toLocaleString("en-GB", { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+              })}
+            </p>
+          </div>
+
+          {/* Total Invested */}
+          <div>
+            <p className="text-xs text-muted-foreground">Total Invested</p>
+            <p className="text-xl font-bold">
+              £{metrics.totalContributions.toLocaleString("en-GB", { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+              })}
+            </p>
+          </div>
+
+          {/* Total Return */}
+          <div>
+            <p className="text-xs text-muted-foreground">Total Return</p>
+            <div className="flex items-center gap-1">
+              {isPositive ? (
+                <TrendingUp className="h-4 w-4 text-success" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-destructive" />
+              )}
+              <p className={cn(
+                "text-xl font-bold",
+                isPositive ? "text-success" : "text-destructive"
+              )}>
+                {isPositive ? "+" : "-"}£{Math.abs(metrics.totalReturn).toLocaleString("en-GB", { 
+                  minimumFractionDigits: 2, 
+                  maximumFractionDigits: 2 
+                })}
+              </p>
+            </div>
+            <p className={cn(
+              "text-xs",
+              isPositive ? "text-success" : "text-destructive"
+            )}>
+              {isPositive ? "+" : ""}{metrics.returnPercentage.toFixed(2)}%
+            </p>
+          </div>
+
+          {/* Daily Change */}
+          <div>
+            <p className="text-xs text-muted-foreground">Daily Change</p>
+            <div className="flex items-center gap-1">
+              <Percent className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xl font-bold text-success">
+                +£{metrics.dailyChange.amount.toLocaleString("en-GB", { 
+                  minimumFractionDigits: 2, 
+                  maximumFractionDigits: 2 
+                })}
+              </p>
+            </div>
+            <p className="text-xs text-success">
+              +{metrics.dailyChange.percentage.toFixed(3)}%
+            </p>
+          </div>
+        </div>
+
+        {/* Expected Return Badge */}
+        <div className="mt-4 pt-3 border-t flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Expected annual return</span>
+          <Badge variant="outline" className="gap-1">
+            <Percent className="h-3 w-3" />
+            {investment.expected_annual_return}%
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
