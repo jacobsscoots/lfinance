@@ -283,9 +283,24 @@ function extractFromText(text: string): ExtractedNutrition {
 async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNutrition> {
   const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
   
-  let html: string;
+  let html: string | undefined;
+  let markdown: string | undefined;
   
-  // Try Firecrawl first if available (handles anti-bot protection)
+  // Block page detection indicators
+  const blockIndicators = [
+    "security check",
+    "something is not right",
+    "access denied",
+    "captcha",
+    "please verify",
+    "blocked",
+    "unusual traffic",
+    "bot detection",
+    "challenge-platform",
+    "ray id",
+  ];
+  
+  // Try Firecrawl first if available (handles anti-bot protection better)
   if (FIRECRAWL_API_KEY) {
     try {
       console.log("Using Firecrawl to fetch URL:", url);
@@ -297,8 +312,10 @@ async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNut
         },
         body: JSON.stringify({
           url,
-          formats: ["html", "markdown"],
+          formats: ["markdown", "html"],
           onlyMainContent: false,
+          waitFor: 5000, // Wait for JS content to load
+          timeout: 30000, // 30 second timeout for slow pages
         }),
       });
 
@@ -307,18 +324,43 @@ async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNut
       if (!firecrawlResponse.ok) {
         console.error("Firecrawl API error:", firecrawlData);
         // Fall through to direct fetch
-      } else if (firecrawlData.success && firecrawlData.data?.html) {
-        html = firecrawlData.data.html;
-        console.log("Successfully fetched via Firecrawl");
+      } else if (firecrawlData.success) {
+        // Access data correctly - Firecrawl v1 nests content in data.data
+        const responseData = firecrawlData.data || firecrawlData;
+        markdown = responseData.markdown;
+        html = responseData.html;
+        
+        // Log first 500 chars for debugging
+        const preview = (markdown || html || "").substring(0, 500);
+        console.log("Firecrawl content preview:", preview);
+        
+        if (markdown || html) {
+          console.log("Successfully fetched via Firecrawl");
+          
+          // Check if the content is actually a block page
+          const contentToCheck = (markdown || html || "").toLowerCase();
+          const isBlocked = blockIndicators.some(indicator => 
+            contentToCheck.includes(indicator)
+          );
+          
+          if (isBlocked) {
+            console.log("Detected blocked page content");
+            throw new Error("This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product.");
+          }
+        }
       }
     } catch (e) {
+      // Re-throw if it's our block detection error
+      if (e instanceof Error && e.message.includes("anti-bot protection")) {
+        throw e;
+      }
       console.error("Firecrawl fetch failed:", e);
       // Fall through to direct fetch
     }
   }
 
   // Fallback to direct fetch if Firecrawl didn't work
-  if (!html!) {
+  if (!html && !markdown) {
     try {
       console.log("Attempting direct fetch for URL:", url);
       const response = await fetch(url, {
@@ -337,35 +379,54 @@ async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNut
       }
       
       html = await response.text();
+      
+      // Check direct fetch for block pages too
+      const contentToCheck = html.toLowerCase();
+      const isBlocked = blockIndicators.some(indicator => 
+        contentToCheck.includes(indicator)
+      );
+      
+      if (isBlocked) {
+        throw new Error("This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead.");
+      }
     } catch (e) {
-      if (e instanceof Error && e.message.includes("blocking")) {
+      if (e instanceof Error && (e.message.includes("blocking") || e.message.includes("anti-bot"))) {
         throw e;
       }
       throw new Error("Could not access this URL. The website may be blocking automated access. Try 'Upload Photo' or 'Paste Text' instead.");
     }
   }
 
-  // Try to find JSON-LD first
-  const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
-  let structuredData: any = null;
+  // Prefer markdown (cleaner, more token-efficient) over HTML
+  const contentForAi = markdown && markdown.length > 200 ? markdown : html;
+  
+  if (!contentForAi) {
+    throw new Error("Could not retrieve content from this URL. Try 'Upload Photo' or 'Paste Text' instead.");
+  }
 
-  if (jsonLdMatch) {
-    for (const match of jsonLdMatch) {
-      const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, "").trim();
-      try {
-        const parsed = JSON.parse(jsonContent);
-        if (parsed["@type"] === "Product" || parsed["@type"]?.includes?.("Product")) {
-          structuredData = parsed;
-          break;
+  // Try to find JSON-LD first (only in HTML)
+  if (html) {
+    const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+
+    if (jsonLdMatch) {
+      for (const match of jsonLdMatch) {
+        const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, "").trim();
+        try {
+          const parsed = JSON.parse(jsonContent);
+          if (parsed["@type"] === "Product" || parsed["@type"]?.includes?.("Product")) {
+            console.log("Found JSON-LD Product data");
+            break;
+          }
+        } catch {
+          // Continue to next script
         }
-      } catch {
-        // Continue to next script
       }
     }
   }
 
-  // Use AI to extract from HTML
-  const systemPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this HTML content.
+  // Use AI to extract from content (markdown preferred)
+  const contentType = markdown && markdown.length > 200 ? "markdown" : "HTML";
+  const systemPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this ${contentType} content.
 
 Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
 {
@@ -392,8 +453,10 @@ Look for nutrition tables, product details, and pricing information.
 If nutrition is shown per serving, convert to per 100g using the serving size.
 For UK supermarkets (Tesco, Sainsbury's, Asda, etc.), the format is usually consistent.`;
 
-  // Truncate HTML to avoid token limits
-  const truncatedHtml = html.substring(0, 50000);
+  // Truncate content to avoid token limits (markdown is already cleaner)
+  const truncatedContent = contentForAi.substring(0, 60000);
+  
+  console.log(`Sending ${contentType} to AI (${truncatedContent.length} chars)`);
 
   const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -405,7 +468,7 @@ For UK supermarkets (Tesco, Sainsbury's, Asda, etc.), the format is usually cons
       model: "google/gemini-3-flash-preview",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Extract product information from this webpage HTML:\n\n${truncatedHtml}` },
+        { role: "user", content: `Extract product information from this webpage ${contentType}:\n\n${truncatedContent}` },
       ],
     }),
   });
