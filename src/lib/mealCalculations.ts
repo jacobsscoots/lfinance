@@ -1,12 +1,22 @@
 import { Product } from "@/hooks/useProducts";
 import { MealPlan, MealPlanItem, MealType, MealStatus } from "@/hooks/useMealPlanItems";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
+import { getCaloriesForDate, getWeekStartMonday, WeeklyCalorieSchedule } from "@/lib/weekTargets";
 
 export interface MacroTotals {
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+}
+
+// Weekly targets that can override global settings
+export interface WeeklyTargetsOverride {
+  weekStartDate: string;
+  schedule: WeeklyCalorieSchedule;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
 }
 
 export interface MealMacros extends MacroTotals {
@@ -91,8 +101,28 @@ export function calculateMealMacros(
   return { mealType, status, ...totals };
 }
 
-// Get targets for a specific date (weekday vs weekend)
-export function getTargetsForDate(date: Date, settings: NutritionSettings): MacroTotals {
+// Get targets for a specific date (weekday vs weekend, or weekly override)
+export function getTargetsForDate(
+  date: Date, 
+  settings: NutritionSettings,
+  weeklyOverride?: WeeklyTargetsOverride | null
+): MacroTotals {
+  // If we have weekly targets for this date's week, use them
+  if (weeklyOverride) {
+    const dateWeekStart = getWeekStartMonday(date);
+    const dateWeekStartStr = dateWeekStart.toISOString().split('T')[0];
+    
+    if (dateWeekStartStr === weeklyOverride.weekStartDate) {
+      return {
+        calories: getCaloriesForDate(date, weeklyOverride.schedule),
+        protein: weeklyOverride.protein ?? settings.protein_target_grams ?? 150,
+        carbs: weeklyOverride.carbs ?? settings.carbs_target_grams ?? 200,
+        fat: weeklyOverride.fat ?? settings.fat_target_grams ?? 65,
+      };
+    }
+  }
+
+  // Fall back to global settings (weekday/weekend logic)
   const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
@@ -116,7 +146,8 @@ export function getTargetsForDate(date: Date, settings: NutritionSettings): Macr
 // Calculate macros for a day
 export function calculateDayMacros(
   plan: MealPlan,
-  settings?: NutritionSettings | null
+  settings?: NutritionSettings | null,
+  weeklyOverride?: WeeklyTargetsOverride | null
 ): DayMacros {
   const items = plan.items || [];
   
@@ -139,9 +170,9 @@ export function calculateDayMacros(
 
   let targetDiff: MacroTotals | undefined;
   if (settings && settings.mode === "target_based") {
-    // Use day-specific targets (weekday vs weekend)
+    // Use day-specific targets (weekday vs weekend, or weekly override)
     const planDate = new Date(plan.meal_date);
-    const targets = getTargetsForDate(planDate, settings);
+    const targets = getTargetsForDate(planDate, settings, weeklyOverride);
     
     targetDiff = {
       calories: totals.calories - targets.calories,

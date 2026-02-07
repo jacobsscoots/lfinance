@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Palmtree } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,8 @@ import { useMealPlanItems, MealPlan, MealType } from "@/hooks/useMealPlanItems";
 import { useMealPlanBlackouts } from "@/hooks/useMealPlanBlackouts";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { useProducts } from "@/hooks/useProducts";
-import { calculateDayMacros, calculateWeeklyAverages, DayMacros, getBalanceWarnings } from "@/lib/mealCalculations";
+import { useWeeklyNutritionTargets } from "@/hooks/useWeeklyNutritionTargets";
+import { calculateDayMacros, calculateWeeklyAverages, DayMacros, getBalanceWarnings, WeeklyTargetsOverride } from "@/lib/mealCalculations";
 import { DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
 import { 
   getShoppingWeekRange, 
@@ -38,6 +39,7 @@ import {
   getBlackoutReason,
   getActiveDateStringsInRange,
 } from "@/lib/mealPlannerWeek";
+import { getWeekStartMonday } from "@/lib/weekTargets";
 import { MealDayCard } from "./MealDayCard";
 import { GroceryListPanel } from "./GroceryListPanel";
 import { WeeklySummaryCard } from "./WeeklySummaryCard";
@@ -62,6 +64,32 @@ export function WeeklyMealPlanner() {
   const { settings, isLoading: settingsLoading, isTargetMode } = useNutritionSettings();
   const { products, isLoading: productsLoading } = useProducts();
 
+  // Fetch weekly nutrition targets for the weeks in this shopping range
+  // Shopping week can span two Mon-Sun weeks, so we check for weekly targets
+  const weekStartMonday = useMemo(() => getWeekStartMonday(weekRange.start), [weekRange.start]);
+  const { weeklyTargets, isLoading: weeklyTargetsLoading } = useWeeklyNutritionTargets(weekStartMonday);
+
+  // Build the weekly override for macro calculations
+  const weeklyOverride: WeeklyTargetsOverride | null = useMemo(() => {
+    if (!weeklyTargets) return null;
+    
+    return {
+      weekStartDate: weeklyTargets.week_start_date,
+      schedule: {
+        monday: weeklyTargets.monday_calories,
+        tuesday: weeklyTargets.tuesday_calories,
+        wednesday: weeklyTargets.wednesday_calories,
+        thursday: weeklyTargets.thursday_calories,
+        friday: weeklyTargets.friday_calories,
+        saturday: weeklyTargets.saturday_calories,
+        sunday: weeklyTargets.sunday_calories,
+      },
+      protein: weeklyTargets.protein_target_grams,
+      carbs: weeklyTargets.carbs_target_grams,
+      fat: weeklyTargets.fat_target_grams,
+    };
+  }, [weeklyTargets]);
+
   // Navigation
   const goToPreviousWeek = () => setWeekRange(prev => getPreviousShoppingWeek(prev));
   const goToNextWeek = () => setWeekRange(prev => getNextShoppingWeek(prev));
@@ -72,8 +100,8 @@ export function WeeklyMealPlanner() {
   // Get active dates (excluding blackouts)
   const activeDates = getActiveDateStringsInRange(weekRange, blackouts);
 
-  // Calculate macros for all days (excluding blackout days from warnings)
-  const dayMacros: DayMacros[] = mealPlans.map(plan => calculateDayMacros(plan, settings));
+  // Calculate macros for all days (with weekly targets override)
+  const dayMacros: DayMacros[] = mealPlans.map(plan => calculateDayMacros(plan, settings, weeklyOverride));
   
   // Only include active days in weekly averages
   const activeDayMacros = dayMacros.filter(dm => activeDates.includes(dm.date));
@@ -97,7 +125,7 @@ export function WeeklyMealPlanner() {
       tolerancePercent: settings.target_tolerance_percent || DEFAULT_PORTIONING_SETTINGS.tolerancePercent,
     };
     
-    recalculateAll.mutate({ settings, portioningSettings });
+    recalculateAll.mutate({ settings, portioningSettings, weeklyOverride });
   };
 
   if (isLoading || settingsLoading || productsLoading) {

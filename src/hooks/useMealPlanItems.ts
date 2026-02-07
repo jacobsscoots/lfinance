@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { addDays } from "date-fns";
 import { Product, ProductType } from "./useProducts";
 import { NutritionSettings } from "./useNutritionSettings";
-import { getTargetsForDate } from "@/lib/mealCalculations";
+import { getTargetsForDate, WeeklyTargetsOverride } from "@/lib/mealCalculations";
 import { calculateMealPortions, PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
@@ -455,11 +455,13 @@ export function useMealPlanItems(weekStart: Date) {
     mutationFn: async ({ 
       planId,
       settings, 
-      portioningSettings = DEFAULT_PORTIONING_SETTINGS 
+      portioningSettings = DEFAULT_PORTIONING_SETTINGS,
+      weeklyOverride
     }: { 
       planId: string;
       settings: NutritionSettings; 
       portioningSettings?: PortioningSettings;
+      weeklyOverride?: WeeklyTargetsOverride | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
       
@@ -472,7 +474,7 @@ export function useMealPlanItems(weekStart: Date) {
       const { calculateDayPortions } = await import("@/lib/autoPortioning");
       
       const dayDate = new Date(plan.meal_date);
-      const targets = getTargetsForDate(dayDate, settings);
+      const targets = getTargetsForDate(dayDate, settings, weeklyOverride);
       
       // Reset unlocked editable items to 0g first (re-generate behavior)
       for (const item of items) {
@@ -538,14 +540,15 @@ export function useMealPlanItems(weekStart: Date) {
     },
   });
 
-  // Generate portions for the entire week
   const recalculateAll = useMutation({
     mutationFn: async ({ 
       settings, 
-      portioningSettings = DEFAULT_PORTIONING_SETTINGS 
+      portioningSettings = DEFAULT_PORTIONING_SETTINGS,
+      weeklyOverride
     }: { 
       settings: NutritionSettings; 
       portioningSettings?: PortioningSettings;
+      weeklyOverride?: WeeklyTargetsOverride | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
       
@@ -556,7 +559,7 @@ export function useMealPlanItems(weekStart: Date) {
       
       for (const plan of mealPlans) {
         const dayDate = new Date(plan.meal_date);
-        const targets = getTargetsForDate(dayDate, settings);
+        const targets = getTargetsForDate(dayDate, settings, weeklyOverride);
         const items = plan.items || [];
         
         if (items.length === 0) continue;
