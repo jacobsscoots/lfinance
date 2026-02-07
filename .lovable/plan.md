@@ -1,200 +1,264 @@
 
-# Toiletries & Consumables Tracking System
+# Mobile Optimization Plan
 
 ## Overview
 
-This plan creates a dedicated Toiletries section that replaces your Excel workbook entirely. The system will track inventory, monitor usage, forecast run-out dates, and calculate costs - all updating in real-time as you make changes.
+This plan addresses mobile usability across the entire application, focusing on improving touch interactions, readability, and navigation patterns for smaller screens. The goal is to make the app feel native and intuitive on mobile devices while maintaining the existing desktop experience.
 
 ---
 
-## What You'll Get
+## Current State Analysis
 
-### Main Features
-- **Inventory Table**: A comprehensive view of all your toiletries with inline-editable fields
-- **Live Forecasting**: Automatic calculation of days remaining and run-out dates based on usage rates
-- **Cost Tracking**: Monthly and yearly spend projections, both per-item and by category
-- **Smart Status Indicators**: Visual badges showing "In Use", "Low", "Empty", and "Out of Stock"
-- **Category Filtering**: Group items by Body, Hair, Oral, Household, etc.
-- **Summary Dashboard**: Total spend breakdowns and items needing attention
+### What's Already Working
+- Basic responsive navigation (MobileNav with slide-out sheet)
+- Tailwind responsive breakpoints in use (sm:, md:, lg:)
+- Cards and grids adapt to screen sizes
+- Most dialogs use `sm:max-w-[425px]` for proper mobile sizing
 
-### Key Behaviours (Matching Your Excel)
-- Quantities always round **up** for purchases (never down)
-- Partial usage supported (not just "full or empty")
-- All forecasts update instantly when you change usage rates or remaining amounts
-- No auto-deletion of items - discontinued items remain visible
+### Key Issues to Address
+
+| Area | Problem | Impact |
+|------|---------|--------|
+| Tables | ToiletryTable uses desktop-focused data tables | Hard to read/interact on mobile |
+| Calendar | 7-column grid too cramped on phones | Dates and bill pills unreadable |
+| Transactions | Filter sidebar takes 300px on all screens | Filters compete with transaction list |
+| Meal Planner | 7-day grid shows all days at once | Cards too narrow to be useful |
+| Forms | Two-column form grids on mobile | Fields become cramped |
+| Touch Targets | Action buttons use hover-only visibility | Can't access on touch devices |
+| Page Headers | Button placement inconsistent on mobile | "Add" buttons sometimes get cut off |
+| Bottom Navigation | No bottom nav option for quick switching | Extra taps to reach common actions |
 
 ---
 
-## User Interface Design
+## Implementation Plan
 
-### Navigation
-A new "Toiletries" link will be added to the sidebar navigation between "Groceries" and "Meal Plan".
+### 1. Mobile-First Table Component for Toiletries
 
-### Page Layout
+Replace the complex table with a card-based mobile view:
+
+**File: `src/components/toiletries/ToiletryTable.tsx`**
+
+Changes:
+- Use the `useIsMobile()` hook to detect screen size
+- On mobile: render a stacked card layout instead of table rows
+- Each card shows: item name, status badge, progress bar, days remaining
+- Action menu (edit/delete/restock) always visible as an icon button
+- On desktop: keep existing table layout
 
 ```text
-+----------------------------------------------------------+
-|  Toiletries                                    [+ Add Item] |
-|  Track and forecast your consumables                       |
-+----------------------------------------------------------+
-|                                                            |
-|  +------------------+  +------------------+  +-----------+ |
-|  | Monthly Spend    |  | Yearly Spend     |  | Low Stock | |
-|  | £42.50           |  | £510.00          |  | 3 items   | |
-|  +------------------+  +------------------+  +-----------+ |
-|                                                            |
-|  [All] [Body] [Hair] [Oral] [Household] [Cleaning]         |
-|                                                            |
-|  +------------------------------------------------------+  |
-|  | Item          | Size  | Remaining | Days  | Run-out  |  |
-|  |               |       |           | Left  | Date     |  |
-|  +------------------------------------------------------+  |
-|  | Shampoo       | 500ml | 250ml     | 25    | Mar 4    |  |
-|  | [Body]        | £6.50 | 50%       |       |          |  |
-|  +------------------------------------------------------+  |
-|  | Toothpaste    | 100ml | 15ml      | 5     | Feb 12   |  |
-|  | [Oral] [LOW]  | £2.00 |           |       |          |  |
-|  +------------------------------------------------------+  |
-+----------------------------------------------------------+
+Mobile Card Layout:
++----------------------------------+
+| Shampoo                    [⋮]   |
+| Body • 500ml • £6.50            |
+| [████████░░░] 50% • 25 days     |
+| [In Use]                         |
++----------------------------------+
 ```
 
-### Status Indicators
-- **In Use** (green): Active item with adequate stock
-- **Low** (amber): Less than 14 days of supply remaining  
-- **Empty** (red): Item has run out, needs reorder
-- **Out of Stock**: Temporarily unavailable (user-set)
-- **Discontinued**: No longer purchasing (user-set)
+### 2. Calendar Mobile Optimization
 
-### Add/Edit Item Form
-A dialog form with fields for:
-- Item name
-- Category (dropdown)
-- Total size (with unit: ml, g, or units)
-- Cost per item
-- Optional: Pack quantity (for multi-buy)
-- Usage rate (amount per day)
-- Current remaining amount
-- Status
+**File: `src/components/calendar/CalendarGrid.tsx`**
+
+Changes:
+- On mobile: reduce cell height from 100px to 70px
+- Shorten weekday headers (M, T, W, T, F, S, S instead of Mon, Tue, etc.)
+- Show maximum 2 bill pills per day (with "+N" indicator)
+- Increase touch target for date cells
+- Hide the "Run-out" column text, keep just the date
+
+**File: `src/pages/Calendar.tsx`**
+
+Changes:
+- Stack the summary cards vertically on mobile (1 column instead of 3)
+- Move the day detail panel above the calendar on mobile when a day is selected
+- Make it a slide-up Drawer on mobile instead of a side panel
+
+### 3. Transactions Page Mobile Layout
+
+**File: `src/pages/Transactions.tsx`**
+
+Changes:
+- On mobile: replace sidebar layout with a collapsible filter section
+- Filters collapse to a single "Filters" button that expands an accordion
+- Move month navigation to a horizontal swipe-friendly row
+- Full-width transaction list
+
+**File: `src/components/transactions/TransactionFilters.tsx`**
+
+Changes:
+- Wrap in a Collapsible component on mobile
+- Change from Card to a minimal expandable section
+- Stack filter selects vertically (1 column)
+
+**File: `src/components/transactions/TransactionList.tsx`**
+
+Changes:
+- Make the action dropdown always visible (remove `opacity-0 group-hover:opacity-100`)
+- Ensure touch targets are at least 44x44px
+
+### 4. Meal Planner Mobile View
+
+**File: `src/components/mealplan/WeeklyMealPlanner.tsx`**
+
+Changes:
+- On mobile: show one day at a time with horizontal swipe navigation
+- Add a day selector strip at the top (Mon | Tue | Wed | etc.)
+- Current day highlighted, tap to switch
+- "Copy Previous Week" button moves to a dropdown menu
+
+**File: `src/components/mealplan/MealDayCard.tsx`**
+
+Changes:
+- On mobile: cards expand to full width
+- Increase touch target size for "Add food" buttons
+- Make dropdown menus larger for touch
+
+### 5. Form Dialog Improvements
+
+**Files affected:**
+- `src/components/toiletries/ToiletryFormDialog.tsx`
+- `src/components/bills/BillFormDialog.tsx`
+- `src/components/transactions/TransactionFormDialog.tsx`
+- `src/components/accounts/AccountFormDialog.tsx`
+
+Changes for all forms:
+- Use `Drawer` component on mobile instead of `Dialog`
+- Create a responsive wrapper component that switches automatically
+- Stack two-column grids into single columns on mobile
+- Increase input heights for easier touch input
+- Add proper keyboard handling (close on escape, focus management)
+
+### 6. Touch-Friendly Action Buttons
+
+**Pattern to apply across all pages:**
+
+Current problem:
+```tsx
+<Button className="opacity-0 group-hover:opacity-100">
+```
+
+Fix:
+```tsx
+<Button className="sm:opacity-0 sm:group-hover:opacity-100">
+```
+
+Files to update:
+- `src/components/transactions/TransactionList.tsx`
+- `src/components/toiletries/ToiletryTable.tsx`
+- `src/components/mealplan/MealDayCard.tsx`
+
+### 7. Page Header Consistency
+
+**All page files** (Dashboard, Accounts, Bills, Transactions, Calendar, etc.)
+
+Changes:
+- Ensure "flex-wrap gap-4" on all header rows
+- On mobile: stack title and action button vertically
+- Use `flex-col sm:flex-row` pattern consistently
+
+Example:
+```tsx
+<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <h1>Page Title</h1>
+    <p>Description</p>
+  </div>
+  <Button>Add Item</Button>
+</div>
+```
+
+### 8. Settings Page Tabs
+
+**File: `src/pages/Settings.tsx`**
+
+Changes:
+- On mobile: change tabs to a scrollable horizontal list
+- Or: convert to a vertical accordion layout
+- Current `grid-cols-5` doesn't work well on narrow screens
+
+### 9. Responsive Dialog/Drawer Wrapper
+
+**New file: `src/components/ui/responsive-dialog.tsx`**
+
+Create a component that:
+- Renders as a `Dialog` on desktop (md: and up)
+- Renders as a `Drawer` on mobile
+- Accepts same props as Dialog
+- Automatically handles the switch
+
+This reduces repeated code across all form dialogs.
 
 ---
 
-## Technical Implementation
-
-### Database Schema
-
-A new `toiletry_items` table will store all item data:
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| user_id | uuid | Owner (for RLS) |
-| name | text | Item name |
-| category | text | body, hair, oral, household, cleaning, other |
-| total_size | numeric | Full container size |
-| size_unit | text | ml, g, or units |
-| cost_per_item | numeric | Price for one unit |
-| pack_size | integer | Multi-buy quantity (default 1) |
-| usage_rate_per_day | numeric | How much used daily |
-| current_remaining | numeric | Current amount left |
-| status | text | active, out_of_stock, discontinued |
-| notes | text | Optional notes |
-| last_restocked_at | timestamp | When last refilled |
-| created_at | timestamp | Auto-set |
-| updated_at | timestamp | Auto-updated |
-
-Row-Level Security policies will ensure users can only access their own data.
-
-### Calculation Logic
-
-All forecasting is computed client-side for instant updates:
-
-```text
-Days Remaining = current_remaining / usage_rate_per_day
-
-Run-out Date = today + Days Remaining
-
-Monthly Cost = (usage_rate_per_day * 30 / total_size) * cost_per_item
-
-Yearly Cost = Monthly Cost * 12
-
-Purchase Quantity = CEILING(required_amount / pack_size)
-```
-
-### Files to Create
+## Files to Create
 
 | File | Purpose |
 |------|---------|
-| `src/pages/Toiletries.tsx` | Main page component |
-| `src/hooks/useToiletries.ts` | Data fetching and mutations |
-| `src/lib/toiletryCalculations.ts` | Forecasting and cost calculations |
-| `src/components/toiletries/ToiletryTable.tsx` | Main inventory table |
-| `src/components/toiletries/ToiletryFormDialog.tsx` | Add/Edit item form |
-| `src/components/toiletries/ToiletrySummaryCards.tsx` | Summary statistics |
-| `src/components/toiletries/DeleteToiletryDialog.tsx` | Delete confirmation |
-| Database migration | Create `toiletry_items` table with RLS |
+| `src/components/ui/responsive-dialog.tsx` | Dialog on desktop, Drawer on mobile |
+| `src/components/toiletries/ToiletryCard.tsx` | Mobile card view for toiletry items |
 
-### Files to Modify
+## Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/App.tsx` | Add /toiletries route |
-| `src/components/layout/AppSidebar.tsx` | Add Toiletries nav link |
-| `src/components/layout/MobileNav.tsx` | Add Toiletries to mobile nav |
-
----
-
-## Data Integrity Rules
-
-These rules will be enforced:
-- No negative quantities (validation rejects values below 0)
-- Explicit rounding display (show both "need 1.3" and "buy 2")
-- No silent rounding (all calculations visible and explainable)
-- Items are never auto-deleted (discontinued status instead)
-- Usage rate changes trigger immediate forecast recalculation
+| File | Changes |
+|------|---------|
+| `src/components/toiletries/ToiletryTable.tsx` | Add mobile card view toggle |
+| `src/components/calendar/CalendarGrid.tsx` | Compact mobile layout |
+| `src/pages/Calendar.tsx` | Stack summary cards, drawer for day details |
+| `src/pages/Transactions.tsx` | Collapsible filters, full-width list |
+| `src/components/transactions/TransactionFilters.tsx` | Mobile-first layout |
+| `src/components/transactions/TransactionList.tsx` | Visible action buttons on mobile |
+| `src/components/mealplan/WeeklyMealPlanner.tsx` | Single-day mobile view |
+| `src/components/mealplan/MealDayCard.tsx` | Larger touch targets |
+| `src/pages/Settings.tsx` | Scrollable or accordion tabs |
+| `src/pages/Bills.tsx` | Consistent header layout |
+| `src/pages/Accounts.tsx` | Already good, minor tweaks |
+| `src/pages/Toiletries.tsx` | Already good, uses improved table |
+| `src/components/toiletries/ToiletryFormDialog.tsx` | Use responsive dialog |
+| `src/components/bills/BillFormDialog.tsx` | Use responsive dialog |
+| `src/components/accounts/AccountFormDialog.tsx` | Use responsive dialog |
 
 ---
 
-## Implementation Phases
+## Technical Approach
 
-### Phase 1 (This Build)
-- Database table with RLS
-- Full CRUD for toiletry items
-- Table view with all fields visible
-- Forecasting calculations (days remaining, run-out date)
-- Cost projections (monthly/yearly per item and totals)
-- Status badges and category filtering
-- Summary cards
+### Detection Method
+Use the existing `useIsMobile()` hook from `src/hooks/use-mobile.tsx` which checks for `max-width: 767px`.
 
-### Phase 2 (Future)
-- Usage history tracking (when items were restocked)
-- Charts showing spend over time
-- Low-stock reminders/notifications
-- Automatic reorder suggestions
-- Integration with shopping lists
+### Component Pattern
+```tsx
+const isMobile = useIsMobile();
 
----
+if (isMobile) {
+  return <MobileView />;
+}
 
-## Validation & Input Rules
+return <DesktopView />;
+```
 
-Using Zod schema validation:
-- Name: Required, max 100 characters
-- Total size: Required, must be positive number
-- Cost: Required, must be non-negative
-- Usage rate: Required, must be positive (prevents division by zero)
-- Remaining: Must be between 0 and total_size
-- Category: Must be one of predefined options
+### Drawer for Mobile Dialogs
+The project already has the Drawer component from vaul. We'll create a wrapper that automatically chooses between Dialog and Drawer based on screen size.
 
 ---
 
-## Summary
+## Priority Order
 
-This Toiletries section will fully replace your Excel by:
+1. **Responsive Dialog wrapper** - Foundation for all form improvements
+2. **ToiletryTable mobile cards** - Most recently added, users testing now
+3. **Transaction page filters** - High-frequency page
+4. **Calendar compact view** - Complex but important for daily use
+5. **Meal planner single-day view** - Complex, lower priority
+6. **Settings tabs** - Lower frequency, simpler fix
+7. **Touch target fixes** - Quick wins across all pages
 
-1. Automatically calculating days remaining and run-out dates
-2. Projecting monthly and yearly costs without manual formulas
-3. Showing clear visual indicators for items needing attention
-4. Allowing quick edits without modal overload
-5. Maintaining data integrity with proper validation
-6. Being future-ready for automation and reminders
+---
 
-The design follows the existing patterns in your app (similar to Bills and Products), ensuring consistency and maintainability.
+## Expected Outcome
+
+After these changes:
+- All tables display as readable cards on mobile
+- Forms open as bottom drawers that feel native
+- Action buttons are always visible and tappable
+- Filters don't compete for screen space
+- Calendar is usable on phone screens
+- Meal planning works one day at a time on mobile
+- Consistent look and feel across all pages
