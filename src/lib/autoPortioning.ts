@@ -158,27 +158,59 @@ function getYoghurtType(product: Product): "primary" | "secondary" | "none" {
 }
 
 /**
+ * Check if a product is specifically a SEASONING (not a sauce).
+ * Seasonings are dry powders/rubs/spice mixes with small realistic portions.
+ */
+function isSeasoning(product: Product): boolean {
+  const name = product.name.toLowerCase();
+  const seasoningKeywords = ["seasoning", "rub", "spice", "powder", "mix", "paprika", "cajun", "herbs", "pepper"];
+  const brandKeywords = ["schwartz"];
+  
+  // Check for seasoning keywords or brand
+  const hasSeasoningKeyword = seasoningKeywords.some(kw => name.includes(kw));
+  const hasBrandKeyword = brandKeywords.some(kw => name.includes(kw));
+  
+  // Exclude liquid sauces (soy sauce, teriyaki sauce, etc.)
+  const isSauce = name.includes("sauce");
+  
+  return (hasSeasoningKeyword || hasBrandKeyword) && !isSauce;
+}
+
+/**
+ * Check if a product is specifically granola (for extended topper range).
+ */
+function isGranola(product: Product): boolean {
+  const name = product.name.toLowerCase();
+  return name.includes("granola");
+}
+
+// Seasoning constants - realistic ranges
+const MAX_SEASONING_GRAMS = 15;    // Absolute maximum (hard cap)
+const DEFAULT_SEASONING_GRAMS = 8; // Default when no pairing found
+const MAX_GRANOLA_GRAMS = 60;      // Extended max for granola toppers
+
+/**
  * Seasoning-to-protein pairing map with realistic gram quantities.
+ * All values MUST be ≤10g to keep seasonings realistic.
  */
 const SEASONING_PAIRINGS: Record<string, { proteins: string[]; grams: number }> = {
   "schwartz": { proteins: ["chicken", "beef", "pork", "lamb"], grams: 8 },
   "paprika": { proteins: ["chicken", "pork"], grams: 3 },
   "garlic": { proteins: ["chicken", "fish", "prawn", "shrimp"], grams: 6 },
   "herbs": { proteins: ["fish", "chicken", "lamb"], grams: 5 },
-  "lemon": { proteins: ["fish", "salmon", "cod", "prawn"], grams: 10 },
+  "lemon": { proteins: ["fish", "salmon", "cod", "prawn"], grams: 8 },  // Capped at 10g
   "pepper": { proteins: ["beef", "steak", "chicken"], grams: 2 },
-  "curry": { proteins: ["chicken", "tofu", "prawn"], grams: 10 },
-  "soy": { proteins: ["fish", "tofu", "prawn", "salmon"], grams: 15 },
-  "teriyaki": { proteins: ["salmon", "chicken"], grams: 20 },
+  "curry": { proteins: ["chicken", "tofu", "prawn"], grams: 8 },        // Capped at 10g
+  "soy": { proteins: ["fish", "tofu", "prawn", "salmon"], grams: 10 },  // Capped at 10g (liquid, borderline sauce)
+  "teriyaki": { proteins: ["salmon", "chicken"], grams: 10 },           // Capped at 10g
   "cajun": { proteins: ["chicken", "fish", "prawn"], grams: 5 },
-  "bbq": { proteins: ["chicken", "pork", "beef"], grams: 15 },
-  "honey": { proteins: ["chicken", "salmon"], grams: 12 },
+  "bbq": { proteins: ["chicken", "pork", "beef"], grams: 10 },          // Capped at 10g
+  "honey": { proteins: ["chicken", "salmon"], grams: 8 },               // Capped at 10g
 };
-
-const DEFAULT_SEASONING_GRAMS = 10;
 
 /**
  * Get smart seasoning portion based on protein pairing.
+ * All returned values are capped at MAX_SEASONING_GRAMS.
  */
 function getSeasoningPortion(product: Product, allItems: EditableItem[]): number {
   const seasoningName = product.name.toLowerCase();
@@ -186,7 +218,7 @@ function getSeasoningPortion(product: Product, allItems: EditableItem[]): number
   // Find proteins in the same meal
   const proteins = allItems.filter(i => isHighProteinSource(i.product));
   
-  // Find best match
+  // Find best match from pairing map
   for (const [key, config] of Object.entries(SEASONING_PAIRINGS)) {
     if (seasoningName.includes(key)) {
       // Check if any protein in meal matches
@@ -194,25 +226,41 @@ function getSeasoningPortion(product: Product, allItems: EditableItem[]): number
         config.proteins.some(pName => p.product.name.toLowerCase().includes(pName))
       );
       if (hasMatchingProtein) {
-        return config.grams;
+        // Enforce hard cap even on pairing values
+        return Math.min(config.grams, MAX_SEASONING_GRAMS);
       }
     }
   }
   
-  // Default: small portion if no specific match
-  return DEFAULT_SEASONING_GRAMS;
+  // Default: small portion if no specific match, still capped
+  return Math.min(DEFAULT_SEASONING_GRAMS, MAX_SEASONING_GRAMS);
 }
 
 /**
  * Get max portion for a product based on its type.
+ * IMPORTANT: Seasonings and sauces are handled separately.
  */
 function getMaxPortion(product: Product, settings: PortioningSettings): number {
-  if (isSauceOrSeasoning(product)) {
-    return 30; // Max 30g for sauces/seasonings
+  // Seasonings get strict 15g hard cap
+  if (isSeasoning(product)) {
+    return MAX_SEASONING_GRAMS;
   }
+  
+  // Sauces (non-seasonings) use existing logic - don't cap at 15g
+  if (isSauceOrSeasoning(product) && !isSeasoning(product)) {
+    return 30; // Sauces can go up to 30g (e.g., passata, curry sauce)
+  }
+  
+  // Granola topper can go up to 60g
+  if (getBreakfastRole(product) === "topper" && isGranola(product)) {
+    return MAX_GRANOLA_GRAMS;
+  }
+  
+  // Other toppers keep original 40g max
   if (getBreakfastRole(product) === "topper") {
-    return 40; // Max 40g for granola/toppings
+    return 40;
   }
+  
   return settings.maxGrams;
 }
 
@@ -444,17 +492,21 @@ function solveSimultaneous(
       });
     }
     
-    // Adjust granola (25-40g range) for final carb balance
+    // Adjust granola (25-60g range for granola, 25-40g for other toppers) for final carb balance
     breakfastTopper.forEach(idx => {
       const currentMacros = sumMacros(items, grams);
       const finalCarbGap = adjustedTargets.carbs - currentMacros.carbs;
       const carbPer100g = items[idx].carbsPer100g;
+      
+      // Determine max for this topper: granola can go to 60g, others stay at 40g
+      const topperMax = isGranola(items[idx].product) ? MAX_GRANOLA_GRAMS : 40;
+      
       if (carbPer100g > 0 && Math.abs(finalCarbGap) > 2) {
         const adjustment = (finalCarbGap * 0.3 / carbPer100g) * 100;
         const newGrams = grams[idx] + adjustment;
-        grams[idx] = Math.max(25, Math.min(40, newGrams));
+        grams[idx] = Math.max(25, Math.min(topperMax, newGrams));
       } else {
-        grams[idx] = Math.max(25, Math.min(40, grams[idx]));
+        grams[idx] = Math.max(25, Math.min(topperMax, grams[idx]));
       }
     });
     
@@ -858,10 +910,16 @@ export function calculateDayPortions(
     let minGrams = settings.minGrams;
     let maxGrams = getMaxPortion(item.product, settings);
     
+    // SEASONINGS: strict 3-15g range, never used as macro knob
+    if (isSeasoning(item.product)) {
+      return { minGrams: 3, maxGrams: MAX_SEASONING_GRAMS };
+    }
+    
     // Breakfast role-specific constraints
     if (role === "topper") {
       minGrams = 25;
-      maxGrams = 40;
+      // Granola can go up to 60g, other toppers stay at 40g
+      maxGrams = isGranola(item.product) ? MAX_GRANOLA_GRAMS : 40;
     } else if (role === "secondary") {
       minGrams = 80;
       maxGrams = 120;
