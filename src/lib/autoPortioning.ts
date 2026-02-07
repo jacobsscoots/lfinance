@@ -1108,15 +1108,18 @@ export function calculateDayPortions(
   let totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
   
   // Collect all editable items across meals for global adjustment
-  // FILTER OUT constrained items (sauces, seasonings, breakfast toppers) - they have fixed portions
+  // FILTER OUT constrained items (sauces, seasonings) - they have fixed portions
+  // EXCEPT granola toppers which are valuable fat sources
   const allEditables: { item: EditableItem; grams: number; mealType: MealType }[] = [];
   activeMeals.forEach(mealType => {
     editableByMeal[mealType].forEach(item => {
       // Skip sauces/seasonings - they have fixed smart portions
       if (isSauceOrSeasoning(item.product)) return;
       
-      // Skip breakfast toppers - they have fixed 25-40g range
-      if (mealType === "breakfast" && getBreakfastRole(item.product) === "topper") return;
+      // Skip breakfast toppers EXCEPT granola (granola is a key fat source)
+      if (mealType === "breakfast" && getBreakfastRole(item.product) === "topper") {
+        if (!isGranola(item.product)) return; // Only granola participates
+      }
       
       const currentGrams = allItemGrams.get(item.itemId) || 0;
       allEditables.push({ item, grams: currentGrams, mealType });
@@ -1185,10 +1188,16 @@ export function calculateDayPortions(
     // === Adjust fat (direction-aware) - relaxed filter to include more items ===
     const fatErrAfter = dailyTargets.fat - totalAchieved.fat;
     if (Math.abs(fatErrAfter) >= 0.3) {
-      // Relaxed filter: fatPer100g > 3 (was > 5) and no protein restriction
-      // This includes items like salmon, Greek yogurt, nuts with moderate fat
+      // Relaxed filter: fatPer100g >= 3 (includes Greek yogurt ~10g, granola ~15g, salmon ~13g)
+      // Also explicitly include secondary yoghurt type for fat contribution
       const fatSources = allEditables
-        .filter(e => e.item.fatPer100g > 3 && !isSauceOrSeasoning(e.item.product))
+        .filter(e => {
+          if (isSauceOrSeasoning(e.item.product)) return false;
+          if (e.item.fatPer100g >= 3) return true;
+          // Include secondary yoghurt (Greek) even if fat is lower
+          if (e.mealType === "breakfast" && getYoghurtType(e.item.product) === "secondary") return true;
+          return false;
+        })
         .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
       
       if (fatSources.length > 0) {
@@ -1264,10 +1273,10 @@ export function calculateDayPortions(
         let minGrams = settings.minGrams;
         let maxGrams = getMaxPortion(item.product, settings);
         
-        // Topper-specific constraints (25-40g)
+        // Topper-specific constraints (25-60g for granola, 25-40g for others)
         if (role === "topper") {
           minGrams = 25;
-          maxGrams = 40;
+          maxGrams = isGranola(item.product) ? MAX_GRANOLA_GRAMS : 40;
         }
         // Fruit constraints (80-120g)
         else if (role === "secondary") {
@@ -1310,11 +1319,14 @@ export function calculateDayPortions(
     const CAL_TOLERANCE = 5.0;    // ±5 kcal for calories
     const MAX_STEP_SIZE = 25;     // Max gram adjustment per iteration to avoid oscillation
     
-    // Filter items available for rebalancing (exclude sauces, toppers, etc.)
+    // Filter items available for rebalancing (exclude sauces, fruit)
+    // INCLUDE granola toppers (they're valuable fat knobs)
     const rebalanceItems = allEditables.filter(e => {
       if (isSauceOrSeasoning(e.item.product)) return false;
       const role = e.mealType === "breakfast" ? getBreakfastRole(e.item.product) : null;
-      if (role === "topper" || role === "secondary") return false;
+      // Allow granola topper (key fat source), exclude other toppers and fruit
+      if (role === "topper" && !isGranola(e.item.product)) return false;
+      if (role === "secondary") return false;
       return true;
     });
     
@@ -1337,8 +1349,14 @@ export function calculateDayPortions(
         return bRatio - aRatio;
       });
     
+    // Fat sources: fatPer100g >= 3 (was > 5) to include more items
+    // Also include secondary yoghurt (Greek) for fat contribution
     const fatSources = rebalanceItems
-      .filter(e => e.item.fatPer100g > 5)
+      .filter(e => {
+        if (e.item.fatPer100g >= 3) return true;
+        if (e.mealType === "breakfast" && getYoghurtType(e.item.product) === "secondary") return true;
+        return false;
+      })
       .sort((a, b) => {
         // Prefer items with highest fat density and lowest protein/carb impact
         const aRatio = a.item.fatPer100g / (a.item.proteinPer100g + a.item.carbsPer100g + 1);
@@ -1372,8 +1390,8 @@ export function calculateDayPortions(
       const totalError = Math.abs(proErr) + Math.abs(carbErr) + Math.abs(fatErr);
       if (totalError >= lastTotalError - 0.1) {
         noProgressCount++;
-        if (noProgressCount > 5) {
-          // No progress for 5 iterations - break to avoid infinite loop
+        if (noProgressCount > 10) {
+          // No progress for 10 iterations - break to avoid infinite loop
           break;
         }
       } else {
@@ -1461,6 +1479,70 @@ export function calculateDayPortions(
     }
   }
   
+  // === FINAL FAT RECONCILIATION PASS ===
+  // If fat is still short after carb reduction, explicitly add grams to fat sources
+  // This is the key fix for the -14g to -21g fat shortage issue
+  totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
+  let fatShortage = dailyTargets.fat - totalAchieved.fat;
+  
+  if (fatShortage > 1) {
+    // Find all fat sources including granola (now in allEditables)
+    const fatKnobs = allEditables
+      .filter(e => {
+        if (isSauceOrSeasoning(e.item.product)) return false;
+        if (e.item.fatPer100g >= 5) return true;
+        // Include granola explicitly
+        if (isGranola(e.item.product)) return true;
+        return false;
+      })
+      .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
+    
+    for (const source of fatKnobs) {
+      if (fatShortage <= 1) break;
+      
+      const currentGrams = allItemGrams.get(source.item.itemId) || 0;
+      const { minGrams, maxGrams } = getItemConstraints(source.item, source.mealType);
+      
+      // Calculate grams needed to close the fat gap
+      const gramsToAdd = (fatShortage / source.item.fatPer100g) * 100;
+      const maxAddable = maxGrams - currentGrams;
+      const actualAdd = Math.min(gramsToAdd, maxAddable);
+      
+      if (actualAdd >= 1) {
+        const newGrams = Math.round(currentGrams + actualAdd);
+        allItemGrams.set(source.item.itemId, newGrams);
+        fatShortage -= (actualAdd / 100) * source.item.fatPer100g;
+      }
+    }
+  }
+  
+  // If fat is still over target, reduce from fat sources
+  totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
+  let fatOverage = totalAchieved.fat - dailyTargets.fat;
+  
+  if (fatOverage > 1) {
+    const fatKnobs = allEditables
+      .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.fatPer100g >= 5)
+      .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
+    
+    for (const source of fatKnobs) {
+      if (fatOverage <= 1) break;
+      
+      const currentGrams = allItemGrams.get(source.item.itemId) || 0;
+      const { minGrams } = getItemConstraints(source.item, source.mealType);
+      
+      const gramsToRemove = (fatOverage / source.item.fatPer100g) * 100;
+      const maxRemovable = currentGrams - minGrams;
+      const actualRemove = Math.min(gramsToRemove, maxRemovable);
+      
+      if (actualRemove >= 1) {
+        const newGrams = Math.round(currentGrams - actualRemove);
+        allItemGrams.set(source.item.itemId, newGrams);
+        fatOverage -= (actualRemove / 100) * source.item.fatPer100g;
+      }
+    }
+  }
+  
   // === FINAL PRECISION VERIFICATION PASS ===
   // One last check to ensure we're within tolerance, with small corrections if needed
   totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
@@ -1512,9 +1594,14 @@ export function calculateDayPortions(
     .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.carbsPer100g > 15)
     .sort((a, b) => b.item.carbsPer100g - a.item.carbsPer100g);
   
-  // Relaxed fat sources filter: fatPer100g > 3 (was > 5) to include more items
+  // Relaxed fat sources filter: fatPer100g >= 3 to include Greek yogurt, granola, etc.
   const finalFatSources = allEditables
-    .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.fatPer100g > 3)
+    .filter(e => {
+      if (isSauceOrSeasoning(e.item.product)) return false;
+      if (e.item.fatPer100g >= 3) return true;
+      if (isGranola(e.item.product)) return true;
+      return false;
+    })
     .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
   
   microCorrect(finalProteinSources, finalProErr, i => i.proteinPer100g);

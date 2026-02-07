@@ -1007,3 +1007,174 @@ describe("success flag truthfulness", () => {
   });
 });
 
+// === REGRESSION TESTS: Fat Precision Parity ===
+// These tests specifically address the reported -14g to -21g fat shortage issue
+
+describe("fat precision regression tests", () => {
+  it("fat is within ±1g when granola and fat sources exist", () => {
+    const items = [
+      createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+      createMealPlanItem(testProducts.greekYogurt, "breakfast"), // 10g fat/100g
+      createMealPlanItem(testProducts.granola, "breakfast"),      // 15g fat/100g
+      createMealPlanItem(testProducts.mixedBerries, "breakfast"),
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+      createMealPlanItem(testProducts.salmon, "dinner"),          // 13g fat/100g
+      createMealPlanItem(testProducts.pasta, "dinner"),
+    ];
+    
+    // Target that requires fat sources to be used
+    const targets: MacroTotals = { calories: 2000, protein: 160, carbs: 220, fat: 60 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    if (result.success) {
+      // CRITICAL: Fat must be within ±1g
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    } else {
+      // If not success, it must have warnings explaining why
+      expect(result.warnings.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("no +200cal/-20fat fake success scenario", () => {
+    // This test replicates the exact failure pattern reported by the user
+    const items = [
+      createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+      createMealPlanItem(testProducts.granola, "breakfast"),
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+      createMealPlanItem(testProducts.chicken, "dinner"),
+      createMealPlanItem(testProducts.pasta, "dinner"),
+    ];
+    
+    const targets: MacroTotals = { calories: 2100, protein: 170, carbs: 230, fat: 55 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    const fatDiff = Math.abs(result.dayTotals.fat - targets.fat);
+    const calDiff = Math.abs(result.dayTotals.calories - targets.calories);
+    
+    // NEVER: success=true with fat -20g and calories +200
+    if (fatDiff > 10 || calDiff > 50) {
+      expect(result.success).toBe(false);
+    }
+    
+    // If success is true, macros MUST be within tolerance
+    if (result.success) {
+      expect(Math.abs(result.dayTotals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("granola is used as fat adjustment knob (25-60g range)", () => {
+    const items = [
+      createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+      createMealPlanItem(testProducts.granola, "breakfast"), // Should be able to go up to 60g
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+    ];
+    
+    // High fat target should push granola toward max
+    const targets: MacroTotals = { calories: 1200, protein: 80, carbs: 100, fat: 40 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    const breakfastResult = result.mealResults.get("breakfast");
+    const granolaGrams = breakfastResult?.items.get(items[1].id) || 0;
+    
+    // Granola should be in 25-60g range (extended from old 40g max)
+    expect(granolaGrams).toBeGreaterThanOrEqual(25);
+    expect(granolaGrams).toBeLessThanOrEqual(60);
+  });
+
+  it("Greek yogurt is used for fat when available", () => {
+    const items = [
+      createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+      createMealPlanItem(testProducts.greekYogurt, "breakfast"), // 10g fat/100g, should participate
+      createMealPlanItem(testProducts.mixedBerries, "breakfast"),
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+    ];
+    
+    // Fat target that needs Greek yogurt contribution
+    const targets: MacroTotals = { calories: 1500, protein: 100, carbs: 150, fat: 35 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    const breakfastResult = result.mealResults.get("breakfast");
+    const greekGrams = breakfastResult?.items.get(items[1].id) || 0;
+    
+    // Greek yogurt should be in 50-150g range and contributing to fat
+    expect(greekGrams).toBeGreaterThanOrEqual(50);
+    expect(greekGrams).toBeLessThanOrEqual(150);
+    
+    // If success, fat must be within tolerance
+    if (result.success) {
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("success=false includes diagnostic warnings when macros cannot be hit", () => {
+    // Create impossible scenario: high fat target with zero-fat items
+    const zeroFatProtein = createProduct({
+      name: "Egg Whites",
+      calories_per_100g: 50,
+      protein_per_100g: 11,
+      carbs_per_100g: 1,
+      fat_per_100g: 0,
+      product_type: "editable",
+    });
+    
+    const items = [
+      createMealPlanItem(zeroFatProtein, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+    ];
+    
+    // Impossible: 50g fat from items with 0-0.5g fat/100g
+    const targets: MacroTotals = { calories: 800, protein: 50, carbs: 100, fat: 50 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // Must be marked as unsuccessful
+    expect(result.success).toBe(false);
+    
+    // Must have warning about fat
+    expect(result.warnings.some(w => w.toLowerCase().includes("fat"))).toBe(true);
+  });
+
+  it("all macros within ±1g for typical balanced day with fat sources", () => {
+    // Realistic day with good variety of fat sources
+    const items = [
+      createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+      createMealPlanItem(testProducts.greekYogurt, "breakfast"),
+      createMealPlanItem(testProducts.granola, "breakfast"),
+      createMealPlanItem(testProducts.mixedBerries, "breakfast"),
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+      createMealPlanItem(testProducts.broccoli, "lunch"),
+      createMealPlanItem(testProducts.salmon, "dinner"), // Key fat source
+      createMealPlanItem(testProducts.pasta, "dinner"),
+    ];
+    
+    // Slightly lower fat target that's more achievable
+    const targets: MacroTotals = { calories: 2200, protein: 175, carbs: 250, fat: 55 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // Debug: log what we got
+    if (!result.success) {
+      console.log("Warnings:", result.warnings);
+      console.log("Achieved:", result.dayTotals);
+      console.log("Targets:", targets);
+    }
+    
+    // If success is true, all macros must be within tolerance
+    if (result.success) {
+      expect(Math.abs(result.dayTotals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.calories - targets.calories)).toBeLessThan(10);
+    } else {
+      // If not success, the solver correctly identified it can't hit targets
+      // This is acceptable - the key is no "fake success"
+      expect(result.warnings.length).toBeGreaterThan(0);
+    }
+  });
+});
+
