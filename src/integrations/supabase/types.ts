@@ -448,6 +448,80 @@ export type Database = {
           },
         ]
       }
+      payslips: {
+        Row: {
+          created_at: string
+          employer_name: string | null
+          extraction_confidence: string | null
+          extraction_raw: Json | null
+          file_path: string
+          gross_pay: number | null
+          id: string
+          match_status: string | null
+          matched_at: string | null
+          matched_transaction_id: string | null
+          net_pay: number | null
+          ni_deducted: number | null
+          pay_period_end: string | null
+          pay_period_start: string | null
+          pension_deducted: number | null
+          tax_deducted: number | null
+          updated_at: string
+          uploaded_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          employer_name?: string | null
+          extraction_confidence?: string | null
+          extraction_raw?: Json | null
+          file_path: string
+          gross_pay?: number | null
+          id?: string
+          match_status?: string | null
+          matched_at?: string | null
+          matched_transaction_id?: string | null
+          net_pay?: number | null
+          ni_deducted?: number | null
+          pay_period_end?: string | null
+          pay_period_start?: string | null
+          pension_deducted?: number | null
+          tax_deducted?: number | null
+          updated_at?: string
+          uploaded_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          employer_name?: string | null
+          extraction_confidence?: string | null
+          extraction_raw?: Json | null
+          file_path?: string
+          gross_pay?: number | null
+          id?: string
+          match_status?: string | null
+          matched_at?: string | null
+          matched_transaction_id?: string | null
+          net_pay?: number | null
+          ni_deducted?: number | null
+          pay_period_end?: string | null
+          pay_period_start?: string | null
+          pension_deducted?: number | null
+          tax_deducted?: number | null
+          updated_at?: string
+          uploaded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payslips_matched_transaction_id_fkey"
+            columns: ["matched_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           brand: string | null
@@ -809,6 +883,33 @@ export type Database = {
           weekend_fat_target_grams?: number | null
           weekend_protein_target_grams?: number | null
           weekend_targets_enabled?: boolean
+        }
+        Relationships: []
+      }
+      user_payday_settings: {
+        Row: {
+          adjustment_rule: string
+          created_at: string
+          id: string
+          payday_date: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          adjustment_rule?: string
+          created_at?: string
+          id?: string
+          payday_date?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          adjustment_rule?: string
+          created_at?: string
+          id?: string
+          payday_date?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

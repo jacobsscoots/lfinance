@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.extract-nutrition]
 verify_jwt = false
+
+[functions.extract-payslip]
+verify_jwt = false

@@ -7,7 +7,7 @@
  * - Monzo early-pay rule: If 20th is Mon/Sat/Sun → previous Friday
  */
 
-import { format, subDays, getDay } from "date-fns";
+import { format, subDays, addDays, getDay } from "date-fns";
 
 // Hardcoded UK bank holidays 2024-2030 (fallback if DB unavailable)
 const UK_BANK_HOLIDAYS_FALLBACK: string[] = [
@@ -69,6 +69,7 @@ export function isWorkingDay(date: Date): boolean {
 
 /**
  * Get the previous working day from a given date
+ * If the date itself is a working day, still returns the previous one
  */
 export function getPreviousWorkingDay(date: Date): Date {
   let current = subDays(date, 1);
@@ -76,6 +77,44 @@ export function getPreviousWorkingDay(date: Date): Date {
     current = subDays(current, 1);
   }
   return current;
+}
+
+/**
+ * Get the next working day from a given date
+ * If the date itself is a working day, still returns the next one
+ */
+export function getNextWorkingDay(date: Date): Date {
+  let current = addDays(date, 1);
+  while (!isWorkingDay(current)) {
+    current = addDays(current, 1);
+  }
+  return current;
+}
+
+/**
+ * Get the closest working day to a given date
+ * If equidistant, prefer the previous (earlier) working day
+ */
+export function getClosestWorkingDay(date: Date): Date {
+  if (isWorkingDay(date)) return date;
+  
+  let prev = subDays(date, 1);
+  let next = addDays(date, 1);
+  let prevDays = 1;
+  let nextDays = 1;
+  
+  while (!isWorkingDay(prev)) {
+    prev = subDays(prev, 1);
+    prevDays++;
+  }
+  
+  while (!isWorkingDay(next)) {
+    next = addDays(next, 1);
+    nextDays++;
+  }
+  
+  // Prefer previous if equidistant
+  return prevDays <= nextDays ? prev : next;
 }
 
 /**

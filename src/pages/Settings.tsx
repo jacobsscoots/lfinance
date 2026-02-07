@@ -1,11 +1,24 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Palette, CreditCard, Tag, CalendarDays, Package, Target } from "lucide-react";
+import { User, Tag, CalendarDays, Package, Target, FileText } from "lucide-react";
 import { ProductSettings } from "@/components/settings/ProductSettings";
 import { NutritionTargetSettings } from "@/components/settings/NutritionTargetSettings";
+import { PaydaySettings } from "@/components/settings/PaydaySettings";
+import { PayslipSettings } from "@/components/settings/PayslipSettings";
+import { PayslipPreviewDialog } from "@/components/settings/PayslipPreviewDialog";
 import { Card, CardContent } from "@/components/ui/card";
+import { Payslip } from "@/hooks/usePayslips";
 
 export default function Settings() {
+  const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
+  const [payslipDialogOpen, setPayslipDialogOpen] = useState(false);
+
+  const handleViewPayslip = (payslip: Payslip) => {
+    setSelectedPayslip(payslip);
+    setPayslipDialogOpen(true);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
@@ -34,6 +47,10 @@ export default function Settings() {
               <CalendarDays className="h-4 w-4" />
               <span className="hidden sm:inline">Payday</span>
             </TabsTrigger>
+            <TabsTrigger value="payslips" className="flex items-center gap-2 flex-1 sm:flex-none">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Payslips</span>
+            </TabsTrigger>
             <TabsTrigger value="account" className="flex items-center gap-2 flex-1 sm:flex-none">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Account</span>
@@ -61,15 +78,11 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="payday">
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <CalendarDays className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-medium mb-2">Payday Settings</h3>
-                <p className="text-sm text-muted-foreground text-center max-w-sm">
-                  Configure your pay cycle rules to help with bill forecasting.
-                </p>
-              </CardContent>
-            </Card>
+            <PaydaySettings />
+          </TabsContent>
+
+          <TabsContent value="payslips">
+            <PayslipSettings onViewPayslip={handleViewPayslip} />
           </TabsContent>
 
           <TabsContent value="account">
@@ -85,6 +98,12 @@ export default function Settings() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <PayslipPreviewDialog
+        payslip={selectedPayslip}
+        open={payslipDialogOpen}
+        onOpenChange={setPayslipDialogOpen}
+      />
     </AppLayout>
   );
 }
