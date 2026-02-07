@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +8,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { MealPlan, MealType, MealStatus, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { Product } from "@/hooks/useProducts";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
-import { DayMacros, MealMacros } from "@/lib/mealCalculations";
+import { DayMacros, MealMacros, getTargetsForDate, MacroTotals } from "@/lib/mealCalculations";
 import { MealItemDialog } from "./MealItemDialog";
 import { EatingOutDialog } from "./EatingOutDialog";
+import { DayDetailModal } from "./DayDetailModal";
+import { DayMacroSummary } from "./DayMacroSummary";
 import { cn } from "@/lib/utils";
 
 interface MealDayCardProps {
@@ -37,6 +39,7 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
 export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: MealDayCardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
   
   const { updateMealStatus, removeItem, updateItem } = useMealPlanItems(weekStart);
@@ -44,6 +47,17 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
   const date = parseISO(plan.meal_date);
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
+  const isTargetMode = settings?.mode === "target_based";
+  
+  // Get targets for this specific date
+  const targets: MacroTotals = settings 
+    ? getTargetsForDate(date, settings)
+    : { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+  
+  // Check if there are uncalculated items
+  const hasUncalculatedItems = items.some(item => 
+    item.quantity_grams === 0 && item.product?.product_type === "editable"
+  );
 
   const getMealStatus = (mealType: MealType): MealStatus => {
     switch (mealType) {
@@ -100,11 +114,34 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
                 {format(date, "d MMM")}
               </div>
             </div>
-            <div className="text-right text-xs text-muted-foreground">
-              <div>{Math.round(dayMacros.totals.calories)} kcal</div>
-              <div>P: {Math.round(dayMacros.totals.protein)}g</div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setDetailModalOpen(true)}
+                title="View day details"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
             </div>
           </CardTitle>
+          
+          {/* Macro Summary */}
+          <div className="mt-2">
+            {hasUncalculatedItems && isTargetMode ? (
+              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1">
+                Not calculated yet — click Recalculate
+              </div>
+            ) : (
+              <DayMacroSummary
+                totals={dayMacros.totals}
+                targets={targets}
+                isTargetMode={isTargetMode}
+                compact
+              />
+            )}
+          </div>
         </CardHeader>
         <CardContent className="flex-1 space-y-3 pt-0">
           {(["breakfast", "lunch", "dinner", "snack"] as MealType[]).map(mealType => {
@@ -247,6 +284,14 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
         open={eatingOutOpen}
         onOpenChange={setEatingOutOpen}
         onConfirm={handleEatingOutConfirm}
+      />
+
+      <DayDetailModal
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        plan={plan}
+        dayMacros={dayMacros}
+        settings={settings}
       />
     </>
   );

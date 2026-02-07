@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { format, startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical } from "lucide-react";
+import { format, startOfWeek, addDays, addWeeks, subWeeks, formatDistanceToNow } from "date-fns";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,6 +15,7 @@ import { useMealPlanItems, MealPlan, MealType } from "@/hooks/useMealPlanItems";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { useProducts } from "@/hooks/useProducts";
 import { calculateDayMacros, calculateWeeklyAverages, DayMacros, getBalanceWarnings } from "@/lib/mealCalculations";
+import { DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
 import { MealDayCard } from "./MealDayCard";
 import { GroceryListPanel } from "./GroceryListPanel";
 import { WeeklySummaryCard } from "./WeeklySummaryCard";
@@ -34,8 +35,8 @@ export function WeeklyMealPlanner() {
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const isMobile = useIsMobile();
   
-  const { mealPlans, isLoading, copyFromPreviousWeek } = useMealPlanItems(weekStart);
-  const { settings, isLoading: settingsLoading } = useNutritionSettings();
+  const { mealPlans, isLoading, copyFromPreviousWeek, recalculateAll, lastCalculated } = useMealPlanItems(weekStart);
+  const { settings, isLoading: settingsLoading, isTargetMode } = useNutritionSettings();
   const { products, isLoading: productsLoading } = useProducts();
 
   const goToPreviousWeek = () => setWeekStart(prev => subWeeks(prev, 1));
@@ -51,6 +52,19 @@ export function WeeklyMealPlanner() {
 
   const isCurrentWeek = format(weekStart, "yyyy-MM-dd") === 
     format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+
+  const handleRecalculate = () => {
+    if (!settings) return;
+    
+    const portioningSettings = {
+      minGrams: settings.min_grams_per_item || DEFAULT_PORTIONING_SETTINGS.minGrams,
+      maxGrams: settings.max_grams_per_item || DEFAULT_PORTIONING_SETTINGS.maxGrams,
+      rounding: settings.portion_rounding || DEFAULT_PORTIONING_SETTINGS.rounding,
+      tolerancePercent: settings.target_tolerance_percent || DEFAULT_PORTIONING_SETTINGS.tolerancePercent,
+    };
+    
+    recalculateAll.mutate({ settings, portioningSettings });
+  };
 
   if (isLoading || settingsLoading || productsLoading) {
     return (
@@ -84,9 +98,30 @@ export function WeeklyMealPlanner() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={settings?.mode === "target_based" ? "default" : "secondary"}>
-            {settings?.mode === "target_based" ? "Target Mode" : "Manual Mode"}
+          <Badge variant={isTargetMode ? "default" : "secondary"}>
+            {isTargetMode ? "Target Mode" : "Manual Mode"}
           </Badge>
+          
+          {/* Recalculate Button - only in Target Mode */}
+          {isTargetMode && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRecalculate}
+              disabled={recalculateAll.isPending || !settings}
+              className="gap-1.5"
+            >
+              {recalculateAll.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">
+                {recalculateAll.isPending ? "Recalculating..." : "Recalculate"}
+              </span>
+            </Button>
+          )}
+          
           {isMobile ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -117,6 +152,13 @@ export function WeeklyMealPlanner() {
           )}
         </div>
       </div>
+
+      {/* Last Calculated Timestamp */}
+      {isTargetMode && lastCalculated && (
+        <div className="text-xs text-muted-foreground">
+          Last calculated: {formatDistanceToNow(lastCalculated, { addSuffix: true })}
+        </div>
+      )}
 
       {/* Warnings */}
       {allWarnings.length > 0 && (
