@@ -4,8 +4,9 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Sparkles } from "lucide-react";
 import { useCalendarData } from "@/hooks/useCalendarData";
+import { useBillOccurrences } from "@/hooks/useBillOccurrences";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { DayDetailPanel } from "@/components/calendar/DayDetailPanel";
 import { getNextPayday, getCurrentPayCycle } from "@/lib/payday";
@@ -22,6 +23,11 @@ export default function Calendar() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const { data, isLoading } = useCalendarData(currentDate);
   const isMobile = useIsMobile();
+
+  // Get bill occurrences hook for actions
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const { markPaid, skipOccurrence, resetOccurrence, autoMatchCount, applyAutoMatches } = useBillOccurrences(year, month);
 
   const goToPreviousMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const goToNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
@@ -45,6 +51,25 @@ export default function Calendar() {
     setSelectedDate(undefined);
   };
 
+  // Action handlers that create occurrence IDs from bill ID and date
+  const handleMarkPaid = (billId: string, dueDate: Date) => {
+    const occurrenceId = `${billId}-${format(dueDate, "yyyy-MM-dd")}`;
+    markPaid.mutate({ occurrenceId });
+  };
+
+  const handleSkip = (billId: string, dueDate: Date) => {
+    const occurrenceId = `${billId}-${format(dueDate, "yyyy-MM-dd")}`;
+    skipOccurrence.mutate(occurrenceId);
+  };
+
+  const handleReset = (billId: string, dueDate: Date) => {
+    const occurrenceId = `${billId}-${format(dueDate, "yyyy-MM-dd")}`;
+    resetOccurrence.mutate(occurrenceId);
+  };
+
+  const paidCount = data?.days.flatMap(d => d.bills).filter(b => b.isPaid || b.status === "paid").length || 0;
+  const totalBillCount = data?.days.flatMap(d => d.bills).length || 0;
+
   return (
     <AppLayout>
       <div className="space-y-4 sm:space-y-6 animate-fade-in">
@@ -57,6 +82,18 @@ export default function Calendar() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {autoMatchCount > 0 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => applyAutoMatches.mutate()}
+                disabled={applyAutoMatches.isPending}
+                className="gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                Auto-match {autoMatchCount} bill{autoMatchCount > 1 ? "s" : ""}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={goToToday}>
               Today
             </Button>
@@ -64,12 +101,20 @@ export default function Calendar() {
         </div>
 
         {/* Summary Cards - Stack on mobile */}
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4">
           <Card>
             <CardContent className="py-3 sm:py-4">
               <p className="text-xs sm:text-sm text-muted-foreground">Bills This Month</p>
               <p className="text-xl sm:text-2xl font-bold text-destructive">
                 £{(data?.monthTotal || 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3 sm:py-4">
+              <p className="text-xs sm:text-sm text-muted-foreground">Status</p>
+              <p className="text-base sm:text-lg font-semibold">
+                {paidCount}/{totalBillCount} paid
               </p>
             </CardContent>
           </Card>
@@ -144,7 +189,13 @@ export default function Calendar() {
                 </DrawerHeader>
                 <div className="px-4 pb-6">
                   {selectedDate && selectedDayData && (
-                    <DayDetailPanel date={selectedDate} bills={selectedDayData.bills} />
+                    <DayDetailPanel 
+                      date={selectedDate} 
+                      bills={selectedDayData.bills}
+                      onMarkPaid={handleMarkPaid}
+                      onSkip={handleSkip}
+                      onReset={handleReset}
+                    />
                   )}
                 </div>
               </DrawerContent>
@@ -198,7 +249,13 @@ export default function Calendar() {
             {/* Day Detail Sidebar */}
             <div>
               {selectedDate && selectedDayData ? (
-                <DayDetailPanel date={selectedDate} bills={selectedDayData.bills} />
+                <DayDetailPanel 
+                  date={selectedDate} 
+                  bills={selectedDayData.bills}
+                  onMarkPaid={handleMarkPaid}
+                  onSkip={handleSkip}
+                  onReset={handleReset}
+                />
               ) : (
                 <Card>
                   <CardContent className="py-8 text-center text-muted-foreground">

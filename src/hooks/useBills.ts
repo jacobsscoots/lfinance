@@ -11,6 +11,8 @@ export type Bill = Tables<"bills"> & {
     color: string | null;
     icon: string | null;
   } | null;
+  account_id?: string | null;
+  due_date_rule?: string;
 };
 
 export type BillInsert = Omit<TablesInsert<"bills">, "user_id">;
@@ -29,7 +31,8 @@ export function useBills() {
         .from("bills")
         .select(`
           *,
-          category:categories(id, name, color, icon)
+          category:categories(id, name, color, icon),
+          account:bank_accounts(id, name)
         `)
         .eq("user_id", user.id)
         .order("due_day", { ascending: true });

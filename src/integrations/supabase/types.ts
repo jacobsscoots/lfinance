@@ -110,11 +110,73 @@ export type Database = {
         }
         Relationships: []
       }
+      bill_occurrences: {
+        Row: {
+          bill_id: string
+          created_at: string
+          due_date: string
+          expected_amount: number
+          id: string
+          match_confidence: string | null
+          notes: string | null
+          paid_at: string | null
+          paid_transaction_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bill_id: string
+          created_at?: string
+          due_date: string
+          expected_amount: number
+          id?: string
+          match_confidence?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          paid_transaction_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bill_id?: string
+          created_at?: string
+          due_date?: string
+          expected_amount?: number
+          id?: string
+          match_confidence?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          paid_transaction_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_occurrences_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_occurrences_paid_transaction_id_fkey"
+            columns: ["paid_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bills: {
         Row: {
+          account_id: string | null
           amount: number
           category_id: string | null
           created_at: string
+          due_date_rule: string
           due_day: number
           end_date: string | null
           frequency: Database["public"]["Enums"]["bill_frequency"]
@@ -129,9 +191,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           amount: number
           category_id?: string | null
           created_at?: string
+          due_date_rule?: string
           due_day: number
           end_date?: string | null
           frequency?: Database["public"]["Enums"]["bill_frequency"]
@@ -146,9 +210,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           amount?: number
           category_id?: string | null
           created_at?: string
+          due_date_rule?: string
           due_day?: number
           end_date?: string | null
           frequency?: Database["public"]["Enums"]["bill_frequency"]
@@ -163,6 +229,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bills_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bills_category_id_fkey"
             columns: ["category_id"]
@@ -636,6 +709,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      uk_bank_holidays: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       user_nutrition_settings: {
         Row: {
