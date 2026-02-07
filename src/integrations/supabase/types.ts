@@ -1282,6 +1282,69 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_nutrition_targets: {
+        Row: {
+          carbs_target_grams: number | null
+          created_at: string
+          fat_target_grams: number | null
+          friday_calories: number
+          id: string
+          monday_calories: number
+          plan_mode: string
+          protein_target_grams: number | null
+          saturday_calories: number
+          sunday_calories: number
+          thursday_calories: number
+          tuesday_calories: number
+          updated_at: string
+          user_id: string
+          wednesday_calories: number
+          week_start_date: string
+          zigzag_enabled: boolean
+          zigzag_schedule: string | null
+        }
+        Insert: {
+          carbs_target_grams?: number | null
+          created_at?: string
+          fat_target_grams?: number | null
+          friday_calories: number
+          id?: string
+          monday_calories: number
+          plan_mode?: string
+          protein_target_grams?: number | null
+          saturday_calories: number
+          sunday_calories: number
+          thursday_calories: number
+          tuesday_calories: number
+          updated_at?: string
+          user_id: string
+          wednesday_calories: number
+          week_start_date: string
+          zigzag_enabled?: boolean
+          zigzag_schedule?: string | null
+        }
+        Update: {
+          carbs_target_grams?: number | null
+          created_at?: string
+          fat_target_grams?: number | null
+          friday_calories?: number
+          id?: string
+          monday_calories?: number
+          plan_mode?: string
+          protein_target_grams?: number | null
+          saturday_calories?: number
+          sunday_calories?: number
+          thursday_calories?: number
+          tuesday_calories?: number
+          updated_at?: string
+          user_id?: string
+          wednesday_calories?: number
+          week_start_date?: string
+          zigzag_enabled?: boolean
+          zigzag_schedule?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       bank_connections_safe: {

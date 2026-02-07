@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,20 +10,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { TransactionFilters as FilterType } from "@/hooks/useTransactions";
+import { 
+  getPayCycleForDate, 
+  getNextPayCycle, 
+  getPrevPayCycle, 
+  formatPayCycleLabel,
+  formatPayCycleLabelShort,
+  toPaydaySettings,
+  PayCycle 
+} from "@/lib/payCycle";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface TransactionFiltersProps {
   filters: FilterType;
   onFiltersChange: (filters: FilterType) => void;
 }
 
+type ViewMode = "paycycle" | "month";
+
 export function TransactionFilters({ filters, onFiltersChange }: TransactionFiltersProps) {
   const { data: categories = [] } = useCategories();
   const { accounts } = useAccounts();
+  const { effectiveSettings } = usePaydaySettings();
+  const isMobile = useIsMobile();
   const [searchValue, setSearchValue] = useState(filters.search || "");
+  const [viewMode, setViewMode] = useState<ViewMode>("paycycle");
+  const [currentPayCycle, setCurrentPayCycle] = useState<PayCycle | null>(null);
+
+  // Initialize pay cycle on mount
+  useEffect(() => {
+    const paydaySettings = toPaydaySettings(effectiveSettings);
+    const cycle = getPayCycleForDate(new Date(), paydaySettings);
+    setCurrentPayCycle(cycle);
+    
+    // Only update filters if in paycycle mode
+    if (viewMode === "paycycle") {
+      onFiltersChange({
+        ...filters,
+        dateFrom: cycle.start,
+        dateTo: cycle.end,
+      });
+    }
+  }, [effectiveSettings]);
 
   const currentMonth = filters.dateFrom || startOfMonth(new Date());
 
@@ -45,6 +79,51 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
     });
   };
 
+  const goToPreviousPayCycle = () => {
+    if (!currentPayCycle) return;
+    const paydaySettings = toPaydaySettings(effectiveSettings);
+    const prevCycle = getPrevPayCycle(currentPayCycle, paydaySettings);
+    setCurrentPayCycle(prevCycle);
+    onFiltersChange({
+      ...filters,
+      dateFrom: prevCycle.start,
+      dateTo: prevCycle.end,
+    });
+  };
+
+  const goToNextPayCycle = () => {
+    if (!currentPayCycle) return;
+    const paydaySettings = toPaydaySettings(effectiveSettings);
+    const nextCycle = getNextPayCycle(currentPayCycle, paydaySettings);
+    setCurrentPayCycle(nextCycle);
+    onFiltersChange({
+      ...filters,
+      dateFrom: nextCycle.start,
+      dateTo: nextCycle.end,
+    });
+  };
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    const paydaySettings = toPaydaySettings(effectiveSettings);
+
+    if (mode === "paycycle") {
+      const cycle = getPayCycleForDate(new Date(), paydaySettings);
+      setCurrentPayCycle(cycle);
+      onFiltersChange({
+        ...filters,
+        dateFrom: cycle.start,
+        dateTo: cycle.end,
+      });
+    } else {
+      onFiltersChange({
+        ...filters,
+        dateFrom: startOfMonth(new Date()),
+        dateTo: endOfMonth(new Date()),
+      });
+    }
+  };
+
   const handleSearch = () => {
     onFiltersChange({ ...filters, search: searchValue || undefined });
   };
@@ -56,10 +135,21 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
 
   const clearFilters = () => {
     setSearchValue("");
-    onFiltersChange({
-      dateFrom: startOfMonth(new Date()),
-      dateTo: endOfMonth(new Date()),
-    });
+    const paydaySettings = toPaydaySettings(effectiveSettings);
+    
+    if (viewMode === "paycycle") {
+      const cycle = getPayCycleForDate(new Date(), paydaySettings);
+      setCurrentPayCycle(cycle);
+      onFiltersChange({
+        dateFrom: cycle.start,
+        dateTo: cycle.end,
+      });
+    } else {
+      onFiltersChange({
+        dateFrom: startOfMonth(new Date()),
+        dateTo: endOfMonth(new Date()),
+      });
+    }
   };
 
   const hasActiveFilters = filters.categoryId || filters.type || filters.accountId || filters.search;
@@ -78,16 +168,48 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Month Navigator */}
-        <div className="flex items-center justify-between">
-          <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="font-medium">{format(currentMonth, "MMMM yyyy")}</span>
-          <Button variant="outline" size="icon" onClick={goToNextMonth}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        {/* View Mode Toggle */}
+        <Tabs value={viewMode} onValueChange={(v) => handleViewModeChange(v as ViewMode)}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="paycycle" className="gap-2">
+              <Wallet className="h-3.5 w-3.5" />
+              Pay Cycle
+            </TabsTrigger>
+            <TabsTrigger value="month" className="gap-2">
+              <Calendar className="h-3.5 w-3.5" />
+              Month
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Date Navigator */}
+        {viewMode === "paycycle" ? (
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="outline" size="icon" onClick={goToPreviousPayCycle}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="font-medium text-sm text-center flex-1 truncate">
+              {currentPayCycle 
+                ? (isMobile 
+                    ? formatPayCycleLabelShort(currentPayCycle) 
+                    : formatPayCycleLabel(currentPayCycle))
+                : "Loading..."}
+            </span>
+            <Button variant="outline" size="icon" onClick={goToNextPayCycle}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="font-medium">{format(currentMonth, "MMMM yyyy")}</span>
+            <Button variant="outline" size="icon" onClick={goToNextMonth}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         {/* Search */}
         <div className="flex gap-2">

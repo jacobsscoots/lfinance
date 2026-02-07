@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Tag, CalendarDays, Package, Target, FileText } from "lucide-react";
+import { User, Tag, CalendarDays, Package, Target, FileText, Calendar } from "lucide-react";
 import { ProductSettings } from "@/components/settings/ProductSettings";
 import { NutritionTargetSettings } from "@/components/settings/NutritionTargetSettings";
 import { PaydaySettings } from "@/components/settings/PaydaySettings";
 import { PayslipSettings } from "@/components/settings/PayslipSettings";
 import { PayslipPreviewDialog } from "@/components/settings/PayslipPreviewDialog";
+import { ZigzagCalculator } from "@/components/settings/ZigzagCalculator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Payslip } from "@/hooks/usePayslips";
 
@@ -35,6 +36,10 @@ export default function Settings() {
               <Target className="h-4 w-4" />
               <span className="hidden sm:inline">Nutrition</span>
             </TabsTrigger>
+            <TabsTrigger value="weekly" className="flex items-center gap-2 flex-1 sm:flex-none">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">Weekly Plan</span>
+            </TabsTrigger>
             <TabsTrigger value="products" className="flex items-center gap-2 flex-1 sm:flex-none">
               <Package className="h-4 w-4" />
               <span className="hidden sm:inline">Products</span>
@@ -59,6 +64,10 @@ export default function Settings() {
 
           <TabsContent value="nutrition">
             <NutritionTargetSettings />
+          </TabsContent>
+
+          <TabsContent value="weekly">
+            <ZigzagCalculator />
           </TabsContent>
 
           <TabsContent value="products">
