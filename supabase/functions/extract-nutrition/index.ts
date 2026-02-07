@@ -110,9 +110,25 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("extract-nutrition error:", e);
+    
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    
+    // User-actionable errors should return 200 so the client can display the message
+    const isUserError = 
+      errorMessage.includes("anti-bot") ||
+      errorMessage.includes("blocking") ||
+      errorMessage.includes("blocked") ||
+      errorMessage.includes("Rate limit") ||
+      errorMessage.includes("could not") ||
+      errorMessage.includes("Try 'Upload") ||
+      errorMessage.includes("Try using");
+    
     return new Response(
-      JSON.stringify({ success: false, error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: false, error: errorMessage }),
+      { 
+        status: isUserError ? 200 : 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
     );
   }
 });
