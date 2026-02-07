@@ -13,7 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useProducts, Product, ProductFormData, ProductType, ServingBasis, kjToKcal, kcalToKj } from "@/hooks/useProducts";
+import { useProducts, Product, ProductFormData, ProductType, ServingBasis, FoodType, MealEligibility, kjToKcal, kcalToKj } from "@/hooks/useProducts";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NutritionImportDialog } from "./NutritionImportDialog";
 import { ExtractedNutrition } from "@/lib/nutritionExtraction";
@@ -49,6 +50,9 @@ const productSchema = z.object({
   source_url: z.string().url().optional().nullable().or(z.literal("")),
   image_url: z.string().url().optional().nullable().or(z.literal("")),
   storage_notes: z.string().max(500).optional().nullable(),
+  // Meal planning
+  meal_eligibility: z.array(z.enum(["breakfast", "lunch", "dinner", "snack"])),
+  food_type: z.enum(["protein", "carb", "fat", "veg", "fruit", "dairy", "sauce", "treat", "other"]),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -90,6 +94,8 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
       source_url: product?.source_url || "",
       image_url: product?.image_url || "",
       storage_notes: product?.storage_notes || "",
+      meal_eligibility: product?.meal_eligibility || ["breakfast", "lunch", "dinner", "snack"],
+      food_type: product?.food_type || "other",
     },
   });
 
@@ -198,6 +204,8 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
       source_url: values.source_url || null,
       image_url: values.image_url || null,
       storage_notes: values.storage_notes || null,
+      meal_eligibility: values.meal_eligibility,
+      food_type: values.food_type,
     };
 
     if (isEditing) {
@@ -644,6 +652,73 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                       <FormControl>
                         <Switch checked={field.value} onCheckedChange={field.onChange} />
                       </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Meal Planning */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-sm">Meal Planning</h4>
+                
+                <FormField
+                  control={form.control}
+                  name="meal_eligibility"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Allowed Meals</FormLabel>
+                      <FormDescription>Which meals can this product appear in?</FormDescription>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {(["breakfast", "lunch", "dinner", "snack"] as const).map((meal) => (
+                          <label 
+                            key={meal}
+                            className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:bg-accent"
+                          >
+                            <Checkbox
+                              checked={field.value?.includes(meal)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  field.onChange([...field.value, meal]);
+                                } else {
+                                  field.onChange(field.value.filter((m: string) => m !== meal));
+                                }
+                              }}
+                            />
+                            <span className="text-sm capitalize">{meal}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="food_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Food Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="protein">Protein</SelectItem>
+                          <SelectItem value="carb">Carb</SelectItem>
+                          <SelectItem value="fat">Fat</SelectItem>
+                          <SelectItem value="veg">Vegetable</SelectItem>
+                          <SelectItem value="fruit">Fruit</SelectItem>
+                          <SelectItem value="dairy">Dairy</SelectItem>
+                          <SelectItem value="sauce">Sauce/Condiment</SelectItem>
+                          <SelectItem value="treat">Treat</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Helps with smart meal composition</FormDescription>
                     </FormItem>
                   )}
                 />

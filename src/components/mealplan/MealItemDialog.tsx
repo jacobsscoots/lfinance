@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Package, Scale } from "lucide-react";
-import { Product } from "@/hooks/useProducts";
-import { MealType, useMealPlanItems } from "@/hooks/useMealPlanItems";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Package, Scale, AlertTriangle, Target, Zap } from "lucide-react";
+import { Product, MealEligibility } from "@/hooks/useProducts";
+import { MealType, MealPlanItem, useMealPlanItems } from "@/hooks/useMealPlanItems";
+import { useNutritionSettings } from "@/hooks/useNutritionSettings";
+import { 
+  calculateSingleItemPortion, 
+  isProductAllowedForMeal,
+  PortioningSettings,
+  DEFAULT_PORTIONING_SETTINGS 
+} from "@/lib/autoPortioning";
 
 interface MealItemDialogProps {
   open: boolean;
@@ -16,6 +24,8 @@ interface MealItemDialogProps {
   mealType: MealType;
   products: Product[];
   weekStart: Date;
+  existingItems?: MealPlanItem[];
+  planDate?: Date;
 }
 
 export function MealItemDialog({
@@ -25,13 +35,69 @@ export function MealItemDialog({
   mealType,
   products,
   weekStart,
+  existingItems = [],
+  planDate,
 }: MealItemDialogProps) {
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("100");
+  const [manualOverride, setManualOverride] = useState(false);
   
   const { addItem } = useMealPlanItems(weekStart);
+  const { settings, isTargetMode, getTargetsForDate } = useNutritionSettings();
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
+  
+  // Check if product is allowed for this meal
+  const isAllowedForMeal = selectedProduct 
+    ? isProductAllowedForMeal(selectedProduct, mealType)
+    : true;
+
+  // Get portioning settings from user settings
+  const portioningSettings: PortioningSettings = useMemo(() => ({
+    minGrams: settings?.min_grams_per_item ?? DEFAULT_PORTIONING_SETTINGS.minGrams,
+    maxGrams: settings?.max_grams_per_item ?? DEFAULT_PORTIONING_SETTINGS.maxGrams,
+    rounding: settings?.portion_rounding ?? DEFAULT_PORTIONING_SETTINGS.rounding,
+    tolerancePercent: settings?.target_tolerance_percent ?? DEFAULT_PORTIONING_SETTINGS.tolerancePercent,
+  }), [settings]);
+
+  // Get daily targets for the plan date
+  const dailyTargets = useMemo(() => {
+    if (!planDate) return { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+    return getTargetsForDate(planDate);
+  }, [planDate, getTargetsForDate]);
+
+  // Calculate auto-portion when in target mode
+  const autoPortionResult = useMemo(() => {
+    if (!selectedProduct || !isTargetMode) return null;
+    
+    return calculateSingleItemPortion(
+      selectedProduct,
+      mealType,
+      existingItems,
+      dailyTargets,
+      portioningSettings
+    );
+  }, [selectedProduct, isTargetMode, mealType, existingItems, dailyTargets, portioningSettings]);
+
+  // Update quantity when auto-portion is calculated
+  useEffect(() => {
+    if (autoPortionResult && isTargetMode && !manualOverride) {
+      setQuantity(String(autoPortionResult.grams));
+    }
+  }, [autoPortionResult, isTargetMode, manualOverride]);
+
+  // Reset state when dialog opens/closes or product changes
+  useEffect(() => {
+    if (!open) {
+      setSelectedProductId("");
+      setQuantity("100");
+      setManualOverride(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    setManualOverride(false);
+  }, [selectedProductId]);
 
   // For fixed products, use the fixed portion size
   const effectiveQuantity = selectedProduct?.product_type === "fixed" && selectedProduct.fixed_portion_grams
@@ -46,8 +112,18 @@ export function MealItemDialog({
     fat: (selectedProduct.fat_per_100g * effectiveQuantity) / 100,
   } : null;
 
+  const handleQuantityChange = (value: string) => {
+    setQuantity(value);
+    if (isTargetMode) {
+      setManualOverride(true);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedProductId || effectiveQuantity <= 0) return;
+    
+    // Block if product not allowed for this meal
+    if (!isAllowedForMeal) return;
 
     await addItem.mutateAsync({
       meal_plan_id: planId,
@@ -59,6 +135,7 @@ export function MealItemDialog({
     // Reset form
     setSelectedProductId("");
     setQuantity("100");
+    setManualOverride(false);
     onOpenChange(false);
   };
 
@@ -69,11 +146,30 @@ export function MealItemDialog({
     snack: "Snacks",
   };
 
+  // Filter and sort products - show eligible first
+  const sortedProducts = useMemo(() => {
+    return [...products].sort((a, b) => {
+      const aAllowed = isProductAllowedForMeal(a, mealType);
+      const bAllowed = isProductAllowedForMeal(b, mealType);
+      if (aAllowed && !bAllowed) return -1;
+      if (!aAllowed && bAllowed) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [products, mealType]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add to {mealLabels[mealType]}</DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle>Add to {mealLabels[mealType]}</DialogTitle>
+            {isTargetMode && (
+              <Badge variant="default" className="ml-2">
+                <Target className="h-3 w-3 mr-1" />
+                Auto
+              </Badge>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -89,30 +185,76 @@ export function MealItemDialog({
                     No products. Add products in Settings first.
                   </div>
                 ) : (
-                  products.map(product => (
-                    <SelectItem key={product.id} value={product.id}>
-                      <div className="flex items-center gap-2">
-                        {product.product_type === "fixed" ? (
-                          <Package className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Scale className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span>{product.name}</span>
-                        <span className="text-muted-foreground">
-                          ({product.calories_per_100g} kcal/100g)
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))
+                  sortedProducts.map(product => {
+                    const allowed = isProductAllowedForMeal(product, mealType);
+                    return (
+                      <SelectItem 
+                        key={product.id} 
+                        value={product.id}
+                        className={!allowed ? "opacity-50" : ""}
+                      >
+                        <div className="flex items-center gap-2">
+                          {product.product_type === "fixed" ? (
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Scale className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span>{product.name}</span>
+                          <span className="text-muted-foreground">
+                            ({product.calories_per_100g} kcal/100g)
+                          </span>
+                          {!allowed && (
+                            <Badge variant="outline" className="text-xs ml-1">
+                              Not for {mealLabels[mealType]}
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })
                 )}
               </SelectContent>
             </Select>
           </div>
 
-          {selectedProduct && (
+          {/* Show warning if product not allowed for this meal */}
+          {selectedProduct && !isAllowedForMeal && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>{selectedProduct.name}</strong> is not allowed for {mealLabels[mealType]}. 
+                {selectedProduct.meal_eligibility && selectedProduct.meal_eligibility.length > 0 && (
+                  <> Allowed meals: {selectedProduct.meal_eligibility.map(m => mealLabels[m as MealType] || m).join(", ")}.</>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {selectedProduct && isAllowedForMeal && (
             <>
               <div className="space-y-2">
-                <Label>Quantity (grams)</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Quantity (grams)</Label>
+                  {isTargetMode && autoPortionResult && !selectedProduct.fixed_portion_grams && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Zap className="h-3 w-3 text-primary" />
+                      {manualOverride ? (
+                        <button 
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() => {
+                            setManualOverride(false);
+                            setQuantity(String(autoPortionResult.grams));
+                          }}
+                        >
+                          Reset to auto ({autoPortionResult.grams}g)
+                        </button>
+                      ) : (
+                        <span>Auto-calculated</span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {selectedProduct.product_type === "fixed" && selectedProduct.fixed_portion_grams ? (
                   <div className="flex items-center gap-2">
                     <Input 
@@ -130,12 +272,24 @@ export function MealItemDialog({
                   <Input
                     type="number"
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
+                    onChange={(e) => handleQuantityChange(e.target.value)}
                     min="1"
-                    step="10"
+                    step={portioningSettings.rounding}
                   />
                 )}
               </div>
+
+              {/* Auto-portioning warnings */}
+              {isTargetMode && autoPortionResult && autoPortionResult.warnings.length > 0 && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    {autoPortionResult.warnings.map((w, i) => (
+                      <div key={i} className="text-sm">{w}</div>
+                    ))}
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {previewMacros && !selectedProduct.ignore_macros && (
                 <div className="p-3 rounded-lg bg-muted/50 space-y-2">
@@ -175,7 +329,7 @@ export function MealItemDialog({
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={!selectedProductId || effectiveQuantity <= 0 || addItem.isPending}
+              disabled={!selectedProductId || effectiveQuantity <= 0 || addItem.isPending || !isAllowedForMeal}
             >
               Add Item
             </Button>

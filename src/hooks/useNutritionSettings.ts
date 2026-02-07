@@ -20,6 +20,11 @@ export interface NutritionSettings {
   weekend_carbs_target_grams: number | null;
   weekend_fat_target_grams: number | null;
   weekend_targets_enabled: boolean;
+  // Portioning settings
+  min_grams_per_item: number | null;
+  max_grams_per_item: number | null;
+  portion_rounding: number | null;
+  target_tolerance_percent: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +40,11 @@ export interface NutritionSettingsFormData {
   weekend_carbs_target_grams?: number | null;
   weekend_fat_target_grams?: number | null;
   weekend_targets_enabled?: boolean;
+  // Portioning settings
+  min_grams_per_item?: number | null;
+  max_grams_per_item?: number | null;
+  portion_rounding?: number | null;
+  target_tolerance_percent?: number | null;
 }
 
 export interface DayTargets {
@@ -55,6 +65,10 @@ const DEFAULT_SETTINGS: Omit<NutritionSettings, "id" | "user_id" | "created_at" 
   weekend_carbs_target_grams: null,
   weekend_fat_target_grams: null,
   weekend_targets_enabled: false,
+  min_grams_per_item: 10,
+  max_grams_per_item: 500,
+  portion_rounding: 5,
+  target_tolerance_percent: 2,
 };
 
 export function useNutritionSettings() {
