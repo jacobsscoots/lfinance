@@ -27,6 +27,14 @@ export interface ToiletryItem {
   // Packaging
   gross_size: number | null;
   packaging_weight: number | null;
+  // Weight-based tracking
+  opened_at: string | null;
+  finished_at: string | null;
+  empty_weight_grams: number | null;
+  full_weight_grams: number | null;
+  current_weight_grams: number | null;
+  calculated_usage_rate: number | null;
+  last_weighed_at: string | null;
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -78,9 +86,23 @@ const LOW_STOCK_THRESHOLD_DAYS = 14;
 export function calculateForecast(item: ToiletryItem): ToiletryForecast {
   const { current_remaining, usage_rate_per_day, total_size, cost_per_item } = item;
   
-  // Days remaining = current_remaining / usage_rate_per_day
-  const daysRemaining = usage_rate_per_day > 0 
-    ? Math.max(0, current_remaining / usage_rate_per_day)
+  // Use weight-based data if available, otherwise fall back to manual tracking
+  let effectiveRemaining = current_remaining;
+  let effectiveRate = usage_rate_per_day;
+  
+  // If we have weight-based data, use it for more accurate forecasting
+  if (item.current_weight_grams != null && item.empty_weight_grams != null) {
+    effectiveRemaining = Math.max(0, item.current_weight_grams - item.empty_weight_grams);
+  }
+  
+  // Use calculated rate if available (from weight-based tracking)
+  if (item.calculated_usage_rate != null && item.calculated_usage_rate > 0) {
+    effectiveRate = item.calculated_usage_rate;
+  }
+  
+  // Days remaining = effectiveRemaining / effectiveRate
+  const daysRemaining = effectiveRate > 0 
+    ? Math.max(0, effectiveRemaining / effectiveRate)
     : Infinity;
   
   // Run-out date = today + days remaining

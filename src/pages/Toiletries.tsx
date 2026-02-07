@@ -1,13 +1,19 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus } from "lucide-react";
 import { useToiletries } from "@/hooks/useToiletries";
+import { useToiletryPurchases } from "@/hooks/useToiletryPurchases";
 import { ToiletrySummaryCards } from "@/components/toiletries/ToiletrySummaryCards";
 import { ToiletryCategoryFilter } from "@/components/toiletries/ToiletryCategoryFilter";
 import { ToiletryTable } from "@/components/toiletries/ToiletryTable";
 import { ToiletryFormDialog } from "@/components/toiletries/ToiletryFormDialog";
 import { DeleteToiletryDialog } from "@/components/toiletries/DeleteToiletryDialog";
+import { LogWeightDialog } from "@/components/toiletries/LogWeightDialog";
+import { LinkPurchaseDialog } from "@/components/toiletries/LinkPurchaseDialog";
+import { OrdersTab } from "@/components/toiletries/OrdersTab";
+import { ToiletrySummaryTab } from "@/components/toiletries/ToiletrySummaryTab";
 import type { ToiletryItem } from "@/lib/toiletryCalculations";
 
 export default function Toiletries() {
@@ -17,14 +23,22 @@ export default function Toiletries() {
     createToiletry, 
     updateToiletry, 
     deleteToiletry,
-    restockToiletry 
+    restockToiletry,
+    logWeight,
   } = useToiletries();
   
+  const { purchases, createPurchase } = useToiletryPurchases();
+  
+  const [activeTab, setActiveTab] = useState("items");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ToiletryItem | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingItem, setDeletingItem] = useState<ToiletryItem | null>(null);
+  const [weightDialogOpen, setWeightDialogOpen] = useState(false);
+  const [weighingItem, setWeighingItem] = useState<ToiletryItem | null>(null);
+  const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
+  const [linkingItem, setLinkingItem] = useState<ToiletryItem | null>(null);
   
   const filteredItems = useMemo(() => {
     if (!selectedCategory) return toiletries;
@@ -50,6 +64,16 @@ export default function Toiletries() {
     restockToiletry.mutate({ id: item.id, totalSize: item.total_size });
   };
   
+  const handleLogWeight = (item: ToiletryItem) => {
+    setWeighingItem(item);
+    setWeightDialogOpen(true);
+  };
+  
+  const handleLinkPurchase = (item: ToiletryItem) => {
+    setLinkingItem(item);
+    setPurchaseDialogOpen(true);
+  };
+  
   const handleFormSubmit = (values: any) => {
     if (editingItem) {
       updateToiletry.mutate({ id: editingItem.id, ...values });
@@ -64,6 +88,27 @@ export default function Toiletries() {
       setDeleteDialogOpen(false);
       setDeletingItem(null);
     }
+  };
+  
+  const handleWeightSubmit = (itemId: string, weight: number, readingType: "full" | "regular" | "empty") => {
+    logWeight.mutate({ id: itemId, weight, readingType });
+  };
+  
+  const handlePurchaseSubmit = (values: {
+    toiletry_item_id: string;
+    transaction_id: string | null;
+    purchase_date: string;
+    quantity: number;
+    unit_price: number;
+    discount_type: string;
+    discount_amount: number;
+    final_price: number;
+    notes: string | null;
+  }) => {
+    createPurchase.mutate({
+      ...values,
+      order_id: null,
+    });
   };
   
   return (
@@ -83,28 +128,49 @@ export default function Toiletries() {
           </Button>
         </div>
         
-        {/* Summary Cards */}
-        <ToiletrySummaryCards items={toiletries} />
-        
-        {/* Category Filter */}
-        <ToiletryCategoryFilter
-          selectedCategory={selectedCategory}
-          onCategoryChange={setSelectedCategory}
-        />
-        
-        {/* Items Table */}
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">
-            Loading items...
-          </div>
-        ) : (
-          <ToiletryTable
-            items={filteredItems}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onRestock={handleRestock}
-          />
-        )}
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="items">Items</TabsTrigger>
+            <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="items" className="space-y-6">
+            {/* Summary Cards */}
+            <ToiletrySummaryCards items={toiletries} />
+            
+            {/* Category Filter */}
+            <ToiletryCategoryFilter
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+            />
+            
+            {/* Items Table */}
+            {isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                Loading items...
+              </div>
+            ) : (
+              <ToiletryTable
+                items={filteredItems}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onRestock={handleRestock}
+                onLogWeight={handleLogWeight}
+                onLinkPurchase={handleLinkPurchase}
+              />
+            )}
+          </TabsContent>
+          
+          <TabsContent value="orders">
+            <OrdersTab />
+          </TabsContent>
+          
+          <TabsContent value="summary">
+            <ToiletrySummaryTab items={toiletries} purchases={purchases} />
+          </TabsContent>
+        </Tabs>
         
         {/* Form Dialog */}
         <ToiletryFormDialog
@@ -122,6 +188,24 @@ export default function Toiletries() {
           onConfirm={handleDeleteConfirm}
           itemName={deletingItem?.name || ""}
           isLoading={deleteToiletry.isPending}
+        />
+        
+        {/* Weight Dialog */}
+        <LogWeightDialog
+          open={weightDialogOpen}
+          onOpenChange={setWeightDialogOpen}
+          item={weighingItem}
+          onSubmit={handleWeightSubmit}
+          isLoading={logWeight.isPending}
+        />
+        
+        {/* Purchase Dialog */}
+        <LinkPurchaseDialog
+          open={purchaseDialogOpen}
+          onOpenChange={setPurchaseDialogOpen}
+          item={linkingItem}
+          onSubmit={handlePurchaseSubmit}
+          isLoading={createPurchase.isPending}
         />
       </div>
     </AppLayout>
