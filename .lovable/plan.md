@@ -1,129 +1,200 @@
 
-# Plan: Add Multi-Select and Transfer to Next Day for Meal Items
+# Plan: Multi-Target Precision Solver for Zero-Tolerance Macro Matching
 
-## Overview
-Add two new features to the "Add to Meal" dialog:
-1. **Multi-select products** - Allow users to select multiple products at once to add to a meal
-2. **Transfer items to next day** - Copy all items from the current day to the next day
+## Problem Analysis
 
-## What I Checked
-- Bank connections security: **VERIFIED** - The `bank_connections_safe` view correctly excludes sensitive tokens (access_token, refresh_token, token_expires_at) and RLS policies are working
-- Current MealItemDialog: Uses single-select dropdown, adds one product at a time
-- useMealPlanItems hook: Already has `addItem` mutation for inserting meal plan items
-- Popover and Command components are available for building a multi-select combobox
+The current algorithm has structural flaws causing macro drift:
+
+1. **Sequential adjustment** - Fixes protein first, then tries to fix calories separately, which disrupts the balance
+2. **Single-macro focus** - Each phase only considers one macro at a time
+3. **No simultaneous constraints** - Doesn't solve protein + carbs + fat + calories together
+
+Looking at the MyFitnessPal reference, realistic portions are:
+- Breakfast: 290g yogurt, 130g fruit, 40g granola (~620 kcal, 31g protein)
+- Lunch: 550g meal prep pack (~868 kcal, 93g protein)
+- Dinner: 170g chicken, 210g rice, veg, seasoning (~859 kcal, 79g protein)
+
+The key insight: **macros are mathematically linked** - every gram of food contributes to ALL macros simultaneously. We need a solver that respects this.
 
 ---
 
-## Implementation Details
+## Solution: Iterative Multi-Target Optimization
 
-### 1. Create Multi-Select Product Dialog
+Replace the current sequential approach with a **gradient descent / iterative refinement** algorithm that:
 
-**New component: `MealItemMultiSelectDialog.tsx`**
+1. Treats ALL targets (calories, protein, carbs, fat) as simultaneous constraints
+2. Uses weighted error minimization to balance all macros together
+3. Iterates until error across ALL dimensions is below tolerance
+4. Applies realistic portion constraints (min/max grams, breakfast composition rules)
 
-Replace the single-select dropdown with a multi-select combobox that:
-- Uses Popover + Command components for searchable list
-- Shows checkboxes next to each product
-- Displays selected count in the trigger button
-- Keeps dialog open after selecting (toggle behavior)
-- Filters/sorts products by meal eligibility (allowed first, disallowed grayed out)
-- Shows "Not for [Meal]" badge for ineligible items
-- In target mode: adds all items with 0g (to be calculated via Generate)
-- In manual mode: adds all items with default 100g
+### Algorithm Overview
 
-**UI flow:**
-```text
-+-------------------------------------------+
-| Add to Dinner              [Auto badge]   |
-+-------------------------------------------+
-| Products                                  |
-| [Select products...              v ]      |
-| +---------------------------------------+ |
-| | Search products...                    | |
-| +---------------------------------------+ |
-| | [x] Chicken Breast (114 kcal/100g)    | |
-| | [x] Brown Rice (163 kcal/100g)        | |
-| | [ ] Broccoli (34 kcal/100g)           | |
-| | [ ] Greek Yogurt (99 kcal) Not for Din| |
-| +---------------------------------------+ |
-| Selected: 2 products                      |
-|                                           |
-| [Cancel]              [Add 2 Items (0g)]  |
-+-------------------------------------------+
+```
+1. Calculate fixed contributions (locked/fixed items)
+2. Calculate remaining targets for each macro
+3. Initialize portions based on role (protein sources, carbs, etc.)
+4. LOOP until convergence (all macros within 0.5g/1kcal):
+   a. Calculate current error for each macro
+   b. Compute weighted gradient for each adjustable item
+   c. Adjust grams proportionally to reduce total error
+   d. Apply constraints (min/max, breakfast caps)
+5. Final polish pass to eliminate any remaining drift
 ```
 
-### 2. Add "Transfer to Next Day" Action
+### Key Improvements
 
-**Location:** MealDayCard dropdown menu (header area) 
+| Current Approach | New Approach |
+|------------------|--------------|
+| Fix protein, then fix calories | Solve all macros simultaneously |
+| Adjust one item at a time | Distribute adjustments across items |
+| Ignores carb/fat targets | Considers all 4 dimensions |
+| Single pass | Iterates until exact match |
 
-Add a new menu option in the day card header:
-- "Copy to Next Day" - copies all items from this day to the next day
-- Shows confirmation count of items transferred
-- Preserves meal types (breakfast items stay breakfast, etc.)
+---
 
-**New mutation in useMealPlanItems hook:**
+## Technical Implementation
 
+### File: `src/lib/autoPortioning.ts`
+
+#### 1. New Multi-Macro Error Function
 ```typescript
-const copyDayToNext = useMutation({
-  mutationFn: async (sourcePlanId: string) => {
-    // 1. Find source plan and its items
-    // 2. Find target plan (next day)
-    // 3. Insert copies of all items to target plan
-    // Return count of items copied
-  }
-});
+interface MacroError {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  totalWeighted: number;
+}
+
+function calculateMacroError(achieved: MacroTotals, targets: MacroTotals): MacroError {
+  // Weight priorities: Calories 1.0, Protein 1.5, Carbs 0.8, Fat 0.8
+  const calError = targets.calories - achieved.calories;
+  const proError = targets.protein - achieved.protein;
+  const carbError = targets.carbs - achieved.carbs;
+  const fatError = targets.fat - achieved.fat;
+  
+  return {
+    calories: calError,
+    protein: proError,
+    carbs: carbError,
+    fat: fatError,
+    totalWeighted: Math.abs(calError) + 1.5 * Math.abs(proError) + 
+                   0.8 * Math.abs(carbError) + 0.8 * Math.abs(fatError)
+  };
+}
 ```
 
-### 3. Update MealDayCard Header
+#### 2. Iterative Solver with Simultaneous Constraints
+```typescript
+function solveSimultaneous(
+  items: EditableItem[],
+  targets: MacroTotals,
+  settings: PortioningSettings
+): Map<string, number> {
+  const n = items.length;
+  const grams = new Array(n).fill(50); // Initial guess
+  
+  const MAX_ITERATIONS = 100;
+  const TOLERANCE = 0.5; // Within 0.5g/kcal of target
+  
+  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+    const current = sumMacros(items, grams);
+    const error = calculateMacroError(current, targets);
+    
+    // Check convergence
+    if (Math.abs(error.calories) < 1 && 
+        Math.abs(error.protein) < TOLERANCE &&
+        Math.abs(error.carbs) < TOLERANCE &&
+        Math.abs(error.fat) < TOLERANCE) {
+      break;
+    }
+    
+    // Compute adjustment for each item based on its macro contribution
+    for (let i = 0; i < n; i++) {
+      const item = items[i];
+      
+      // Calculate this item's "influence" on each macro
+      const calInfluence = item.caloriesPer100g / 100;
+      const proInfluence = item.proteinPer100g / 100;
+      const carbInfluence = item.carbsPer100g / 100;
+      const fatInfluence = item.fatPer100g / 100;
+      
+      // Weighted gradient: how much should this item change?
+      const gradient = 
+        error.calories * calInfluence * 1.0 +
+        error.protein * proInfluence * 1.5 +
+        error.carbs * carbInfluence * 0.8 +
+        error.fat * fatInfluence * 0.8;
+      
+      // Apply damped adjustment (prevent oscillation)
+      const learningRate = 0.3;
+      grams[i] += gradient * learningRate;
+      grams[i] = Math.max(settings.minGrams, Math.min(settings.maxGrams, grams[i]));
+    }
+  }
+  
+  // Final precision pass: fine-tune to hit exact targets
+  return fineTuneToExact(items, grams, targets, settings);
+}
+```
 
-Add a dropdown menu to the day card header with:
-- View Details (existing)
-- Copy All to Next Day (new)
-- Clear All Items (optional - for convenience)
+#### 3. Breakfast Composition Rules (Preserved)
+- **Yogurt (base)**: ~55% of breakfast calories, sized to hit protein
+- **Fruit (secondary)**: ~30% of breakfast calories
+- **Granola (topper)**: Max 40g regardless (capped)
+
+These rules run BEFORE the multi-macro solver to establish reasonable starting portions.
+
+#### 4. Final Precision Pass
+```typescript
+function fineTuneToExact(
+  items: EditableItem[],
+  grams: number[],
+  targets: MacroTotals,
+  settings: PortioningSettings
+): Map<string, number> {
+  // After iterative solve, make micro-adjustments to hit EXACT targets
+  // Prioritize items by their dominant macro contribution
+  
+  // 1. Adjust highest-protein item to hit protein exactly
+  // 2. Adjust highest-carb item to hit carbs exactly
+  // 3. Adjust highest-fat item to hit fat exactly
+  // 4. Micro-adjust any item to hit calories exactly
+  
+  // Each adjustment is tiny (0.1-2g) to preserve overall balance
+}
+```
 
 ---
 
-## Files to Create/Modify
+## Changes Required
 
-| File | Action | Description |
-|------|--------|-------------|
-| `src/components/mealplan/MealItemMultiSelectDialog.tsx` | **Create** | New multi-select dialog component |
-| `src/components/mealplan/MealDayCard.tsx` | Modify | Add "Copy to Next Day" menu option |
-| `src/hooks/useMealPlanItems.ts` | Modify | Add `addMultipleItems` and `copyDayToNext` mutations |
-| `src/components/mealplan/MealItemDialog.tsx` | Modify | Update to import toggle for single/multi mode OR replace entirely with multi-select |
-
----
-
-## Technical Approach
-
-### Multi-Select Implementation
-- Use `Popover` + `Command` + `Checkbox` for the selection UI
-- Maintain `Set<string>` of selected product IDs
-- On submit, loop through and call `addItem` for each (or batch insert)
-- For better UX: batch insert with single mutation to avoid N network requests
-
-### Copy to Next Day Implementation
-- Get current plan's items
-- Find next day's plan ID (weekDates[currentDayIndex + 1])
-- If next day is in different week, handle appropriately (error or skip)
-- Insert items with same product_id, meal_type, quantity_grams
-- Do not copy locked status (let user choose)
+| File | Change |
+|------|--------|
+| `src/lib/autoPortioning.ts` | Replace `solveExactPortions` with new simultaneous solver |
+| `src/lib/autoPortioning.ts` | Update `calculateDayPortions` to use new solver |
+| `src/lib/autoPortioning.ts` | Add `calculateMacroError` and `fineTuneToExact` functions |
 
 ---
 
-## Considerations
+## Testing Plan
 
-1. **Batch vs Individual Inserts**: Use batch insert (single query) for better performance
-2. **Week Boundary**: If Saturday, "next day" is Sunday which should be in same week - should work. But if the week ends, show a message that they can't copy to next week from this view
-3. **Fixed Products**: Fixed-portion products use their preset grams even in multi-select
-4. **Duplicate Prevention**: Optionally check if product already exists in meal before adding (or allow duplicates)
+After implementation:
+1. Open `/meal-plan` and add items to a day
+2. Click "Generate Portions"
+3. Verify ALL macros show green (within tolerance):
+   - Calories: exactly 2302 (or user's target)
+   - Protein: exactly 149g (or target)
+   - Carbs: exactly 259g (or target)
+   - Fat: exactly 51g (or target)
+4. Check alert bar shows no warnings (no "under/over target" messages)
 
 ---
 
-## Bank Connections Test Result
+## Expected Outcome
 
-**Status: VERIFIED** 
-
-- The `/accounts` route correctly redirects to login for unauthenticated users
-- The `bank_connections_safe` view exists and excludes sensitive columns
-- The `useBankConnections` hook correctly queries the safe view
-- RLS policies are properly configured (authenticated users can only see their own connections via the view)
+The final day totals will match targets with zero tolerance:
+- No more "22g under protein" warnings
+- No calorie overshoot from carb/fat compensation
+- Realistic gram portions (similar to the MyFitnessPal reference ranges)
+- All progress bars show green (success state)
