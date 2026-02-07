@@ -188,8 +188,11 @@ serve(async (req) => {
         balance = balances[0]?.current || 0;
       }
 
-      // Extract provider from account data if available, fallback to connection provider
-      const accountProvider = account.provider?.provider_id || connectionProvider;
+      // Extract provider from account data - prefer provider_id (e.g. "ob-monzo")
+      // This is crucial for displaying correct bank names in the UI
+      const accountProvider = account.provider?.provider_id || 
+                              account.provider?.display_name || 
+                              connectionProvider;
       const accountType = account.account_type === 'SAVINGS' ? 'savings' : 'current';
       const accountName = account.display_name || account.account_number?.number || 'Bank Account';
 

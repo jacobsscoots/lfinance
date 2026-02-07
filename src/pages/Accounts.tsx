@@ -26,12 +26,17 @@ export default function Accounts() {
     deleteAccount,
     toggleHidden 
   } = useAccounts();
-  const { completeConnection } = useBankConnections();
+  const { connections, completeConnection } = useBankConnections();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
   const [showHiddenAccounts, setShowHiddenAccounts] = useState(false);
+
+  // Create a map of connection_id -> status for quick lookup
+  const connectionStatusMap = new Map(
+    connections.map(conn => [conn.id, conn.status])
+  );
 
   // Handle TrueLayer OAuth callback
   useEffect(() => {
@@ -210,6 +215,7 @@ export default function Accounts() {
               <AccountCard
                 key={account.id}
                 account={account}
+                connectionStatus={account.connection_id ? connectionStatusMap.get(account.connection_id) : null}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onToggleHidden={handleToggleHidden}
