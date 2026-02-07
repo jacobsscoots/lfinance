@@ -236,6 +236,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
       offer_price: values.offer_price || null,
       offer_label: values.offer_label || null,
       pack_size_grams: values.pack_size_grams || null,
+      retailer: values.retailer || null,
       serving_basis: values.serving_basis,
       serving_size_grams: values.serving_size_grams || null,
       product_type: values.product_type,
