@@ -135,6 +135,29 @@ function isSauceOrSeasoning(product: Product): boolean {
 }
 
 /**
+ * Detect yoghurt type for breakfast proportionality.
+ * Primary = 0%/fat-free (main base, 200-300g)
+ * Secondary = Greek/full-fat (smaller portion, 50-150g)
+ */
+function getYoghurtType(product: Product): "primary" | "secondary" | "none" {
+  const name = product.name.toLowerCase();
+  if (!name.includes("yogurt") && !name.includes("yoghurt")) return "none";
+  
+  // 0% or fat-free yoghurt = primary base (larger portion)
+  if (name.includes("0%") || name.includes("fat free") || name.includes("fat-free") || name.includes("skyr")) {
+    return "primary";
+  }
+  
+  // Greek/full-fat = secondary (smaller portion for fat/creaminess)
+  if (name.includes("greek") || name.includes("natural") || name.includes("full fat") || name.includes("full-fat")) {
+    return "secondary";
+  }
+  
+  // Default yoghurt to primary
+  return "primary";
+}
+
+/**
  * Seasoning-to-protein pairing map with realistic gram quantities.
  */
 const SEASONING_PAIRINGS: Record<string, { proteins: string[]; grams: number }> = {
@@ -344,65 +367,95 @@ function solveSimultaneous(
     fat: Math.max(0, targets.fat - sauceContrib.fat),
   };
 
-  // === BREAKFAST SPECIAL HANDLING ===
+  // === BREAKFAST SPECIAL HANDLING WITH PROPORTIONAL YOGHURT ===
   if (mealType === "breakfast") {
+    // Separate yoghurts into primary (0%) and secondary (Greek/full-fat)
+    const primaryYoghurt: number[] = [];
+    const secondaryYoghurt: number[] = [];
+    
+    breakfastBase.forEach(idx => {
+      const yogType = getYoghurtType(items[idx].product);
+      if (yogType === "secondary") {
+        secondaryYoghurt.push(idx);
+      } else {
+        primaryYoghurt.push(idx); // primary or none defaults to primary
+      }
+    });
+    
     // Step 1: Set granola (topper) to 30g - within 25-40g range
     breakfastTopper.forEach(idx => {
-      grams[idx] = 30; // Sensible default, will be clamped to 25-40g
+      grams[idx] = 30;
     });
     
-    // Step 2: Calculate calories used by toppers
-    let topperCalories = 0;
-    breakfastTopper.forEach(idx => {
-      topperCalories += items[idx].caloriesPer100g * grams[idx] / 100;
+    // Step 2: Set fruit to 90g (within 80-120g range)
+    breakfastSecondary.forEach(idx => {
+      grams[idx] = 90;
     });
     
-    const remainingCalories = adjustedTargets.calories - topperCalories;
-    const remainingProtein = adjustedTargets.protein - sumMacros(items, grams).protein + sauceContrib.protein;
-    
-    // Step 3: Size yogurt (base) primarily by protein need
-    if (breakfastBase.length > 0 && remainingProtein > 0) {
-      const totalProteinPer100g = breakfastBase.reduce((sum, idx) => sum + items[idx].proteinPer100g, 0);
-      if (totalProteinPer100g > 0) {
-        // Size to hit ~90% of remaining protein (leave room for fine-tuning)
-        const gramsNeeded = (remainingProtein * 0.9 / totalProteinPer100g) * 100;
-        breakfastBase.forEach(idx => {
-          const min = getBreakfastMinimum("base");
-          grams[idx] = Math.max(min, Math.min(settings.maxGrams, gramsNeeded));
-        });
-      }
-    }
-    
-    // Step 4: Calculate remaining calories after base
-    let baseCalories = 0;
-    breakfastBase.forEach(idx => {
-      baseCalories += items[idx].caloriesPer100g * grams[idx] / 100;
-    });
-    
-    const afterBaseCals = remainingCalories - baseCalories;
-    
-    // Step 5: Size fruit (secondary) to fill remaining calories - ENFORCE MINIMUM
-    if (breakfastSecondary.length > 0) {
-      const minSecondary = getBreakfastMinimum("secondary");
-      const totalCalsPer100g = breakfastSecondary.reduce((sum, idx) => sum + items[idx].caloriesPer100g, 0);
-      if (totalCalsPer100g > 0 && afterBaseCals > 0) {
-        const gramsNeeded = (afterBaseCals / totalCalsPer100g) * 100;
-        breakfastSecondary.forEach(idx => {
-          // Enforce minimum 80g for fruit even if calorie budget is exceeded
-          grams[idx] = Math.max(minSecondary, Math.min(settings.maxGrams, gramsNeeded));
+    // Step 3: Size PRIMARY yoghurt (0%) for protein - target 200-300g
+    // This is the main base, sized to hit ~70% of breakfast protein
+    if (primaryYoghurt.length > 0) {
+      const proteinNeeded = adjustedTargets.protein * 0.7;
+      const totalProtPer100g = primaryYoghurt.reduce((s, i) => s + items[i].proteinPer100g, 0);
+      if (totalProtPer100g > 0) {
+        const gramsNeeded = (proteinNeeded / totalProtPer100g) * 100;
+        primaryYoghurt.forEach(idx => {
+          // Clamp to realistic 200-300g range
+          grams[idx] = Math.max(200, Math.min(300, gramsNeeded));
         });
       } else {
-        // Even with no remaining calories, fruit gets minimum portion
-        breakfastSecondary.forEach(idx => {
-          grams[idx] = minSecondary;
+        primaryYoghurt.forEach(idx => {
+          grams[idx] = 250; // Default if no protein info
         });
       }
     }
     
-    // Step 5.5: Ensure toppers have sensible minimums (25-40g range)
+    // Step 4: Size SECONDARY yoghurt (Greek/full-fat) smaller - target 50-150g
+    // This adds fat/creaminess without overwhelming the bowl
+    if (secondaryYoghurt.length > 0) {
+      // Calculate fat contribution needed after primary
+      const currentFat = sumMacros(items, grams).fat;
+      const fatGap = adjustedTargets.fat - currentFat - sauceContrib.fat;
+      
+      secondaryYoghurt.forEach(idx => {
+        if (fatGap > 0 && items[idx].fatPer100g > 0) {
+          const gramsForFat = (fatGap / items[idx].fatPer100g) * 100;
+          // Clamp to realistic 50-150g range
+          grams[idx] = Math.max(50, Math.min(150, gramsForFat));
+        } else {
+          grams[idx] = 75; // Default small portion
+        }
+      });
+    }
+    
+    // Step 5: Fine-tune toppers to hit remaining carb/fat targets
+    const afterYoghurtMacros = sumMacros(items, grams);
+    const carbGap = adjustedTargets.carbs - afterYoghurtMacros.carbs;
+    
+    // Adjust fruit (80-120g range) to help with carbs
+    if (breakfastSecondary.length > 0 && Math.abs(carbGap) > 5) {
+      breakfastSecondary.forEach(idx => {
+        const carbPer100g = items[idx].carbsPer100g;
+        if (carbPer100g > 0) {
+          const adjustment = (carbGap * 0.5 / carbPer100g) * 100;
+          const newGrams = grams[idx] + adjustment;
+          grams[idx] = Math.max(80, Math.min(120, newGrams));
+        }
+      });
+    }
+    
+    // Adjust granola (25-40g range) for final carb balance
     breakfastTopper.forEach(idx => {
-      const min = getBreakfastMinimum("topper");
-      grams[idx] = Math.max(min, Math.min(40, grams[idx] || 30));
+      const currentMacros = sumMacros(items, grams);
+      const finalCarbGap = adjustedTargets.carbs - currentMacros.carbs;
+      const carbPer100g = items[idx].carbsPer100g;
+      if (carbPer100g > 0 && Math.abs(finalCarbGap) > 2) {
+        const adjustment = (finalCarbGap * 0.3 / carbPer100g) * 100;
+        const newGrams = grams[idx] + adjustment;
+        grams[idx] = Math.max(25, Math.min(40, newGrams));
+      } else {
+        grams[idx] = Math.max(25, Math.min(40, grams[idx]));
+      }
     });
     
     // Step 6: Other items get minimal portions
@@ -485,9 +538,9 @@ function solveSimultaneous(
   // === PRECISION FINE-TUNING PASS ===
   fineTuneToExact(items, grams, targets, settings, mealType);
   
-  // Store results with high precision
+  // Store results as integers (whole numbers for kitchen scales)
   for (let i = 0; i < n; i++) {
-    result.set(items[i].itemId, Math.round(grams[i] * 10) / 10);
+    result.set(items[i].itemId, Math.round(grams[i]));
   }
   
   return result;
@@ -940,6 +993,161 @@ export function calculateDayPortions(
       }
     });
   });
+
+  // === INTEGER ROUNDING + REBALANCE PASS ===
+  // Convert all portions to whole integers, then rebalance to maintain macro targets
+  const integerRoundingPass = () => {
+    // Track drift caused by rounding
+    let roundingDrift = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    
+    // Step 1: Round all items to nearest integer
+    activeMeals.forEach(mealType => {
+      editableByMeal[mealType].forEach(item => {
+        const currentGrams = allItemGrams.get(item.itemId) || 0;
+        const roundedGrams = Math.round(currentGrams);
+        
+        // Get min/max constraints based on item type
+        const role = mealType === "breakfast" ? getBreakfastRole(item.product) : null;
+        let minGrams = settings.minGrams;
+        let maxGrams = getMaxPortion(item.product, settings);
+        
+        // Topper-specific constraints (25-40g)
+        if (role === "topper") {
+          minGrams = 25;
+          maxGrams = 40;
+        }
+        // Fruit constraints (80-120g)
+        else if (role === "secondary") {
+          minGrams = 80;
+          maxGrams = 120;
+        }
+        // Primary yoghurt constraints (200-300g)
+        else if (role === "base") {
+          const yogType = getYoghurtType(item.product);
+          if (yogType === "primary") {
+            minGrams = 200;
+            maxGrams = 300;
+          } else if (yogType === "secondary") {
+            minGrams = 50;
+            maxGrams = 150;
+          }
+        }
+        
+        // Clamp to valid range
+        const finalGrams = Math.max(minGrams, Math.min(maxGrams, roundedGrams));
+        
+        // Calculate drift from rounding
+        const macrosBefore = calculateMacrosForGrams(item.product, currentGrams);
+        const macrosAfter = calculateMacrosForGrams(item.product, finalGrams);
+        
+        roundingDrift.calories += macrosAfter.calories - macrosBefore.calories;
+        roundingDrift.protein += macrosAfter.protein - macrosBefore.protein;
+        roundingDrift.carbs += macrosAfter.carbs - macrosBefore.carbs;
+        roundingDrift.fat += macrosAfter.fat - macrosBefore.fat;
+        
+        allItemGrams.set(item.itemId, finalGrams);
+      });
+    });
+    
+    // Step 2: Rebalance using macro-appropriate items to compensate for drift
+    // Only adjust items that weren't in the rounding pass (main meal items, not constrained ones)
+    const rebalanceItems = allEditables.filter(e => {
+      if (isSauceOrSeasoning(e.item.product)) return false;
+      const role = e.mealType === "breakfast" ? getBreakfastRole(e.item.product) : null;
+      if (role === "topper" || role === "secondary") return false;
+      return true;
+    });
+    
+    // Rebalance protein (if drift >= 0.5g)
+    if (Math.abs(roundingDrift.protein) >= 0.5 && rebalanceItems.length > 0) {
+      const proteinSources = rebalanceItems
+        .filter(e => isHighProteinSource(e.item.product))
+        .sort((a, b) => b.item.proteinPer100g - a.item.proteinPer100g);
+      
+      if (proteinSources.length > 0) {
+        const best = proteinSources[0];
+        const currentGrams = allItemGrams.get(best.item.itemId) || 0;
+        // Adjust by 1g in opposite direction of drift
+        const adjustment = roundingDrift.protein > 0 ? -1 : 1;
+        const role = best.mealType === "breakfast" ? getBreakfastRole(best.item.product) : null;
+        const minG = role === "base" && getYoghurtType(best.item.product) === "primary" ? 200 : settings.minGrams;
+        const maxG = role === "base" && getYoghurtType(best.item.product) === "primary" ? 300 : getMaxPortion(best.item.product, settings);
+        const newGrams = Math.max(minG, Math.min(maxG, currentGrams + adjustment));
+        allItemGrams.set(best.item.itemId, newGrams);
+      }
+    }
+    
+    // Rebalance carbs (if drift >= 0.5g)
+    if (Math.abs(roundingDrift.carbs) >= 0.5 && rebalanceItems.length > 0) {
+      const carbSources = rebalanceItems
+        .filter(e => e.item.carbsPer100g > 15 && e.item.proteinPer100g < 10)
+        .sort((a, b) => b.item.carbsPer100g - a.item.carbsPer100g);
+      
+      if (carbSources.length > 0) {
+        const best = carbSources[0];
+        const currentGrams = allItemGrams.get(best.item.itemId) || 0;
+        const adjustment = roundingDrift.carbs > 0 ? -1 : 1;
+        const maxG = getMaxPortion(best.item.product, settings);
+        const newGrams = Math.max(settings.minGrams, Math.min(maxG, currentGrams + adjustment));
+        allItemGrams.set(best.item.itemId, newGrams);
+      }
+    }
+    
+    // Rebalance fat (if drift >= 0.5g)
+    if (Math.abs(roundingDrift.fat) >= 0.5 && rebalanceItems.length > 0) {
+      const fatSources = rebalanceItems
+        .filter(e => e.item.fatPer100g > 5)
+        .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
+      
+      if (fatSources.length > 0) {
+        const best = fatSources[0];
+        const currentGrams = allItemGrams.get(best.item.itemId) || 0;
+        const adjustment = roundingDrift.fat > 0 ? -1 : 1;
+        const maxG = getMaxPortion(best.item.product, settings);
+        const newGrams = Math.max(settings.minGrams, Math.min(maxG, currentGrams + adjustment));
+        allItemGrams.set(best.item.itemId, newGrams);
+      }
+    }
+  };
+  
+  integerRoundingPass();
+
+  // === CARB REDUCTION PRIORITY PASS ===
+  // If carbs are still over target after rounding, reduce high-carb items first
+  totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
+  let carbOverage = totalAchieved.carbs - dailyTargets.carbs;
+  
+  if (carbOverage > 0.5) {
+    // Find high-carb items (rice, pasta, granola) to reduce
+    const carbSources = allEditables
+      .filter(e => e.item.carbsPer100g > 20)
+      .sort((a, b) => b.item.carbsPer100g - a.item.carbsPer100g);
+    
+    for (const source of carbSources) {
+      if (carbOverage <= 0.5) break;
+      
+      const currentGrams = allItemGrams.get(source.item.itemId) || 0;
+      const role = source.mealType === "breakfast" ? getBreakfastRole(source.item.product) : null;
+      
+      // Determine min based on role
+      let minForItem = settings.minGrams;
+      if (role === "topper") minForItem = 25;
+      else if (role === "secondary") minForItem = 80;
+      else if (source.item.carbsPer100g > 25 && source.item.proteinPer100g < 10) minForItem = 80; // Rice/pasta min
+      
+      // Calculate how much to reduce (max 5g per pass to avoid overshooting)
+      const maxReduction = currentGrams - minForItem;
+      if (maxReduction > 0) {
+        const reduction = Math.min(5, maxReduction);
+        const newGrams = currentGrams - reduction;
+        allItemGrams.set(source.item.itemId, newGrams);
+        
+        // Update carb overage
+        const carbReduction = (reduction / 100) * source.item.carbsPer100g;
+        carbOverage -= carbReduction;
+      }
+    }
+  }
 
   // Final calculation
   totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
