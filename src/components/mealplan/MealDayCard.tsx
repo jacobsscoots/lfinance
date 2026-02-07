@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2 } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { MealItemMultiSelectDialog } from "./MealItemMultiSelectDialog";
 import { EatingOutDialog } from "./EatingOutDialog";
 import { DayDetailModal } from "./DayDetailModal";
 import { DayMacroSummary } from "./DayMacroSummary";
+import { DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
 import { cn } from "@/lib/utils";
 
 interface MealDayCardProps {
@@ -42,13 +43,14 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
   
-  const { updateMealStatus, removeItem, updateItem, copyDayToNext, clearDay } = useMealPlanItems(weekStart);
+  const { updateMealStatus, removeItem, updateItem, copyDayToNext, clearDay, recalculateDay } = useMealPlanItems(weekStart);
   
   const date = parseISO(plan.meal_date);
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
   const isTargetMode = settings?.mode === "target_based";
   const isSaturday = date.getDay() === 6; // Can't copy to next day on Saturday (end of week)
+  const hasItems = items.length > 0;
   
   // Get targets for this specific date
   const targets: MacroTotals = settings 
@@ -109,6 +111,19 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
     clearDay.mutate(plan.id);
   };
 
+  const handleGenerate = () => {
+    if (!settings) return;
+    
+    const portioningSettings = {
+      minGrams: settings.min_grams_per_item || DEFAULT_PORTIONING_SETTINGS.minGrams,
+      maxGrams: settings.max_grams_per_item || DEFAULT_PORTIONING_SETTINGS.maxGrams,
+      rounding: settings.portion_rounding || DEFAULT_PORTIONING_SETTINGS.rounding,
+      tolerancePercent: settings.target_tolerance_percent || DEFAULT_PORTIONING_SETTINGS.tolerancePercent,
+    };
+    
+    recalculateDay.mutate({ planId: plan.id, settings, portioningSettings });
+  };
+
   return (
     <>
       <Card className={cn(
@@ -124,6 +139,23 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {/* Per-Day Generate Button */}
+              {isTargetMode && hasItems && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={handleGenerate}
+                  disabled={recalculateDay.isPending}
+                  title="Generate portions for this day"
+                >
+                  {recalculateDay.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
