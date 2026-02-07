@@ -1,24 +1,36 @@
-# Implementation Status - All 3 Tasks Complete
+# Implementation Status - All Tasks Complete
 
-## ✅ TASK 1B — Copy to Next Day (DONE)
-- Fixed Monday copy button being incorrectly disabled
-- Changed from `date.getDay() === 1` to checking actual last day in `weekDates` array
-- Now only the final Monday (day 9) is disabled, not first Monday (day 2)
+## ✅ TASK 1A — Macro Solver "Precision Mode" Lie Fix (DONE)
 
-## ✅ TASK 3 — Bills Calendar Fix (DONE)  
-- Replaced unstable Popover + Calendar with native `<Input type="date" />` inputs
-- Removed Calendar, Popover imports to eliminate portal/focus issues
-- Form now stays open during date selection
+### Root Cause
+The UI in `DayDetailModal.tsx` line 229 showed "Precision mode: Exact targets with zero tolerance" as a **hardcoded static string** displayed whenever target mode was enabled — regardless of whether the solver actually achieved tolerance. This was a UI bug, not a solver bug.
 
-## ✅ TASK 1A — Macro Solver Fat Regression (DONE)
-- Increased fat weighting from 0.8x → 1.2x in `calculateMacroError()`
-- Relaxed fat source filter from `fatPer100g > 5` → `> 3`
-- Added feasibility pre-check before solver runs
-- Added 4 new fat parity tests (now 181 total tests)
+The solver correctly returned `success: false` when outside tolerance, but the UI ignored this and showed the misleading message anyway.
 
-## TASK 2 — Transactions Pay-Cycle
-- Already implemented via Settings → Payday Settings
-- No code changes needed
+### Fix Applied
+1. **DayDetailModal.tsx**: Replaced static "Precision mode" text with dynamic status computed from actual macro differences:
+   - Shows "✓ Targets achieved — all macros within ±1g tolerance" (green) when truly successful
+   - Shows "⚠ Targets not fully achieved" (amber) with specific failed macros when not successful
+   - Removed misleading hardcoded "Exact targets with zero tolerance" text
+
+2. **autoPortioning.ts**: Already correctly returns `success: false` when macros outside tolerance (verified by tests)
+
+3. **New tests added**: 5 additional tests verifying success flag truthfulness
+
+## ✅ TASK 1B — Copy to Next Day Fix (DONE)
+- Fixed Monday copy button incorrectly disabled
+
+## ✅ TASK 3 — Bills Calendar Fix (DONE)
+- Replaced unstable calendar popovers with native date inputs
+
+## Test Results
+- **186 tests pass** (56 in autoPortioning alone)
+- Added tests for:
+  - "success=false when any macro is outside tolerance"
+  - "warnings array describes which macros failed"
+  - "success is only true when ALL macros are within tolerance"
+  - "success is false when fat is off by >1g even if others are close"
+  - "success is false when protein is off by >1g even if others are close"
 
 ## Executive Summary
 

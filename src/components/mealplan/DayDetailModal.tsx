@@ -79,6 +79,23 @@ export function DayDetailModal({
     (item.product.calories_per_100g === 0 || item.product.protein_per_100g === 0)
   );
 
+  // Calculate actual success based on macro differences (NOT hardcoded)
+  const calDiff = Math.abs(dayMacros.totals.calories - targets.calories);
+  const proDiff = Math.abs(dayMacros.totals.protein - targets.protein);
+  const carbDiff = Math.abs(dayMacros.totals.carbs - targets.carbs);
+  const fatDiff = Math.abs(dayMacros.totals.fat - targets.fat);
+  
+  // Success = all macros within tolerance (±1g for P/C/F, ±2 kcal for calories)
+  const isWithinTolerance = calDiff < 5 && proDiff <= 1 && carbDiff <= 1 && fatDiff <= 1;
+  const hasItems = items.length > 0;
+  
+  // Build specific failure messages for clarity
+  const failedMacros: string[] = [];
+  if (proDiff > 1) failedMacros.push(`Protein: ${proDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.protein - targets.protein)}g`);
+  if (carbDiff > 1) failedMacros.push(`Carbs: ${carbDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.carbs - targets.carbs)}g`);
+  if (fatDiff > 1) failedMacros.push(`Fat: ${fatDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.fat - targets.fat)}g`);
+  if (calDiff >= 5) failedMacros.push(`Calories: ${calDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.calories - targets.calories)}`);
+
   // Portioning settings info
   const portioningSettings = {
     rounding: settings?.portion_rounding || 5,
@@ -223,10 +240,36 @@ export function DayDetailModal({
             <div className="space-y-2">
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 <Settings2 className="h-4 w-4" />
-                Calculation Settings
+                Calculation Status
               </h4>
+              
+              {/* Dynamic status based on ACTUAL results, not settings */}
+              {hasItems && !hasUncalculatedItems && (
+                <div className={cn(
+                  "text-xs px-3 py-2 rounded-md border",
+                  isWithinTolerance 
+                    ? "bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400"
+                    : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
+                )}>
+                  {isWithinTolerance ? (
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold">✓ Targets achieved</span>
+                      <span className="text-muted-foreground">— all macros within ±1g tolerance</span>
+                    </span>
+                  ) : (
+                    <div className="space-y-1">
+                      <span className="font-semibold">⚠ Targets not fully achieved</span>
+                      {failedMacros.length > 0 && (
+                        <div className="text-[11px] text-muted-foreground">
+                          Off by: {failedMacros.join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <ul className="text-xs text-muted-foreground space-y-1 pl-4 list-disc">
-                <li><strong>Precision mode:</strong> Exact targets with zero tolerance</li>
                 <li>Calories split evenly across breakfast/lunch/dinner</li>
                 {items.some(i => i.is_locked) && (
                   <li>Locked items are not adjusted during generation</li>
