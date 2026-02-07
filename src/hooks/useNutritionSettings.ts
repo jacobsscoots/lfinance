@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
 
+import { 
+  Sex, 
+  ActivityLevel, 
+  Formula, 
+  GoalType 
+} from "@/lib/nutritionTargets";
+
 export type NutritionMode = "target_based" | "manual";
 
 export interface NutritionSettings {
@@ -25,6 +32,18 @@ export interface NutritionSettings {
   max_grams_per_item: number | null;
   portion_rounding: number | null;
   target_tolerance_percent: number | null;
+  // Calculator inputs
+  age: number | null;
+  sex: Sex | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  body_fat_percent: number | null;
+  activity_level: ActivityLevel | null;
+  formula: Formula | null;
+  goal_type: GoalType | null;
+  protein_per_kg: number | null;
+  fat_per_kg: number | null;
+  last_calculated_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -45,6 +64,18 @@ export interface NutritionSettingsFormData {
   max_grams_per_item?: number | null;
   portion_rounding?: number | null;
   target_tolerance_percent?: number | null;
+  // Calculator inputs
+  age?: number | null;
+  sex?: Sex | null;
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  body_fat_percent?: number | null;
+  activity_level?: ActivityLevel | null;
+  formula?: Formula | null;
+  goal_type?: GoalType | null;
+  protein_per_kg?: number | null;
+  fat_per_kg?: number | null;
+  last_calculated_at?: string | null;
 }
 
 export interface DayTargets {
@@ -69,6 +100,18 @@ const DEFAULT_SETTINGS: Omit<NutritionSettings, "id" | "user_id" | "created_at" 
   max_grams_per_item: 500,
   portion_rounding: 5,
   target_tolerance_percent: 2,
+  // Calculator defaults
+  age: null,
+  sex: null,
+  height_cm: null,
+  weight_kg: null,
+  body_fat_percent: null,
+  activity_level: null,
+  formula: "mifflin_st_jeor",
+  goal_type: "maintain",
+  protein_per_kg: 2.2,
+  fat_per_kg: 0.8,
+  last_calculated_at: null,
 };
 
 export function useNutritionSettings() {
