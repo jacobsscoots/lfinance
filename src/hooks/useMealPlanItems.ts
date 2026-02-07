@@ -165,6 +165,101 @@ export function useMealPlanItems(weekStart: Date) {
     },
   });
 
+  // Batch insert multiple items at once
+  const addMultipleItems = useMutation({
+    mutationFn: async (items: Omit<MealPlanItemFormData, "is_locked">[]) => {
+      if (!user) throw new Error("Not authenticated");
+      if (items.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from("meal_plan_items")
+        .insert(items.map(item => ({ ...item, user_id: user.id })))
+        .select(`*, product:products(*)`);
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      toast.success(`Added ${data?.length || 0} items`);
+    },
+    onError: (error) => {
+      toast.error("Failed to add items: " + error.message);
+    },
+  });
+
+  // Copy all items from one day to the next day
+  const copyDayToNext = useMutation({
+    mutationFn: async ({ sourcePlanId, sourcePlanDate }: { sourcePlanId: string; sourcePlanDate: string }) => {
+      if (!user) throw new Error("Not authenticated");
+      
+      // Find source plan items
+      const sourcePlan = mealPlans.find(p => p.id === sourcePlanId);
+      if (!sourcePlan || !sourcePlan.items || sourcePlan.items.length === 0) {
+        throw new Error("No items to copy");
+      }
+
+      // Find next day's plan
+      const sourceIndex = weekDates.indexOf(sourcePlanDate);
+      if (sourceIndex === -1 || sourceIndex >= weekDates.length - 1) {
+        throw new Error("Cannot copy to next day - end of week");
+      }
+
+      const nextDate = weekDates[sourceIndex + 1];
+      const targetPlan = mealPlans.find(p => p.meal_date === nextDate);
+      if (!targetPlan) {
+        throw new Error("Next day plan not found");
+      }
+
+      // Create copies of all items
+      const newItems = sourcePlan.items.map(item => ({
+        user_id: user.id,
+        meal_plan_id: targetPlan.id,
+        product_id: item.product_id,
+        meal_type: item.meal_type,
+        quantity_grams: item.quantity_grams,
+        // Don't copy is_locked status
+      }));
+
+      const { data, error } = await supabase
+        .from("meal_plan_items")
+        .insert(newItems)
+        .select();
+      
+      if (error) throw error;
+      return { count: data?.length || 0, targetDate: nextDate };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      toast.success(`Copied ${result.count} items to ${result.targetDate}`);
+    },
+    onError: (error) => {
+      toast.error("Failed to copy: " + error.message);
+    },
+  });
+
+  // Clear all items from a specific day
+  const clearDay = useMutation({
+    mutationFn: async (planId: string) => {
+      if (!user) throw new Error("Not authenticated");
+      
+      const { error } = await supabase
+        .from("meal_plan_items")
+        .delete()
+        .eq("meal_plan_id", planId)
+        .eq("user_id", user.id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      toast.success("Cleared all items from day");
+    },
+    onError: (error) => {
+      toast.error("Failed to clear: " + error.message);
+    },
+  });
+
   const updateItem = useMutation({
     mutationFn: async ({ id, ...formData }: Partial<MealPlanItemFormData> & { id: string }) => {
       if (!user) throw new Error("Not authenticated");
@@ -399,10 +494,13 @@ export function useMealPlanItems(weekStart: Date) {
     isLoading,
     error,
     addItem,
+    addMultipleItems,
     updateItem,
     removeItem,
     updateMealStatus,
     copyFromPreviousWeek,
+    copyDayToNext,
+    clearDay,
     recalculateAll,
     lastCalculated,
   };
