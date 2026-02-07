@@ -843,5 +843,167 @@ describe("fat parity with protein/carbs", () => {
       expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
     }
   });
+
+  it("success=false when any macro is outside tolerance", () => {
+    // Create a deliberately constrained scenario where fat will be hard to hit
+    const lowFatProtein = createProduct({
+      name: "Chicken Breast Lean",
+      calories_per_100g: 165,
+      protein_per_100g: 31,
+      carbs_per_100g: 0,
+      fat_per_100g: 3.6, // Very low fat
+      product_type: "editable",
+    });
+    
+    const lowFatCarb = createProduct({
+      name: "White Rice Plain",
+      calories_per_100g: 130,
+      protein_per_100g: 2.7,
+      carbs_per_100g: 28,
+      fat_per_100g: 0.3, // Very low fat
+      product_type: "editable",
+    });
+    
+    const items = [
+      createMealPlanItem(lowFatProtein, "lunch"),
+      createMealPlanItem(lowFatCarb, "lunch"),
+      createMealPlanItem(lowFatProtein, "dinner"),
+      createMealPlanItem(lowFatCarb, "dinner"),
+    ];
+    
+    // Target requires significant fat (65g) but items provide almost none
+    const targets: MacroTotals = { calories: 1800, protein: 150, carbs: 200, fat: 65 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // With only low-fat items, we CANNOT hit 65g fat
+    // Therefore success MUST be false
+    const fatDiff = Math.abs(result.dayTotals.fat - targets.fat);
+    
+    if (fatDiff > 1) {
+      // If fat is more than 1g off, success MUST be false
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it("warnings array describes which macros failed", () => {
+    // Same setup as above - fat will fail
+    const lowFatProtein = createProduct({
+      name: "Chicken Breast Lean",
+      calories_per_100g: 165,
+      protein_per_100g: 31,
+      carbs_per_100g: 0,
+      fat_per_100g: 3.6,
+      product_type: "editable",
+    });
+    
+    const lowFatCarb = createProduct({
+      name: "White Rice Plain",
+      calories_per_100g: 130,
+      protein_per_100g: 2.7,
+      carbs_per_100g: 28,
+      fat_per_100g: 0.3,
+      product_type: "editable",
+    });
+    
+    const items = [
+      createMealPlanItem(lowFatProtein, "lunch"),
+      createMealPlanItem(lowFatCarb, "lunch"),
+    ];
+    
+    const targets: MacroTotals = { calories: 1000, protein: 80, carbs: 100, fat: 50 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // If not successful, warnings should mention what failed
+    if (!result.success) {
+      expect(result.warnings.length).toBeGreaterThan(0);
+      // Should contain at least one mention of the failed macro
+      const hasSpecificWarning = result.warnings.some(w => 
+        w.toLowerCase().includes("fat") || 
+        w.toLowerCase().includes("protein") || 
+        w.toLowerCase().includes("carb") ||
+        w.toLowerCase().includes("calorie") ||
+        w.toLowerCase().includes("unreachable")
+      );
+      expect(hasSpecificWarning).toBe(true);
+    }
+  });
+});
+
+// === SUCCESS FLAG TRUTH TESTS ===
+// Ensure the solver NEVER claims success when it hasn't achieved tolerance
+
+describe("success flag truthfulness", () => {
+  it("success is only true when ALL macros are within tolerance", () => {
+    const items = [
+      createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+      createMealPlanItem(testProducts.granola, "breakfast"),
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+      createMealPlanItem(testProducts.salmon, "dinner"),
+      createMealPlanItem(testProducts.pasta, "dinner"),
+    ];
+    
+    const targets: MacroTotals = { calories: 2000, protein: 160, carbs: 220, fat: 55 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // If success is true, ALL of these must hold:
+    if (result.success) {
+      expect(Math.abs(result.dayTotals.calories - targets.calories)).toBeLessThan(2);
+      expect(Math.abs(result.dayTotals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("success is false when protein is off by >1g even if others are close", () => {
+    // Create scenario where protein will be hard to hit
+    const lowProtein = createProduct({
+      name: "Pure Carb Source",
+      calories_per_100g: 350,
+      protein_per_100g: 1,
+      carbs_per_100g: 80,
+      fat_per_100g: 2,
+      product_type: "editable",
+    });
+    
+    const items = [
+      createMealPlanItem(lowProtein, "lunch"),
+    ];
+    
+    // Require 100g protein from an item with only 1g/100g
+    const targets: MacroTotals = { calories: 700, protein: 100, carbs: 150, fat: 10 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    const proteinDiff = Math.abs(result.dayTotals.protein - targets.protein);
+    if (proteinDiff > 1) {
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it("success is false when fat is off by >1g even if others are close", () => {
+    // Create scenario where fat will be hard to hit
+    const lowFat = createProduct({
+      name: "Fat Free High Protein",
+      calories_per_100g: 100,
+      protein_per_100g: 20,
+      carbs_per_100g: 5,
+      fat_per_100g: 0.5,
+      product_type: "editable",
+    });
+    
+    const items = [
+      createMealPlanItem(lowFat, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+    ];
+    
+    // Require 50g fat from items with almost no fat
+    const targets: MacroTotals = { calories: 1000, protein: 80, carbs: 120, fat: 50 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    const fatDiff = Math.abs(result.dayTotals.fat - targets.fat);
+    if (fatDiff > 1) {
+      expect(result.success).toBe(false);
+    }
+  });
 });
 
