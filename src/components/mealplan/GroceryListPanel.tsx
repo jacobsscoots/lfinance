@@ -4,14 +4,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { MealPlan } from "@/hooks/useMealPlanItems";
 import { generateGroceryList, GroceryItem } from "@/lib/mealCalculations";
+import { BlackoutRange, isDateBlackout } from "@/lib/mealPlannerWeek";
 
 interface GroceryListPanelProps {
   plans: MealPlan[];
+  blackouts?: BlackoutRange[];
 }
 
-export function GroceryListPanel({ plans }: GroceryListPanelProps) {
-  const groceryItems = generateGroceryList(plans);
+export function GroceryListPanel({ plans, blackouts = [] }: GroceryListPanelProps) {
+  // Filter out blackout days from grocery calculation
+  const activePlans = plans.filter(plan => !isDateBlackout(plan.meal_date, blackouts));
+  
+  const groceryItems = generateGroceryList(activePlans);
   const totalCost = groceryItems.reduce((sum, item) => sum + item.totalCost, 0);
+  
+  const excludedDays = plans.length - activePlans.length;
 
   if (groceryItems.length === 0) {
     return (
@@ -88,6 +95,9 @@ export function GroceryListPanel({ plans }: GroceryListPanelProps) {
             <p>• Purchase quantities are rounded up to nearest pack size</p>
             <p>• Nutrition calculations use required grams, not rounded amounts</p>
             <p>• Items from skipped meals are excluded</p>
+            {excludedDays > 0 && (
+              <p className="text-primary">• {excludedDays} holiday day(s) excluded from grocery list</p>
+            )}
           </div>
         </CardContent>
       </Card>
