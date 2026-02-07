@@ -472,30 +472,30 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
 
       const commonBody = {
         url: formattedUrl,
-        formats: ["markdown", "html", "rawHtml"],
-        onlyMainContent: false,
+        formats: ["markdown"],  // Only request markdown - faster and sufficient
+        onlyMainContent: true,  // Focus on main content only
         headers: {
           "Accept-Language": "en-GB,en;q=0.9",
           "User-Agent": userAgent,
         },
       };
 
-      // Attempt 1: UK location + mobile (may use proxy)
+      // Attempt 1: Fast first try - reduced wait time
       let firecrawlResult = await scrapeFirecrawl({
         ...commonBody,
-        waitFor: 8000,
-        timeout: 45000,
+        waitFor: 3000,
+        timeout: 25000,
         mobile: true,
         location: { country: "GB", languages: ["en-GB", "en"] },
       });
 
-      // Attempt 2: no location/proxy (avoids proxy tunnel failures)
+      // Attempt 2: Desktop fallback if mobile failed (avoids proxy tunnel failures)
       if (!firecrawlResult) {
-        console.log("Firecrawl primary scrape failed; retrying without proxy/location...");
+        console.log("Firecrawl primary scrape failed; retrying desktop...");
         firecrawlResult = await scrapeFirecrawl({
           ...commonBody,
-          waitFor: 8000,
-          timeout: 45000,
+          waitFor: 4000,
+          timeout: 25000,
           mobile: false,
         });
       }
@@ -517,12 +517,15 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
           if (isLikelyBlocked(detectionSample)) {
             console.log("Detected blocked page content (primary)");
 
-            // Retry once with alternate settings (desktop + longer wait)
+            // Retry once with alternate settings (desktop + longer wait + more formats)
             console.log("Retrying Firecrawl with alternate settings...");
             const retry = await scrapeFirecrawl({
-              ...commonBody,
-              waitFor: 12000,
-              timeout: 60000,
+              url: formattedUrl,
+              formats: ["markdown", "html"],  // Try HTML too on retry
+              onlyMainContent: false,
+              headers: commonBody.headers,
+              waitFor: 6000,
+              timeout: 35000,
               mobile: false,
               location: { country: "GB", languages: ["en-GB", "en"] },
             });
@@ -702,8 +705,8 @@ Extract the size value separately from the unit.`;
 
   const systemPrompt = isToiletry ? toiletryPrompt : groceryPrompt;
 
-  // Truncate content to avoid token limits (markdown is already cleaner)
-  const truncatedContent = contentForAi.substring(0, 60000);
+  // Truncate content - product data is typically in the first portion
+  const truncatedContent = contentForAi.substring(0, 25000);
   
   console.log(`Sending ${contentType} to AI (${truncatedContent.length} chars)`);
 
@@ -714,7 +717,7 @@ Extract the size value separately from the unit.`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
+      model: "google/gemini-2.5-flash-lite",  // Faster model for extraction
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Extract product information from this webpage ${contentType}:\n\n${truncatedContent}` },
