@@ -10,6 +10,13 @@ const corsHeaders = {
 const TRUELAYER_API_URL = 'https://api.truelayer.com';
 const TRUELAYER_AUTH_URL = 'https://auth.truelayer.com';
 
+// Input validation
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(value: string | undefined): boolean {
+  return typeof value === 'string' && UUID_REGEX.test(value);
+}
+
 function jsonResponse(data: object, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -54,6 +61,10 @@ serve(async (req) => {
 
     if (!connectionId) {
       return errorResponse('Missing connectionId parameter', 'validation', 400);
+    }
+    
+    if (!isValidUUID(connectionId)) {
+      return errorResponse('Invalid connectionId: must be a valid UUID', 'validation', 400);
     }
 
     // Get connection details server-side - tokens never exposed to client

@@ -5,6 +5,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Input validation constants
+const MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB max for images
+const MAX_TEXT_LENGTH = 100000; // 100KB max for pasted text
+const MAX_URL_LENGTH = 2048;
+const VALID_METHODS = ["image", "text", "url"] as const;
+
+function isValidHttpsUrl(value: string | undefined): boolean {
+  if (typeof value !== 'string' || value.length > MAX_URL_LENGTH) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 interface ExtractedNutrition {
   name?: string;
   brand?: string;
@@ -32,7 +48,47 @@ serve(async (req) => {
   }
 
   try {
-    const { method, content } = await req.json();
+    const body = await req.json();
+    const { method, content } = body;
+    
+    // Validate method
+    if (!method || !VALID_METHODS.includes(method)) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid method. Use 'image', 'text', or 'url'" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Validate content exists
+    if (!content || typeof content !== 'string') {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing or invalid content" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Validate content size based on method
+    if (method === "image" && content.length > MAX_CONTENT_SIZE) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Image too large. Maximum size is 10MB." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    if (method === "text" && content.length > MAX_TEXT_LENGTH) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Text too long. Maximum length is 100KB." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    if (method === "url" && !isValidHttpsUrl(content)) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid URL format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -45,10 +101,8 @@ serve(async (req) => {
       result = await extractFromImage(content, LOVABLE_API_KEY);
     } else if (method === "text") {
       result = extractFromText(content);
-    } else if (method === "url") {
-      result = await extractFromUrl(content, LOVABLE_API_KEY);
     } else {
-      throw new Error("Invalid method. Use 'image', 'text', or 'url'");
+      result = await extractFromUrl(content, LOVABLE_API_KEY);
     }
 
     return new Response(JSON.stringify({ success: true, data: result }), {

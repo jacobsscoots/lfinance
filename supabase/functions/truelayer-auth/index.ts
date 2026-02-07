@@ -9,6 +9,29 @@ const corsHeaders = {
 
 const TRUELAYER_AUTH_URL = 'https://auth.truelayer.com';
 
+// Input validation helpers
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_URL_LENGTH = 2048;
+const MAX_CODE_LENGTH = 2048;
+
+function isValidUUID(value: string | undefined): boolean {
+  return typeof value === 'string' && UUID_REGEX.test(value);
+}
+
+function isValidHttpsUrl(value: string | undefined): boolean {
+  if (typeof value !== 'string' || value.length > MAX_URL_LENGTH) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isValidCode(value: string | undefined): boolean {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_CODE_LENGTH;
+}
+
 interface RequestBody {
   action?: 'auth-url' | 'exchange-code' | 'refresh-token';
   redirectUri?: string;
@@ -103,6 +126,10 @@ serve(async (req) => {
         return errorResponse('Missing redirectUri parameter', 'auth-url', 400);
       }
 
+      if (!isValidHttpsUrl(redirectUri)) {
+        return errorResponse('Invalid redirectUri: must be a valid HTTPS URL', 'auth-url', 400);
+      }
+
       const scopes = [
         'info',
         'accounts',
@@ -131,11 +158,20 @@ serve(async (req) => {
       if (!code) {
         return errorResponse('Missing code parameter', 'exchange-code', 400);
       }
+      if (!isValidCode(code)) {
+        return errorResponse('Invalid code format', 'exchange-code', 400);
+      }
       if (!redirectUri) {
         return errorResponse('Missing redirectUri parameter', 'exchange-code', 400);
       }
+      if (!isValidHttpsUrl(redirectUri)) {
+        return errorResponse('Invalid redirectUri: must be a valid HTTPS URL', 'exchange-code', 400);
+      }
       if (!connectionId) {
         return errorResponse('Missing connectionId parameter', 'exchange-code', 400);
+      }
+      if (!isValidUUID(connectionId)) {
+        return errorResponse('Invalid connectionId: must be a valid UUID', 'exchange-code', 400);
       }
 
       // Verify the connection belongs to this user
@@ -213,6 +249,9 @@ serve(async (req) => {
 
       if (!connectionId) {
         return errorResponse('Missing connectionId parameter', 'refresh-token', 400);
+      }
+      if (!isValidUUID(connectionId)) {
+        return errorResponse('Invalid connectionId: must be a valid UUID', 'refresh-token', 400);
       }
 
       // Get the connection and verify ownership
