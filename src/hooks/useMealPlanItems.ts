@@ -582,6 +582,13 @@ export function useMealPlanItems(weekStart: Date) {
           plan.meal_date
         );
 
+        // Debug: Log solver outcome
+        console.log(`[Solver] ${plan.meal_date}: success=${result.success}`, {
+          warnings: result.warnings,
+          dayTotals: result.dayTotals,
+          targets,
+        });
+
         if (result.success) {
           successCount++;
 
