@@ -53,8 +53,11 @@ export function useAccounts() {
 
       if (error) throw error;
       
-      // Deduplicate by external_id (for connected accounts) or id (for manual accounts)
-      // This prevents duplicates from appearing even if database has issues
+      // DEFENSIVE ONLY:
+      // Database uniqueness on (provider, external_id) is the source of truth.
+      // This client-side deduplication is a safety net for rare edge cases
+      // and should not be relied upon to fix data integrity issues.
+      // See: bank_accounts_provider_external_id_key unique index
       const uniqueAccounts = Array.from(
         new Map((data || []).map(a => [a.external_id || a.id, a])).values()
       ) as BankAccount[];

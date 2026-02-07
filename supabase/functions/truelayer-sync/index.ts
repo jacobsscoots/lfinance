@@ -196,11 +196,13 @@ serve(async (req) => {
       const accountType = account.account_type === 'SAVINGS' ? 'savings' : 'current';
       const accountName = account.display_name || account.account_number?.number || 'Bank Account';
 
-      // Check if account already exists using (provider, external_id) composite key
+      // SOURCE OF TRUTH: Check if account already exists using (provider, external_id) composite key
+      // This lookup must match the database unique index on (COALESCE(provider, 'unknown'), external_id)
       const { data: existingAccount } = await supabase
         .from('bank_accounts')
-        .select('id, display_name')
+        .select('id, display_name, provider')
         .eq('external_id', account.account_id)
+        .eq('provider', accountProvider)
         .eq('user_id', userId)
         .maybeSingle();
 
