@@ -1,170 +1,224 @@
-# Fix Account Deduplication – Database as Source of Truth
+# Transactions Module – Receipt Uploading & Attachments
 
-## Current Problems
+## Overview
 
-### 1. Column Name Inconsistency (Resolved)
-- Database column: `external_id`
-- Earlier plan referenced: `external_account_id`
-- **Decision**: Use `external_id` consistently everywhere (confirmed existing column)
+Extend the Transactions module to support receipt uploads (image/PDF), attachment to transactions, and manual viewing/replacement.
 
-All references (DB, types, sync, UI) must use:
-- `provider`
-- `external_id`
+This implementation must **not** affect:
+- transaction syncing
+- bills auto-matching
+- account balances
+- historical transactions
 
-No aliases, no fallbacks, no mixed naming.
-
----
-
-### 2. Conflicting Unique Indexes
-Two previous migrations caused confusion:
-- One migration created a composite index `(provider, external_id)`
-- A later migration dropped it and created a unique index on `external_id` only
-
-**Current state (verified):**
-- Only `external_id` unique index exists
-- This allows duplicates when the same external_id appears across providers
-
-This must be corrected.
+All receipt functionality is strictly additive and optional.
 
 ---
 
-### 3. TrueLayer Sync Not Using Composite Key
-The TrueLayer sync currently checks existence using:
+## Assumptions (Locked)
 
-```ts
-.eq('external_id', account.account_id)
-.eq('user_id', userId)
-This is insufficient and allows duplicate rows when:
+| Area | Decision |
+|----|----|
+| Storage | Supabase Storage |
+| Bucket access | Private |
+| File types | JPG, PNG, WebP, PDF |
+| Max file size | 10MB |
+| Receipts per transaction | One (v1) |
+| OCR | Not implemented |
+| Auto-attach | Not implemented (future prompt) |
+| Delete behaviour | Soft delete (DB cleared, file removed) |
+| URL handling | Signed URLs generated on demand |
 
-provider differs
+---
 
-provider is NULL
+## Database Changes
 
-multiple banks reuse similar account IDs
+### Extend `transactions` Table
 
-4. UI Deduplication Acting as Primary Fix
-The UI currently deduplicates accounts in useAccounts.ts.
+```sql
+ALTER TABLE transactions
+ADD COLUMN IF NOT EXISTS receipt_path text,
+ADD COLUMN IF NOT EXISTS receipt_uploaded_at timestamp with time zone,
+ADD COLUMN IF NOT EXISTS receipt_source text;
+Column meanings
 
-This must remain defensive only, not relied upon to correct data integrity issues.
+receipt_path: storage path only (NOT a public URL)
 
-Final Design Decision (Source of Truth)
-Database is the source of truth.
+receipt_uploaded_at: timestamp of upload
 
-Uniqueness is enforced by:
+receipt_source: 'manual' | 'auto' (auto reserved for future)
 
-(provider, external_id) at the database level
+⚠️ Important: Do not store signed URLs in the database.
+Always generate signed URLs at runtime.
 
-TrueLayer sync using the same composite key
+Storage Setup
+Supabase Storage Bucket
+Create private bucket:
 
-UI deduplication only as a safety net
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'transaction-receipts',
+  'transaction-receipts',
+  false,
+  10485760,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+);
+Folder Structure
+transaction-receipts/
+  user_id/
+    transaction_id/
+      receipt.ext
+Storage RLS Policies
+Principle: Users may only access receipts inside their own folder.
 
-Solution
-1. Database Migration – Composite Unique Index
-Replace the current external_id-only uniqueness with a composite key.
+Policies:
 
-Important design choice:
+INSERT: user_id folder only
 
-We explicitly handle NULL providers using COALESCE
+SELECT: user_id folder only
 
-This prevents duplicates even if provider data is temporarily missing
+UPDATE: user_id folder only
 
--- Drop the existing single-column unique index
-DROP INDEX IF EXISTS public.bank_accounts_external_id_unique;
+DELETE: user_id folder only
 
--- Create composite unique index on (provider, external_id)
--- COALESCE ensures NULL providers are treated consistently
-CREATE UNIQUE INDEX IF NOT EXISTS bank_accounts_provider_external_id_key
-ON public.bank_accounts (COALESCE(provider, 'unknown'), external_id)
-WHERE external_id IS NOT NULL;
+No cross-user access. No public reads.
 
-COMMENT ON INDEX bank_accounts_provider_external_id_key IS
-  'Source of truth for bank account uniqueness: (provider, external_id). UI deduplication is defensive only.';
-This guarantees:
-
-No duplicate bank accounts at DB level
-
-Safe handling of NULL provider edge cases
-
-Deterministic UPSERT behavior
-
-2. TrueLayer Sync – Composite Lookup + UPSERT
-Update the existing account lookup to fully match the unique key.
-
-Before (insufficient)
-.eq('external_id', account.account_id)
-.eq('user_id', userId)
-After (correct)
-// Source of truth lookup: (provider, external_id)
-const { data: existingAccount } = await supabase
-  .from('bank_accounts')
-  .select('id, display_name, provider')
-  .eq('external_id', account.account_id)
-  .eq('provider', accountProvider)
-  .eq('user_id', userId)
-  .maybeSingle();
-Rules:
-
-Inserts and updates must include provider
-
-UPSERT must align with the composite unique index
-
-No fallback matching by name or display label
-
-3. useAccounts.ts – Mark UI Deduplication as Defensive
-UI deduplication stays, but is explicitly documented as non-authoritative.
-
-// DEFENSIVE ONLY:
-// Database uniqueness on (provider, external_id) is the source of truth.
-// This client-side deduplication is a safety net for rare edge cases
-// and should not be relied upon to fix data integrity issues.
-const uniqueAccounts = Array.from(
-  new Map((data || []).map(a => [a.external_id || a.id, a])).values()
-) as BankAccount[];
-This avoids:
-
-masking real sync bugs
-
-future devs relying on UI dedup instead of DB constraints
-
+Files to Create
+File	Purpose
+src/lib/receiptUpload.ts	Storage + validation utilities
+src/hooks/useReceiptUpload.ts	Upload/remove state handling
+src/components/transactions/ReceiptPreviewDialog.tsx	View / upload / replace receipts
 Files to Modify
-File	Action
-supabase/migrations/xxx_fix_unique_index.sql	CREATE – Replace unique index with composite key
-supabase/functions/truelayer-sync/index.ts	MODIFY – Use (provider, external_id) for lookup & UPSERT
-src/hooks/useAccounts.ts	MODIFY – Mark deduplication as defensive only
-Column Name Verification (Locked)
-Location	Column	Status
-bank_accounts table	external_id	Confirmed
-bank_accounts table	provider	Confirmed
-Type definitions	external_id	Matches
-Type definitions	provider	Matches
-TrueLayer sync	external_id	Uses account.account_id
-TrueLayer sync	provider	Uses accountProvider
-No other column names should be introduced.
+File	Change
+src/hooks/useTransactions.ts	Include receipt fields
+src/components/transactions/TransactionList.tsx	Receipt icon + menu actions
+src/components/transactions/TransactionRow.tsx	Paperclip indicator
+Implementation Details
+Receipt Upload Utility
+src/lib/receiptUpload.ts
 
-Expected Behavior After Fix
-Database is authoritative
+Responsibilities:
 
-Duplicate accounts cannot be created at DB level
+validateReceiptFile(file)
 
-TrueLayer sync is deterministic
+MIME type check
 
-Existing accounts are updated, not reinserted
+10MB size limit
 
-UI dedup is defensive
+uploadTransactionReceipt(file, userId, transactionId)
 
-Rare edge cases only, not a primary fix
+uploads to storage
 
-No silent UPSERT failures
+returns storage path only
 
-Column names and unique keys are consistent everywhere
+deleteTransactionReceipt(userId, transactionId)
 
-Explicit Non-Goals
-No data backfills
+removes file from storage
 
-No account merging logic
+getReceiptSignedUrl(path)
 
-No transaction refactors
+generates short-lived signed URL (e.g. 1 hour)
 
-No manual cleanup scripts
+isReceiptPdf(path)
 
-If duplicates already exist, they will be handled separately.
+helper for preview rendering
+
+Receipt Upload Hook
+src/hooks/useReceiptUpload.ts
+
+Exposes:
+
+uploadReceipt({ file, transactionId })
+
+removeReceipt(transactionId)
+
+isUploading
+
+isRemoving
+
+uploadProgress
+
+Behaviour:
+
+Updates transactions.receipt_path
+
+Sets receipt_uploaded_at
+
+Sets receipt_source = 'manual'
+
+Invalidates transactions query on success
+
+Receipt Preview Dialog
+Component: ReceiptPreviewDialog.tsx
+
+Features:
+
+Image preview (responsive)
+
+PDF embedded viewer (or download fallback)
+
+Actions:
+
+Upload
+
+Replace
+
+Download
+
+Remove
+
+Notes:
+
+Uses signed URL generated at open time
+
+No URLs stored long-term
+
+Transaction List UI
+Changes:
+
+📎 Paperclip icon shown when receipt_path exists
+
+Tooltip: “Receipt attached”
+
+Dropdown menu options:
+
+Upload receipt (if none)
+
+View receipt (if exists)
+
+Clicking icon opens preview dialog.
+
+Safety Guarantees
+No balance impact: receipts do not affect amounts
+
+No sync impact: syncing logic unchanged
+
+No bill impact: auto-matching untouched
+
+Backward compatible: all new fields nullable
+
+Deterministic: no auto-matching or guessing
+
+Explicit Non-Goals (Do Not Implement)
+OCR
+
+Receipt text extraction
+
+Multiple receipts per transaction
+
+Auto-attach logic
+
+Expense categorisation
+
+These require separate prompts.
+
+Success Criteria
+Users can upload receipts to transactions
+
+Receipts can be viewed, replaced, removed
+
+UI clearly indicates receipt presence
+
+No regressions in syncing, bills, or balances
+
+Signed URLs expire and are regenerated safely
+
