@@ -20,11 +20,14 @@ export type Database = {
           balance: number
           connection_id: string | null
           created_at: string
+          display_name: string | null
           external_id: string | null
           id: string
+          is_hidden: boolean
           is_primary: boolean | null
           last_synced_at: string | null
           name: string
+          provider: string | null
           updated_at: string
           user_id: string
         }
@@ -33,11 +36,14 @@ export type Database = {
           balance?: number
           connection_id?: string | null
           created_at?: string
+          display_name?: string | null
           external_id?: string | null
           id?: string
+          is_hidden?: boolean
           is_primary?: boolean | null
           last_synced_at?: string | null
           name: string
+          provider?: string | null
           updated_at?: string
           user_id: string
         }
@@ -46,11 +52,14 @@ export type Database = {
           balance?: number
           connection_id?: string | null
           created_at?: string
+          display_name?: string | null
           external_id?: string | null
           id?: string
+          is_hidden?: boolean
           is_primary?: boolean | null
           last_synced_at?: string | null
           name?: string
+          provider?: string | null
           updated_at?: string
           user_id?: string
         }

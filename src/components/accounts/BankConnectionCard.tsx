@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, Trash2, Building2, Link } from "lucide-react";
 import { useBankConnections } from "@/hooks/useBankConnections";
+import { getProviderLabel } from "@/lib/bankProviders";
 import { format } from "date-fns";
 
 export function BankConnectionCard() {
@@ -98,7 +99,9 @@ export function BankConnectionCard() {
                       <Building2 className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">Open Banking</p>
+                      <p className="font-medium text-sm">
+                        {getProviderLabel(connection.provider)}
+                      </p>
                       <div className="flex items-center gap-2">
                         <Badge
                           variant={connection.status === "connected" ? "default" : "secondary"}
