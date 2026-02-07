@@ -15,6 +15,7 @@ import { ServiceFormDialog } from "@/components/cheaper-bills/ServiceFormDialog"
 import { EnergyUsageChart } from "@/components/cheaper-bills/EnergyUsageChart";
 import { TariffFormDialog } from "@/components/cheaper-bills/TariffFormDialog";
 import { ReadingFormDialog } from "@/components/cheaper-bills/ReadingFormDialog";
+import { BillsAssistant } from "@/components/cheaper-bills/BillsAssistant";
 import { daysUntilContractEnd } from "@/lib/billsCalculations";
 
 export default function CheaperBills() {
@@ -201,6 +202,9 @@ export default function CheaperBills() {
                 ))}
               </div>
             )}
+
+            {/* AI Assistant */}
+            <BillsAssistant />
           </TabsContent>
 
           {/* Broadband Tab */}

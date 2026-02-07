@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.gmail-sync-receipts]
 verify_jwt = false
+
+[functions.compare-energy-deals]
+verify_jwt = false
+
+[functions.analyze-usage-ai]
+verify_jwt = false
