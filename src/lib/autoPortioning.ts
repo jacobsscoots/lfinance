@@ -7,6 +7,8 @@
 import { Product } from "@/hooks/useProducts";
 import { MealPlanItem, MealType } from "@/hooks/useMealPlanItems";
 import { MacroTotals } from "./mealCalculations";
+import { storePortioningSolverDebug, PortioningDebugItem, PortioningDebugTotals, PortioningSolverDebugPayload } from "./portioningDebug";
+
 
 export type FoodType = "protein" | "carb" | "fat" | "veg" | "fruit" | "dairy" | "sauce" | "treat" | "other";
 
@@ -1574,6 +1576,46 @@ export function calculateDayPortions(
     if (calDiff >= 2) warnings.push(`Calories: ${Math.round(totalAchieved.calories)} (target: ${dailyTargets.calories})`);
   }
 
+  // Emit debug payload for dev-only console comparison (via localStorage flag)
+  const debugItems: PortioningDebugItem[] = [];
+  activeMeals.forEach(mt => {
+    mealItems[mt].forEach(item => {
+      if (!item.product) return;
+      const grams = allItemGrams.get(item.id) || 0;
+      const macro = calculateMacrosForGrams(item.product, grams);
+      debugItems.push({
+        itemId: item.id,
+        name: item.product.name,
+        mealType: mt,
+        grams,
+        per100g: {
+          calories: item.product.calories_per_100g,
+          protein: item.product.protein_per_100g,
+          carbs: item.product.carbs_per_100g,
+          fat: item.product.fat_per_100g,
+        },
+        contribution: macro,
+        flags: {
+          locked: item.is_locked,
+          fixed: item.product.product_type === "fixed",
+          ignored: !!item.product.ignore_macros,
+          seasoningLike: isSauceOrSeasoning(item.product),
+        },
+      });
+    });
+  });
+  const debugPayload: PortioningSolverDebugPayload = {
+    mealDate: items.length > 0 && typeof (items[0] as any).meal_plan_id === "string"
+      ? (items[0] as any).meal_date ?? "unknown"
+      : "unknown",
+    targets: dailyTargets,
+    achieved: totalAchieved,
+    warnings,
+    items: debugItems,
+    createdAt: new Date().toISOString(),
+  };
+  storePortioningSolverDebug(debugPayload);
+
   return {
     mealResults,
     dayTotals: totalAchieved,
@@ -1581,6 +1623,7 @@ export function calculateDayPortions(
     success,
   };
 }
+
 
 /**
  * Helper to calculate total macros from the gram map.
