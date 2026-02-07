@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link } from "lucide-react";
 import {
   calculateForecast,
   formatCurrency,
@@ -33,6 +33,8 @@ interface ToiletryTableProps {
   onEdit: (item: ToiletryItem) => void;
   onDelete: (item: ToiletryItem) => void;
   onRestock: (item: ToiletryItem) => void;
+  onLogWeight?: (item: ToiletryItem) => void;
+  onLinkPurchase?: (item: ToiletryItem) => void;
 }
 
 export function ToiletryTable({
@@ -40,6 +42,8 @@ export function ToiletryTable({
   onEdit,
   onDelete,
   onRestock,
+  onLogWeight,
+  onLinkPurchase,
 }: ToiletryTableProps) {
   const isMobile = useIsMobile();
 
@@ -152,22 +156,34 @@ export function ToiletryTable({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-popover">
-                      <DropdownMenuItem onClick={() => onEdit(item)}>
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onRestock(item)}>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Restock
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        onClick={() => onDelete(item)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onEdit(item)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        {onLogWeight && (
+                          <DropdownMenuItem onClick={() => onLogWeight(item)}>
+                            <Scale className="mr-2 h-4 w-4" />
+                            Log Weight
+                          </DropdownMenuItem>
+                        )}
+                        {onLinkPurchase && (
+                          <DropdownMenuItem onClick={() => onLinkPurchase(item)}>
+                            <Link className="mr-2 h-4 w-4" />
+                            Link Purchase
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => onRestock(item)}>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Restock
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => onDelete(item)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

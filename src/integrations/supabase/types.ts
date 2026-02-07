@@ -639,18 +639,25 @@ export type Database = {
       toiletry_items: {
         Row: {
           brand: string | null
+          calculated_usage_rate: number | null
           category: string
           cost_per_item: number
           created_at: string
           current_remaining: number
+          current_weight_grams: number | null
+          empty_weight_grams: number | null
+          finished_at: string | null
+          full_weight_grams: number | null
           gross_size: number | null
           id: string
           image_url: string | null
           last_restocked_at: string | null
+          last_weighed_at: string | null
           name: string
           notes: string | null
           offer_label: string | null
           offer_price: number | null
+          opened_at: string | null
           pack_size: number
           packaging_weight: number | null
           quantity_in_use: number | null
@@ -667,18 +674,25 @@ export type Database = {
         }
         Insert: {
           brand?: string | null
+          calculated_usage_rate?: number | null
           category?: string
           cost_per_item?: number
           created_at?: string
           current_remaining?: number
+          current_weight_grams?: number | null
+          empty_weight_grams?: number | null
+          finished_at?: string | null
+          full_weight_grams?: number | null
           gross_size?: number | null
           id?: string
           image_url?: string | null
           last_restocked_at?: string | null
+          last_weighed_at?: string | null
           name: string
           notes?: string | null
           offer_label?: string | null
           offer_price?: number | null
+          opened_at?: string | null
           pack_size?: number
           packaging_weight?: number | null
           quantity_in_use?: number | null
@@ -695,18 +709,25 @@ export type Database = {
         }
         Update: {
           brand?: string | null
+          calculated_usage_rate?: number | null
           category?: string
           cost_per_item?: number
           created_at?: string
           current_remaining?: number
+          current_weight_grams?: number | null
+          empty_weight_grams?: number | null
+          finished_at?: string | null
+          full_weight_grams?: number | null
           gross_size?: number | null
           id?: string
           image_url?: string | null
           last_restocked_at?: string | null
+          last_weighed_at?: string | null
           name?: string
           notes?: string | null
           offer_label?: string | null
           offer_price?: number | null
+          opened_at?: string | null
           pack_size?: number
           packaging_weight?: number | null
           quantity_in_use?: number | null
@@ -722,6 +743,141 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      toiletry_orders: {
+        Row: {
+          actual_delivery: string | null
+          created_at: string
+          delivery_cost: number | null
+          dispatch_date: string | null
+          estimated_delivery: string | null
+          id: string
+          notes: string | null
+          order_date: string
+          order_reference: string | null
+          retailer: string
+          subtotal: number
+          total_amount: number
+          transaction_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_delivery?: string | null
+          created_at?: string
+          delivery_cost?: number | null
+          dispatch_date?: string | null
+          estimated_delivery?: string | null
+          id?: string
+          notes?: string | null
+          order_date: string
+          order_reference?: string | null
+          retailer: string
+          subtotal: number
+          total_amount: number
+          transaction_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_delivery?: string | null
+          created_at?: string
+          delivery_cost?: number | null
+          dispatch_date?: string | null
+          estimated_delivery?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string
+          order_reference?: string | null
+          retailer?: string
+          subtotal?: number
+          total_amount?: number
+          transaction_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "toiletry_orders_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      toiletry_purchases: {
+        Row: {
+          created_at: string
+          discount_amount: number | null
+          discount_type: string | null
+          final_price: number
+          id: string
+          notes: string | null
+          order_id: string | null
+          purchase_date: string
+          quantity: number
+          toiletry_item_id: string
+          transaction_id: string | null
+          unit_price: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_type?: string | null
+          final_price: number
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          purchase_date: string
+          quantity?: number
+          toiletry_item_id: string
+          transaction_id?: string | null
+          unit_price: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_type?: string | null
+          final_price?: number
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          purchase_date?: string
+          quantity?: number
+          toiletry_item_id?: string
+          transaction_id?: string | null
+          unit_price?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "toiletry_purchases_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "toiletry_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "toiletry_purchases_toiletry_item_id_fkey"
+            columns: ["toiletry_item_id"]
+            isOneToOne: false
+            referencedRelation: "toiletry_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "toiletry_purchases_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {

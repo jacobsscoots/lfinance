@@ -129,6 +129,57 @@ export function useToiletries() {
     },
   });
 
+  const logWeight = useMutation({
+    mutationFn: async ({ 
+      id, 
+      weight, 
+      readingType 
+    }: { 
+      id: string; 
+      weight: number; 
+      readingType: "full" | "regular" | "empty";
+    }) => {
+      const updates: Record<string, unknown> = {
+        current_weight_grams: weight,
+        last_weighed_at: new Date().toISOString(),
+      };
+
+      if (readingType === "full") {
+        updates.full_weight_grams = weight;
+        updates.opened_at = new Date().toISOString().split('T')[0];
+      } else if (readingType === "empty") {
+        updates.empty_weight_grams = weight;
+        updates.finished_at = new Date().toISOString().split('T')[0];
+      }
+
+      const { data, error } = await supabase
+        .from("toiletry_items")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["toiletries"] });
+      const message = variables.readingType === "full" 
+        ? "Full weight recorded. You can now track usage over time."
+        : variables.readingType === "empty"
+        ? "Item marked as finished."
+        : "Weight recorded.";
+      toast({ title: "Weight logged", description: message });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Error", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
   return {
     toiletries,
     isLoading,
@@ -137,5 +188,6 @@ export function useToiletries() {
     updateToiletry,
     deleteToiletry,
     restockToiletry,
+    logWeight,
   };
 }
