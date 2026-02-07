@@ -751,11 +751,13 @@ function fineTuneToExact(
 
 /**
  * Calculate portions for all items in a day to hit exact daily targets.
+ * @param mealDate - Optional meal date string for debug logging (yyyy-MM-dd format)
  */
 export function calculateDayPortions(
   items: MealPlanItem[],
   dailyTargets: MacroTotals,
-  settings: PortioningSettings = DEFAULT_PORTIONING_SETTINGS
+  settings: PortioningSettings = DEFAULT_PORTIONING_SETTINGS,
+  mealDate?: string
 ): DayPortioningResult {
   const warnings: string[] = [];
   const mealResults = new Map<MealType, MealPortioningResult>();
@@ -1605,9 +1607,7 @@ export function calculateDayPortions(
     });
   });
   const debugPayload: PortioningSolverDebugPayload = {
-    mealDate: items.length > 0 && typeof (items[0] as any).meal_plan_id === "string"
-      ? (items[0] as any).meal_date ?? "unknown"
-      : "unknown",
+    mealDate: mealDate ?? "unknown",
     targets: dailyTargets,
     achieved: totalAchieved,
     warnings,

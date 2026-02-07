@@ -490,7 +490,7 @@ export function useMealPlanItems(weekStart: Date) {
         ...portioningSettings,
         rounding: 0,
         tolerancePercent: 0,
-      });
+      }, plan.meal_date);
 
       if (!result.success) {
         // Don’t apply a bad solve—return warnings so the UI can show the reason.
@@ -553,7 +553,7 @@ export function useMealPlanItems(weekStart: Date) {
       let successCount = 0;
       
       for (const plan of mealPlans) {
-        const dayDate = new Date(plan.meal_date);
+        const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
         const targets = getTargetsForDate(dayDate, settings, weeklyOverride);
         const items = plan.items || [];
         
@@ -581,7 +581,7 @@ export function useMealPlanItems(weekStart: Date) {
           ...portioningSettings,
           rounding: 0,
           tolerancePercent: 0,
-        });
+        }, plan.meal_date);
         
         if (result.success) successCount++;
         
