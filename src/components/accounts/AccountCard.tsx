@@ -2,13 +2,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MoreVertical, Pencil, Trash2, CreditCard, Wallet, PiggyBank, Building2, Eye, EyeOff } from 'lucide-react';
 import { BankAccount } from '@/hooks/useAccounts';
-import { getProviderLabel } from '@/lib/bankProviders';
+import { getProviderLabel, getConnectionStatusColor } from '@/lib/bankProviders';
 import { cn } from '@/lib/utils';
 
 interface AccountCardProps {
   account: BankAccount;
+  connectionStatus?: string | null;
   onEdit: (account: BankAccount) => void;
   onDelete: (account: BankAccount) => void;
   onToggleHidden?: (account: BankAccount) => void;
@@ -21,14 +23,24 @@ const accountTypeIcons: Record<string, React.ComponentType<{ className?: string 
   business: Building2,
 };
 
-export function AccountCard({ account, onEdit, onDelete, onToggleHidden }: AccountCardProps) {
+export function AccountCard({ account, connectionStatus, onEdit, onDelete, onToggleHidden }: AccountCardProps) {
   const Icon = accountTypeIcons[account.account_type] || Wallet;
   const balance = Number(account.balance);
   const isNegative = balance < 0;
   
-  // Use display_name if set, otherwise fall back to provider label or name
+  // Use display_name if set, otherwise fall back to synced name
   const displayName = account.display_name || account.name;
-  const providerLabel = account.provider ? getProviderLabel(account.provider) : null;
+  
+  // Get provider label - will show actual bank name (Monzo, Starling, etc.)
+  const providerLabel = getProviderLabel(account.provider);
+  
+  // Determine if this is a connected account (has external_id from Open Banking)
+  const isConnectedAccount = !!account.external_id;
+  
+  // Get status indicator for connected accounts
+  const status = isConnectedAccount 
+    ? getConnectionStatusColor(connectionStatus || 'connected', account.last_synced_at)
+    : null;
 
   return (
     <Card className={cn(
@@ -50,13 +62,33 @@ export function AccountCard({ account, onEdit, onDelete, onToggleHidden }: Accou
                 <Badge variant="outline" className="text-xs">Hidden</Badge>
               )}
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {providerLabel ? (
-                <span>{providerLabel} · <span className="capitalize">{account.account_type}</span></span>
-              ) : (
-                <span className="capitalize">{account.account_type} account</span>
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              {/* Status indicator dot for connected accounts */}
+              {status && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={cn("h-2 w-2 rounded-full flex-shrink-0", status.bgColor)} />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{status.label}</p>
+                      {account.last_synced_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Last synced: {new Date(account.last_synced_at).toLocaleString()}
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
-            </p>
+              <span>
+                {isConnectedAccount ? (
+                  <>{providerLabel} · <span className="capitalize">{account.account_type}</span></>
+                ) : (
+                  <span className="capitalize">{account.account_type} account</span>
+                )}
+              </span>
+            </div>
           </div>
         </div>
         <DropdownMenu>

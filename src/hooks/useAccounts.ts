@@ -53,9 +53,10 @@ export function useAccounts() {
 
       if (error) throw error;
       
-      // Deduplicate by id (defensive measure)
+      // Deduplicate by external_id (for connected accounts) or id (for manual accounts)
+      // This prevents duplicates from appearing even if database has issues
       const uniqueAccounts = Array.from(
-        new Map((data || []).map(a => [a.id, a])).values()
+        new Map((data || []).map(a => [a.external_id || a.id, a])).values()
       ) as BankAccount[];
       
       return uniqueAccounts;
