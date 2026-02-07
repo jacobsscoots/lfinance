@@ -1,327 +1,184 @@
 
+# Fix "Generate Portions" Button - Precision Solver Debug & Fix
 
-# Upgrade Dashboard to Payday-to-Payday Control Centre
+## Problem Summary
 
-## Overview
+The "Generate Portions" button appears to click but produces no visible change because:
+1. The solver runs and returns `success=false` for most days (Feb 9-16)
+2. Per the recent code change, failed solves are NOT persisted to the database (correct behavior)
+3. The user sees no feedback that the solve failed or why
 
-Transform the current light dashboard into an information-dense control centre that focuses on pay cycle health, forecasting, and actionable guidance. The layout will be 2-column with a main content area (runway, charts, bills) and a sidebar for alerts/actions.
+### Root Cause Identified
 
-## Layout Structure
+The weekly targets have a **calorie/macro mismatch**:
+- Monday Feb 9: 1717 kcal target with 177g protein + 205g carbs
+- Protein calories: 177 × 4 = 708 kcal
+- Carbs calories: 205 × 4 = 820 kcal  
+- Total P+C: **1528 kcal** (already 89% of budget)
+- Remaining for fat: 1717 - 1528 = 189 kcal = **21g fat**
 
-```text
-+-----------------------------------------------+
-| Header: "Payday Control Centre"               |
-| Cycle: 19 Jan → 18 Feb 2026  |  12 days left  |
-+-----------------------------+-----------------+
-| MAIN CONTENT (2/3)          | ALERTS (1/3)    |
-|                             |                 |
-| [Runway & Balance Widget]   | [Alerts Panel]  |
-| - Days remaining            | - Overspend     |
-| - Safe-to-spend/day         | - Runway risk   |
-| - Balance timeline          | - Actions       |
-| - Projections               |                 |
-|                             | [Account List]  |
-| [Charts Row]                | - Current bal   |
-| - Spend pace line chart     | - Change since  |
-| - Outgoings donut           |   payday        |
-| - Net trend mini chart      |                 |
-|                             |                 |
-| [Budget Health Snapshot]    |                 |
-| - Income | Committed |      |                 |
-|   Discretionary | Buffer    |                 |
-|                             |                 |
-| [Upcoming Bills - Expanded] |                 |
-| - Fixed bills section       |                 |
-| - Subscriptions section     |                 |
-| - Variable bills section    |                 |
-| - Totals: 7 days / cycle    |                 |
-+-----------------------------+-----------------+
-```
+The solver is deriving fat as ~21g, but the items available (without enough high-fat sources or with constraints) may not be able to hit all three macros simultaneously within the ±1g tolerance.
 
-## Files to Create/Modify
+## Technical Solution
 
-### New Files
+### Step 1: Add User Feedback for Failed Solves
 
-| File | Purpose |
-|------|---------|
-| `src/hooks/usePayCycleData.ts` | Central hook for all pay-cycle calculations |
-| `src/lib/dashboardCalculations.ts` | Pure functions for runway, projections, alerts |
-| `src/lib/dashboardCalculations.test.ts` | Tests for calculation functions |
-| `src/components/dashboard/RunwayBalanceCard.tsx` | Key widget with balance timeline |
-| `src/components/dashboard/SpendPaceChart.tsx` | Cumulative spend vs pace line chart |
-| `src/components/dashboard/OutgoingsBreakdownChart.tsx` | Donut: Bills vs Other |
-| `src/components/dashboard/NetTrendChart.tsx` | Mini line: last 6 cycles |
-| `src/components/dashboard/BudgetHealthCard.tsx` | Income/Committed/Discretionary/Buffer |
-| `src/components/dashboard/UpcomingBillsExpanded.tsx` | Bills with sections + risk flag |
-| `src/components/dashboard/AlertsPanel.tsx` | Smart alerts with actions |
-| `src/components/dashboard/AccountsOverview.tsx` | Compact account balances |
+Currently when `recalculateAll` fails, the user just sees items stay at 0g with no explanation. Need to:
 
-### Modified Files
+1. Show a toast with the failure reason when solves fail
+2. Display per-day warnings explaining why each day failed
+3. Add a "solver status" indicator to each day card
 
-| File | Changes |
-|------|---------|
-| `src/pages/Dashboard.tsx` | New 2-column layout, wire up all new components |
-| `src/hooks/useDashboardData.ts` | Add new queries for historical cycles |
+**File: `src/hooks/useMealPlanItems.ts`**
 
-## Technical Implementation
-
-### 1. Pay Cycle Data Hook (`usePayCycleData.ts`)
-
-Central hook that calculates all pay-cycle metrics:
+Modify `recalculateAll.onSuccess` to report failures:
 
 ```typescript
-interface PayCycleData {
-  // Cycle info
-  cycleStart: Date;
-  cycleEnd: Date;
-  daysTotal: number;
-  daysRemaining: number;
-  daysPassed: number;
-
-  // Balances
-  startBalance: number;      // Balance at cycle start (or first transaction)
-  currentBalance: number;    // Current total balance
-  projectedEndBalance: number;
-
-  // Spending
-  totalSpent: number;
-  expectedSpentByNow: number;  // Linear pace
-  safeToSpendPerDay: number;
+onSuccess: (result) => {
+  queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+  setLastCalculated(new Date());
   
-  // Committed vs discretionary
-  committedRemaining: number;  // Bills/subs still due this cycle
-  discretionaryRemaining: number;
-  bufferAmount: number;
-
-  // Flags
-  isOverPace: boolean;
-  runwayRisk: boolean;  // Low runway after committed
-  
-  // Daily breakdown for charts
-  dailySpending: { date: string; actual: number; expected: number }[];
+  if (result.daysSucceeded === result.totalDays) {
+    toast.success(`Generated portions for all ${result.daysSucceeded} days`);
+  } else if (result.daysSucceeded > 0) {
+    toast.warning(
+      `Generated portions for ${result.daysSucceeded}/${result.totalDays} days. ` +
+      `${result.totalDays - result.daysSucceeded} days could not be solved within ±1g tolerance.`
+    );
+  } else {
+    toast.error(
+      `No days could be solved. Check that your macro targets are achievable with the selected items.`
+    );
+  }
 }
 ```
 
-Calculations:
-- `startBalance`: Sum of account balances + all spending - all income since cycle start
-- `committedRemaining`: Sum of all bills/subscriptions due in remaining days of cycle
-- `discretionaryRemaining`: `currentBalance - committedRemaining`
-- `safeToSpendPerDay`: `discretionaryRemaining / daysRemaining`
-- `projectedEndBalance`: Based on current pace extrapolation
-- `runwayRisk`: True if `discretionaryRemaining < (daysRemaining * 10)` or similar threshold
+### Step 2: Collect and Return Day-Specific Warnings
 
-### 2. Dashboard Calculations (`dashboardCalculations.ts`)
-
-Pure functions for testability:
+Modify `recalculateAll` to collect warnings per day:
 
 ```typescript
-// Runway calculations
-export function calculateSafeToSpend(
-  currentBalance: number,
-  committedRemaining: number,
-  daysRemaining: number
-): number;
+const dayWarnings: { date: string; warnings: string[] }[] = [];
 
-export function calculateProjectedEndBalance(
-  currentBalance: number,
-  spentSoFar: number,
-  daysPassed: number,
-  daysRemaining: number,
-  committedRemaining: number
-): { best: number; expected: number; worst: number };
+for (const plan of mealPlans) {
+  // ... existing solve logic ...
+  
+  if (!result.success) {
+    dayWarnings.push({ 
+      date: plan.meal_date, 
+      warnings: result.warnings 
+    });
+  }
+}
 
-// Alert generation
-export function generateAlerts(
-  data: PayCycleData,
-  upcomingBills: BillOccurrence[]
-): Alert[];
-
-// Historical cycle comparison
-export function calculateNetPosition(
-  income: number,
-  expenses: number
-): number;
-```
-
-### 3. Runway & Balance Card (`RunwayBalanceCard.tsx`)
-
-Key visual showing:
-- Large "X days remaining" display
-- "Safe to spend: £X/day" with color coding (green/amber/red)
-- Balance timeline mini-visual:
-  ```
-  [Start £2,450] ----●---- [Now £1,823] -------- [End ~£450]
-  ```
-- Projection band (best/worst case)
-- Warning banner if unknown data (accounts not connected)
-
-### 4. Charts Implementation
-
-**Spend Pace Chart** (Line chart using Recharts):
-- X-axis: Days of cycle (1, 2, 3...)
-- Y-axis: Cumulative £
-- Two lines: Actual cumulative spend, Expected linear pace
-- Shaded area between them (green if under, red if over)
-
-**Outgoings Breakdown** (Donut chart):
-- Two segments: "Bills & Subscriptions" vs "Other Spending"
-- Center shows total spent this cycle
-- Legend with amounts
-
-**Net Trend** (Mini line chart):
-- Last 6 pay cycles (or placeholder if not enough data)
-- Each point = income - expenses for that cycle
-- Visual shows trajectory (improving/declining)
-
-### 5. Budget Health Snapshot (`BudgetHealthCard.tsx`)
-
-Four-column stat display:
-
-```
-| Income     | Committed  | Discretionary | Buffer  |
-| £2,450.00  | £892.00    | £931.00       | £521.00 |
-| Received   | Bills left | Left to spend | Leftover|
-```
-
-- Income: Sum of income transactions this cycle
-- Committed: Sum of bills/subscriptions remaining
-- Discretionary: Current balance - committed
-- Buffer: Projected end balance if zero discretionary spend
-
-### 6. Expanded Upcoming Bills (`UpcomingBillsExpanded.tsx`)
-
-Sections with collapsible groups:
-- **Fixed Bills** (bill_type = 'fixed', is_subscription = false)
-- **Subscriptions** (is_subscription = true)
-- **Variable Bills** (is_variable = true) - shows "~£X (est.)"
-
-Summary boxes:
-- "Due next 7 days: £X"
-- "Due rest of cycle: £X"
-- Risk flag if: `committedRemaining > discretionaryRemaining`
-
-### 7. Alerts Panel (`AlertsPanel.tsx`)
-
-Smart alerts generated from data:
-
-```typescript
-type Alert = {
-  type: 'warning' | 'danger' | 'info';
-  title: string;
-  message: string;
-  action?: {
-    label: string;
-    description: string;
-  };
+return { 
+  updated: totalUpdated, 
+  daysSucceeded: successCount, 
+  totalDays: mealPlans.length,
+  dayWarnings 
 };
 ```
 
-Examples:
-- **Overspending**: "You're £54 over pace. Reduce daily spend to £18/day to finish on target."
-- **Runway Risk**: "After upcoming bills, you'll have £120 discretionary for 12 days (£10/day)"
-- **Large Bill Coming**: "Council Tax (£142) due in 3 days"
-- **Positive**: "On track! £24 below expected spend"
+### Step 3: Improve Solver Precision for Edge Cases
 
-Each alert has a suggested action where applicable.
+The solver may be failing because it's hitting constraints before achieving ±1g precision. Review and fix:
 
-### 8. Accounts Overview (`AccountsOverview.tsx`)
+**File: `src/lib/autoPortioning.ts`**
 
-Compact list showing:
-```
-Current Account    £1,823.45    -£626.55
-Savings           £3,240.00    +£0.00
-```
-- Account name
-- Current balance
-- Change since cycle start (green/red)
-- Respects `is_hidden` flag
-- "Some accounts not synced" warning if applicable
+1. **Increase precision loop budget** from 50 to 100 iterations
+2. **Add fallback adjustment strategy** when primary sources are exhausted
+3. **Ensure the solver recalculates totals after EVERY adjustment** (currently may skip recalc in some paths)
+4. **Fix the "no editable items" early return** - currently returns success=true when there are no editable items even if targets aren't met
 
-## Data Flow
+### Step 4: Fix Items with 0g Quantities
 
-```text
-Dashboard.tsx
-    │
-    ├── usePayCycleData()
-    │   ├── usePaydaySettings() → cycle dates
-    │   ├── useAccounts() → balances
-    │   ├── useTransactions(cycle range) → spending
-    │   └── useBillsInCycle() → committed
-    │
-    ├── useHistoricalCycles() → net trend
-    │
-    └── Components render with data
+For days Feb 9-16, the items currently have `quantity_grams: 0`. This happened because:
+1. Previous generate attempts failed
+2. Items were added with 0g default
+
+Need to ensure the UI correctly shows these as "uncalculated" rather than calculated-but-zero.
+
+**File: `src/components/mealplan/MealDayCard.tsx`**
+
+The `hasUncalculatedItems` check is already present:
+```typescript
+const hasUncalculatedItems = items.some(item => 
+  item.quantity_grams === 0 && item.product?.product_type === "editable"
+);
 ```
 
-## Handling Missing Data
+This is showing the "Add items → click Generate" message correctly.
 
-Each component will gracefully handle missing data:
+### Step 5: Database Cleanup for Testing
+
+Clear the 0g items and regenerate with improved solver:
+
+```sql
+-- Reset all editable items in date range to allow fresh regeneration
+UPDATE meal_plan_items mpi
+SET quantity_grams = 0
+FROM meal_plans mp
+WHERE mpi.meal_plan_id = mp.id
+  AND mp.meal_date BETWEEN '2026-02-08' AND '2026-02-16'
+  AND mpi.is_locked = false
+  AND EXISTS (
+    SELECT 1 FROM products p 
+    WHERE p.id = mpi.product_id 
+    AND p.product_type = 'editable'
+  );
+```
+
+### Step 6: Add Debug Logging Toggle
+
+Enable localStorage debug flag to show solver internals:
+
+**File: `src/lib/portioningDebug.ts`**
+
+Ensure debug logging outputs to console when `localStorage.debug_portioning = '1'`:
 
 ```typescript
-// Example in RunwayBalanceCard
-if (!hasAccounts) {
-  return <WarningCard message="Connect an account to see runway" />;
-}
-
-if (isLoading) {
-  return <Skeleton />;
+export function storePortioningSolverDebug(payload: PortioningSolverDebugPayload) {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('debug_portioning') === '1') {
+    console.groupCollapsed(`[Portioning Debug] ${payload.mealDate}`);
+    console.log('Targets:', payload.targets);
+    console.log('Achieved:', payload.achieved);
+    console.log('Success:', payload.warnings.length === 0);
+    console.log('Warnings:', payload.warnings);
+    console.table(payload.items.map(i => ({
+      name: i.name,
+      meal: i.mealType,
+      grams: i.grams,
+      cal: Math.round(i.contribution.calories),
+      pro: Math.round(i.contribution.protein),
+      carb: Math.round(i.contribution.carbs),
+      fat: Math.round(i.contribution.fat)
+    })));
+    console.groupEnd();
+  }
 }
 ```
 
-For historical charts:
-- If < 2 cycles of data: Show "Building history..." placeholder
-- If < 6 cycles: Show available data with note
+## Files to Modify
 
-## Tests to Add
+| File | Changes |
+|------|---------|
+| `src/hooks/useMealPlanItems.ts` | Add failure feedback in onSuccess, collect day warnings |
+| `src/lib/autoPortioning.ts` | Increase iteration budget, fix edge cases, improve precision |
+| `src/lib/portioningDebug.ts` | Ensure debug logging works when flag is set |
 
-`src/lib/dashboardCalculations.test.ts`:
+## Testing Protocol
 
-```typescript
-describe('calculateSafeToSpend', () => {
-  it('returns positive when balance exceeds committed', () => {});
-  it('returns 0 when balance equals committed', () => {});
-  it('handles 0 days remaining', () => {});
-});
+1. Enable debug: `localStorage.setItem('debug_portioning', '1')`
+2. Navigate to Feb 8-16 week
+3. Click "Generate Portions"
+4. Observe console output for each day's solve attempt
+5. Verify toast message indicates which days failed and why
+6. For successful days, verify macros are within ±1g of targets
 
-describe('calculateProjectedEndBalance', () => {
-  it('projects based on current spending pace', () => {});
-  it('accounts for committed spending', () => {});
-  it('best case assumes zero additional spend', () => {});
-});
+## Definition of Done
 
-describe('generateAlerts', () => {
-  it('generates overspend warning when over pace', () => {});
-  it('generates runway risk when low discretionary', () => {});
-  it('generates positive alert when under budget', () => {});
-});
-```
-
-## Mobile Responsiveness
-
-On mobile (< md breakpoint):
-- Single column layout
-- Alerts panel moves below main content
-- Charts stack vertically
-- Accounts overview collapses to summary
-
-## Implementation Order
-
-1. Create `dashboardCalculations.ts` + tests (pure logic first)
-2. Create `usePayCycleData.ts` hook
-3. Create `RunwayBalanceCard` (key widget)
-4. Create `BudgetHealthCard`
-5. Create `UpcomingBillsExpanded`
-6. Create `AlertsPanel` + `AccountsOverview`
-7. Create charts (`SpendPaceChart`, `OutgoingsBreakdownChart`, `NetTrendChart`)
-8. Update `Dashboard.tsx` with new layout
-9. Add historical cycles query to `useDashboardData.ts`
-10. Final testing and polish
-
-## Guardrails Respected
-
-- No changes to meal planning or macro solver code
-- No mutations to transaction data (read-only computations)
-- Dashboard computes derived values only
-- Existing pay cycle logic in `payday.ts` and `payCycle.ts` unchanged
-- Existing bills logic in `billOccurrences.ts` unchanged
-
+- [ ] Generate Portions button shows clear feedback (success/failure count)
+- [ ] Failed days explain why they couldn't be solved
+- [ ] Days that CAN be solved hit ±1g macro precision
+- [ ] Debug logging shows solver internals when enabled
+- [ ] No silent failures - every outcome is communicated to user
