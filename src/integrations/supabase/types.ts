@@ -661,6 +661,9 @@ export type Database = {
           id: string
           is_pending: boolean | null
           merchant: string | null
+          receipt_path: string | null
+          receipt_source: string | null
+          receipt_uploaded_at: string | null
           transaction_date: string
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at: string
@@ -676,6 +679,9 @@ export type Database = {
           id?: string
           is_pending?: boolean | null
           merchant?: string | null
+          receipt_path?: string | null
+          receipt_source?: string | null
+          receipt_uploaded_at?: string | null
           transaction_date?: string
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
@@ -691,6 +697,9 @@ export type Database = {
           id?: string
           is_pending?: boolean | null
           merchant?: string | null
+          receipt_path?: string | null
+          receipt_source?: string | null
+          receipt_uploaded_at?: string | null
           transaction_date?: string
           type?: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string

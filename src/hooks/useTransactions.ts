@@ -20,6 +20,10 @@ export type Transaction = Tables<"transactions"> & {
     id: string;
     name: string;
   } | null;
+  // Receipt fields (added for attachment support)
+  receipt_path?: string | null;
+  receipt_uploaded_at?: string | null;
+  receipt_source?: string | null;
 };
 
 export type TransactionInsert = Omit<TablesInsert<"transactions">, "id" | "created_at" | "updated_at">;
