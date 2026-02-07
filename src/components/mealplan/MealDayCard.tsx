@@ -126,8 +126,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <MoreVertical className="h-3 w-3" />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-6 sm:w-6">
+                        <MoreVertical className="h-4 w-4 sm:h-3 sm:w-3" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -171,10 +171,10 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="w-full h-7 text-xs text-muted-foreground"
+                    className="w-full h-9 sm:h-7 text-xs text-muted-foreground"
                     onClick={() => handleAddItem(mealType)}
                   >
-                    <Plus className="h-3 w-3 mr-1" />
+                    <Plus className="h-4 w-4 sm:h-3 sm:w-3 mr-1" />
                     Add food
                   </Button>
                 ) : (
@@ -195,8 +195,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
                           <span className="text-muted-foreground">{item.quantity_grams}g</span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-5 w-5">
-                                <MoreVertical className="h-3 w-3" />
+                              <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-5 sm:w-5">
+                                <MoreVertical className="h-4 w-4 sm:h-3 sm:w-3" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">

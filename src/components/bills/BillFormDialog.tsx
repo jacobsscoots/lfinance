@@ -3,13 +3,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,16 +114,16 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Bill" : "Add Bill"}</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{isEditing ? "Edit Bill" : "Add Bill"}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             {isEditing
               ? "Update the details of your recurring bill."
               : "Add a new recurring bill or subscription."}
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Bill Name *</Label>
@@ -137,7 +137,7 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="amount">Amount (£) *</Label>
               <Input
@@ -169,7 +169,7 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="frequency">Frequency *</Label>
               <Select
@@ -179,7 +179,7 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
                 <SelectTrigger>
                   <SelectValue placeholder="Select frequency" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover">
                   <SelectItem value="weekly">Weekly</SelectItem>
                   <SelectItem value="fortnightly">Fortnightly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
@@ -198,7 +198,7 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover">
                   <SelectItem value="none">No category</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
@@ -237,7 +237,7 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
             />
           </div>
 
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
@@ -247,9 +247,9 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
             >
               {isEditing ? "Save Changes" : "Add Bill"}
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

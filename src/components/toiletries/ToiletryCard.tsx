@@ -1,0 +1,115 @@
+import { format } from "date-fns";
+import { MoreVertical, RefreshCw, Pencil, Trash2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { 
+  calculateForecast, 
+  formatCurrency, 
+  getStatusBadgeVariant, 
+  getStatusDisplayText,
+  TOILETRY_CATEGORIES,
+  type ToiletryItem 
+} from "@/lib/toiletryCalculations";
+import { cn } from "@/lib/utils";
+
+interface ToiletryCardProps {
+  item: ToiletryItem;
+  onEdit: (item: ToiletryItem) => void;
+  onDelete: (item: ToiletryItem) => void;
+  onRestock: (item: ToiletryItem) => void;
+}
+
+export function ToiletryCard({ item, onEdit, onDelete, onRestock }: ToiletryCardProps) {
+  const forecast = calculateForecast(item);
+  const categoryLabel = TOILETRY_CATEGORIES.find(c => c.value === item.category)?.label || item.category;
+
+  return (
+    <Card className="relative">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-medium text-sm truncate">{item.name}</h3>
+              <Badge variant={getStatusBadgeVariant(item, forecast)} className="text-xs shrink-0">
+                {getStatusDisplayText(item, forecast)}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+              <Badge variant="secondary" className="text-xs">
+                {categoryLabel}
+              </Badge>
+              <span>•</span>
+              <span>{item.total_size}{item.size_unit}</span>
+              <span>•</span>
+              <span>{formatCurrency(item.cost_per_item)}</span>
+            </div>
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-popover">
+              <DropdownMenuItem onClick={() => onRestock(item)}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Restock
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(item)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => onDelete(item)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Progress 
+              value={forecast.percentRemaining} 
+              className={cn(
+                "h-2 flex-1",
+                forecast.statusLevel === "low" && "[&>div]:bg-warning",
+                forecast.statusLevel === "empty" && "[&>div]:bg-destructive"
+              )}
+            />
+            <span className="text-xs text-muted-foreground w-10 text-right">
+              {forecast.percentRemaining}%
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              {item.current_remaining.toFixed(0)}{item.size_unit} remaining
+            </span>
+            {forecast.daysRemaining !== Infinity && (
+              <span className={cn(
+                "font-medium",
+                forecast.statusLevel === "low" && "text-warning",
+                forecast.statusLevel === "empty" && "text-destructive"
+              )}>
+                {forecast.daysRemaining} days • {forecast.runOutDateFormatted}
+              </span>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

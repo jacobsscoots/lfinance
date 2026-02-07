@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -26,6 +25,8 @@ import {
   TOILETRY_CATEGORIES,
   type ToiletryItem,
 } from "@/lib/toiletryCalculations";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ToiletryCard } from "./ToiletryCard";
 
 interface ToiletryTableProps {
   items: ToiletryItem[];
@@ -40,6 +41,8 @@ export function ToiletryTable({
   onDelete,
   onRestock,
 }: ToiletryTableProps) {
+  const isMobile = useIsMobile();
+
   if (items.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -49,6 +52,24 @@ export function ToiletryTable({
     );
   }
 
+  // Mobile: Card layout
+  if (isMobile) {
+    return (
+      <div className="space-y-3">
+        {items.map((item) => (
+          <ToiletryCard
+            key={item.id}
+            item={item}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onRestock={onRestock}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Desktop: Table layout
   return (
     <div className="rounded-md border">
       <Table>
@@ -130,7 +151,7 @@ export function ToiletryTable({
                         <span className="sr-only">Actions</span>
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="bg-popover">
                       <DropdownMenuItem onClick={() => onEdit(item)}>
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
