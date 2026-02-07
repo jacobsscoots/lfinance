@@ -1,169 +1,92 @@
 
+Goal
+- Fix the “Connection failed: Edge Function returned a non‑2xx status code” that happens immediately when clicking “Connect Bank” on the published site.
+- Make the bank-connection flow deterministic and debuggable (clear, structured error messages), without changing unrelated features.
 
-# Life Tracker - Personal Finance & Life Dashboard
+What’s happening (root cause, based on current code)
+- The frontend calls the backend function `truelayer-auth` like this:
+  - `supabase.functions.invoke("truelayer-auth", { body: { redirectUri } })`
+- But the backend function `supabase/functions/truelayer-auth/index.ts` only performs actions when a URL query parameter exists:
+  - `const action = url.searchParams.get('action')`
+  - It expects `?action=auth-url` / `?action=exchange-code` / `?action=refresh-token`
+- Because the frontend does not send `action`, the backend returns `400 { error: "Invalid action" }`.
+- Supabase’s client surfaces that as the generic message: “Edge Function returned a non‑2xx status code”.
 
-A premium, calm personal finance app with UK Open Banking integration, smart pay-cycle tracking, and a cohesive purple-themed design that makes daily money management feel supportive rather than stressful.
+Secondary issue you will hit after the above is fixed (based on your screenshot)
+- Your TrueLayer “Redirect URIs” do not include the app’s redirect URL.
+- Once the app successfully redirects to TrueLayer, the authorization step will fail unless TrueLayer is configured with:
+  - `https://lfinance.lovable.app/accounts?truelayer_callback=true`
+- (TrueLayer notes it may take up to ~15 minutes to apply.)
 
----
+Implementation plan (code changes)
+1) Make `truelayer-auth` accept a deterministic request schema (body-based), while keeping backward compatibility
+   - File: `supabase/functions/truelayer-auth/index.ts`
+   - Update request parsing so `action` can come from either:
+     1) Query string: `?action=...` (existing behavior)
+     2) JSON body: `{ action: "auth-url" | "exchange-code" | "refresh-token", ... }` (new)
+     3) If neither is present, return a structured 400 with an explicit message (do not fall back to “Invalid action”).
+   - Add strict validation per action:
+     - `auth-url`: requires `redirectUri`
+     - `exchange-code`: requires `code` and `redirectUri`
+     - `refresh-token`: requires `refreshToken`
+   - Return structured error JSON consistently:
+     - `{ error: "message", stage: "auth-url" | "exchange-code" | "refresh-token" | "validation", details?: any }`
+   - Improve CORS headers to include the full recommended header list so browsers don’t fail preflight in edge cases.
+     - Also include `Access-Control-Allow-Methods: GET,POST,OPTIONS` (explicit).
 
-## Design System & Theme
+2) Update the frontend to always send `action` in the body (no reliance on query strings)
+   - File: `src/hooks/useBankConnections.ts`
+   - Start connection:
+     - Call `invoke("truelayer-auth", { body: { action: "auth-url", redirectUri } })`
+   - Complete connection:
+     - Call `invoke("truelayer-auth", { body: { action: "exchange-code", code, redirectUri } })`
+   - Refresh token:
+     - Call `invoke("truelayer-auth", { body: { action: "refresh-token", refreshToken } })`
 
-**Purple Color Palette (Light Mode First)**
-- Primary structure: Deep purples (#310055, #3C0663, #4A0A77, #5A108F, #6818A5)
-- Interactive accents: Soft purples (#8B2FC9, #AB51E3, #BD68EE, #D283FF, #DC97FF)
-- Backgrounds: Soft neutral whites and light grays
-- Warning states: Warm amber (accessible, non-clashing)
-- Success states: Soft teal-green
+3) Make frontend error messages deterministic and informative (so you can self-diagnose next time)
+   - File: `src/hooks/useBankConnections.ts`
+   - Add a small helper to normalize function errors into a readable string:
+     - Include HTTP status if available
+     - Include backend JSON error body if available (`error.context` often contains response/body for function failures)
+   - Update toast descriptions to use this normalized message, so instead of:
+     - “Edge Function returned a non‑2xx status code”
+     you’ll see something like:
+     - “truelayer-auth (400 validation): Missing action. Expected auth-url | exchange-code | refresh-token.”
 
-**Visual Style**
-- Rounded cards with subtle shadows
-- Generous spacing and breathing room
-- Clean typography hierarchy
-- Dark mode toggle available in settings
+4) Fix likely next blocker: TrueLayer Redirect URI mismatch (configuration, no code)
+   - In TrueLayer Console (Live, since you confirmed you’re using Live):
+     - Add redirect URI exactly:
+       - `https://lfinance.lovable.app/accounts?truelayer_callback=true`
+     - Remove/replace the incorrect/incomplete one currently shown (it won’t match what the app uses).
+     - Keep `http://localhost:3000/callback` only if you still test locally; it does not help the published site.
+   - Note: TrueLayer may take up to 15 minutes to apply redirect URI changes.
 
----
+5) Hardening (recommended, small, and deterministic)
+   - Clean up “pending” connections when `startConnection` fails:
+     - Today the code inserts a pending DB record before calling `truelayer-auth`.
+     - If `truelayer-auth` fails, you’ll end up with orphaned “pending” rows.
+   - Update `startConnection` mutation to:
+     - `insert pending row` → `invoke auth-url`
+     - if invoke fails: best-effort delete that pending row before showing the toast.
 
-## Core Features (Phase 1)
+6) Validate end-to-end (test checklist)
+   - After implementing steps (1)-(3):
+     - Go to Accounts → Connect Bank
+     - Expected result: you are redirected to TrueLayer (no immediate red error banner)
+   - After step (4):
+     - Complete the TrueLayer flow
+     - Expected result: you return to `/accounts?truelayer_callback=true&code=...` and see “Connecting your bank…” followed by “Bank connected!”
+   - If anything still fails:
+     - Use the now-detailed toast message to identify the stage (auth-url vs exchange-code).
+     - Check backend function logs for the same stage label and details.
 
-### 1. Authentication & User Security
-- Email/password login with Lovable Cloud
-- Secure session management
-- Protected routes for all financial data
+Files involved (expected edits)
+- `supabase/functions/truelayer-auth/index.ts` (action parsing, validation, CORS, structured errors)
+- `src/hooks/useBankConnections.ts` (send action explicitly + better error display + pending cleanup)
 
-### 2. Home Dashboard
-A calm, glanceable overview showing:
-- **Pay Cycle Status**: Days until next payday, money remaining, spending pace indicator
-- **Month-to-Date Summary**: Income vs outgoings with visual comparison
-- **Net Position**: Running balance trend chart
-- **Upcoming Bills**: Next 7 days of scheduled payments
-- **Pattern Alerts**: Supportive early warnings when spending trends exceed norms
-- Collapsible/reorderable sections for customization
+Notes on publishing
+- These changes include frontend code changes, so they will require publishing to update the live site after implementation.
+- Secret updates do not require republishing, but this fix is code-level.
 
-### 3. Smart Pay Cycle Engine
-- **Official payday**: 20th of each month
-- **Monzo early-pay rule**: If 20th falls on Saturday, Sunday, or Monday → paid on the preceding Friday. Otherwise paid on the 20th.
-- Date range: January 2026 - January 2027 (extendable)
-- Variable income support: Expected vs actual per month
-- Pay-cycle summaries: Income received, total spent, what's left, trend comparison
-
-### 4. Bank Accounts & Transactions
-**Manual Entry First (Bank sync added in Phase 1b)**
-- Add/edit/remove accounts with custom labels and groupings
-- Manual transaction entry with date, amount, merchant, category
-- Transaction feed with search and filters
-- Category assignment with manual override capability
-
-**Categories System**
-- Sensible default category set
-- Add/rename/remove categories without breaking history
-- Merchant mapping rules (e.g., "AMZN MKTP" → "Amazon" → Shopping)
-- Category preserved through renames
-
-### 5. Bills & Subscriptions Manager
-- Structured bill entries: Name, amount, frequency, due date, provider, start/end dates
-- Review date reminders for savings checks
-- Automatic projection into monthly calendar and cashflow forecast
-- "Money needed before next payday" calculation
-
-### 6. Monthly Calendar View
-- Full month grid layout, Monday-Sunday orientation
-- View-only display of bills and predicted outgoings
-- Daily totals with clickable detail panels
-- Color-coded by category or bill type
-
-### 7. Grocery & Meal Planning
-**Grocery Budget Tracking**
-- Weekly budget setting
-- Saturday/Sunday shop → following Monday cycle logic (8-9 day cycles)
-- Manual entry OR linked bank transaction matching
-- Overspend warnings and trend history
-
-**Weekly Meal Planner**
-- Monday-Sunday grid view
-- Simple text-based meal entries per day
-- Linked to current grocery cycle for context
-
-### 8. Settings
-- Account management (bank accounts, labels)
-- Category management (add/rename/remove)
-- Budget settings per category
-- Payday rules configuration
-- Theme toggle (light/dark)
-- Data range extension controls
-
----
-
-## Bank Sync Integration (Phase 1b)
-
-### TrueLayer Open Banking
-- Secure OAuth connection flow for Monzo and other UK banks
-- Token storage with encryption at rest
-- Automatic refresh token handling
-- "Last synced" timestamp display
-
-### Transaction Ingestion
-- Pull balances and transactions (including pending where supported)
-- Background sync with webhook support where available
-- Merchant normalization and auto-categorization
-- Multi-account support with grouping controls
-
----
-
-## Phase 2 Features (Designed for Clean Addition)
-
-These will be built on a data model that supports them from day one:
-
-1. **Toiletries Inventory Tracker**
-   - Product-level tracking with quantities on hand
-   - Average usage rate calculation
-   - Estimated run-out dates
-   - "Order by" dates based on retailer delivery times
-
-2. **Net Worth Tracking**
-   - Combined bank balances + manual assets/liabilities
-   - Monthly snapshot history
-   - Growth trend visualization
-
-3. **Debt Payoff Tracker**
-   - "Debt-free by" target date setting
-   - Progress visualization over time
-   - Payoff strategy suggestions
-
-4. **Investment Tracking**
-   - Manual portfolio entry
-   - CSV import fallback for non-connected accounts
-
----
-
-## Technical Architecture
-
-**Frontend**
-- React with TypeScript
-- Tailwind CSS with custom purple design tokens
-- Recharts for data visualization
-- Responsive design (desktop-first, mobile-friendly)
-
-**Backend (Lovable Cloud)**
-- Database: Users, accounts, transactions, categories, bills, grocery cycles, meal plans
-- Authentication: Email/password with secure sessions
-- Edge Functions: TrueLayer API integration, scheduled sync jobs
-- Secrets Management: API keys and tokens encrypted
-
-**Data Model Highlights**
-- Flexible category system with rename-safe references
-- Transaction-to-category mapping table for rule persistence
-- Pay cycle calculation as computed view, not stored
-- Extendable date ranges without schema changes
-
----
-
-## What You'll Get
-
-A beautifully designed, genuinely calming personal finance dashboard that:
-- Replaces scattered spreadsheets with one cohesive tool
-- Shows you exactly where you stand each pay cycle
-- Warns you early about overspending patterns (kindly, not naggingly)
-- Keeps your grocery and meal planning connected
-- Connects securely to your UK bank accounts
-- Grows with you as you add Phase 2 features
-
+Out of scope (explicitly not doing now)
+- Changing TrueLayer provider selection logic, adding provider picker UI, or implementing extra security features like PKCE/state persistence in DB. (We can add later once the core flow is stable.)
