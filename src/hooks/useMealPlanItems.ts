@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
-import { addDays } from "date-fns";
+import { addDays, parse } from "date-fns";
 import { Product, ProductType } from "./useProducts";
 import { NutritionSettings } from "./useNutritionSettings";
 import { getTargetsForDate, WeeklyTargetsOverride } from "@/lib/mealCalculations";
 import { calculateMealPortions, PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
+
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type MealStatus = "planned" | "skipped" | "eating_out";
@@ -450,7 +451,7 @@ export function useMealPlanItems(weekStart: Date) {
   // Track last calculation time
   const [lastCalculated, setLastCalculated] = useState<Date | null>(null);
 
-  // Generate portions for a single day (clears unlocked items first if they have values)
+  // Generate portions for a single day (best-effort compute first; only write to DB on success)
   const recalculateDay = useMutation({
     mutationFn: async ({ 
       planId,
@@ -473,50 +474,38 @@ export function useMealPlanItems(weekStart: Date) {
       
       const { calculateDayPortions } = await import("@/lib/autoPortioning");
       
-      const dayDate = new Date(plan.meal_date);
+      // Parse as local date to avoid UTC-shift target mismatches.
+      const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
       const targets = getTargetsForDate(dayDate, settings, weeklyOverride);
-      
-      // Reset unlocked editable items to 0g first (re-generate behavior)
-      for (const item of items) {
-        if (item.is_locked) continue;
-        if (item.product?.product_type === "fixed") continue;
-        
-        if (item.quantity_grams > 0) {
-          await supabase
-            .from("meal_plan_items")
-            .update({ quantity_grams: 0 })
-            .eq("id", item.id)
-            .eq("user_id", user.id);
-        }
-      }
-      
-      // Refetch items with reset values
-      const { data: freshItems } = await supabase
-        .from("meal_plan_items")
-        .select(`*, product:products(*)`)
-        .eq("meal_plan_id", planId);
-      
-      const mappedItems = (freshItems || []).map(item => ({
+
+      // Virtualize unlocked editable items as 0g for the solve (regen behavior),
+      // but do NOT write 0g to the DB unless the solve succeeds.
+      const virtualItems = items.map(item => ({
         ...item,
-        meal_type: item.meal_type as MealType,
-        product: item.product as unknown as Product,
+        quantity_grams:
+          item.is_locked || item.product?.product_type === "fixed" ? item.quantity_grams : 0,
       }));
       
-      const result = calculateDayPortions(mappedItems, targets, {
+      const result = calculateDayPortions(virtualItems, targets, {
         ...portioningSettings,
         rounding: 0,
         tolerancePercent: 0,
       });
+
+      if (!result.success) {
+        // Don’t apply a bad solve—return warnings so the UI can show the reason.
+        return { success: false as const, updated: 0, warnings: result.warnings };
+      }
       
       let updated = 0;
-      for (const item of mappedItems) {
+      for (const item of items) {
         if (item.is_locked) continue;
         if (item.product?.product_type === "fixed") continue;
         
         const mealResult = result.mealResults.get(item.meal_type as MealType);
         const newGrams = mealResult?.items.get(item.id);
         
-        if (newGrams !== undefined && newGrams > 0) {
+        if (newGrams !== undefined) {
           const { error } = await supabase
             .from("meal_plan_items")
             .update({ quantity_grams: newGrams })
@@ -528,17 +517,23 @@ export function useMealPlanItems(weekStart: Date) {
         }
       }
       
-      return { success: result.success, updated };
+      return { success: true as const, updated, warnings: result.warnings };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       setLastCalculated(new Date());
-      toast.success(`Generated portions (${result.updated} items)`);
+
+      if (result.success) {
+        toast.success(`Generated portions (${result.updated} items)`);
+      } else {
+        toast.error(result.warnings?.[0] ?? "Targets not solvable with current fixed/locked items and constraints.");
+      }
     },
     onError: (error) => {
       toast.error("Failed to generate: " + error.message);
     },
   });
+
 
   const recalculateAll = useMutation({
     mutationFn: async ({ 
