@@ -451,6 +451,95 @@ export function useMealPlanItems(weekStart: Date) {
   // Track last calculation time
   const [lastCalculated, setLastCalculated] = useState<Date | null>(null);
 
+  // Generate portions for a single day (clears unlocked items first if they have values)
+  const recalculateDay = useMutation({
+    mutationFn: async ({ 
+      planId,
+      settings, 
+      portioningSettings = DEFAULT_PORTIONING_SETTINGS 
+    }: { 
+      planId: string;
+      settings: NutritionSettings; 
+      portioningSettings?: PortioningSettings;
+    }) => {
+      if (!user) throw new Error("Not authenticated");
+      
+      const plan = mealPlans.find(p => p.id === planId);
+      if (!plan) throw new Error("Plan not found");
+      
+      const items = plan.items || [];
+      if (items.length === 0) throw new Error("No items to generate");
+      
+      const { calculateDayPortions } = await import("@/lib/autoPortioning");
+      
+      const dayDate = new Date(plan.meal_date);
+      const targets = getTargetsForDate(dayDate, settings);
+      
+      // Reset unlocked editable items to 0g first (re-generate behavior)
+      for (const item of items) {
+        if (item.is_locked) continue;
+        if (item.product?.product_type === "fixed") continue;
+        
+        if (item.quantity_grams > 0) {
+          await supabase
+            .from("meal_plan_items")
+            .update({ quantity_grams: 0 })
+            .eq("id", item.id)
+            .eq("user_id", user.id);
+        }
+      }
+      
+      // Refetch items with reset values
+      const { data: freshItems } = await supabase
+        .from("meal_plan_items")
+        .select(`*, product:products(*)`)
+        .eq("meal_plan_id", planId);
+      
+      const mappedItems = (freshItems || []).map(item => ({
+        ...item,
+        meal_type: item.meal_type as MealType,
+        product: item.product as unknown as Product,
+      }));
+      
+      const result = calculateDayPortions(mappedItems, targets, {
+        ...portioningSettings,
+        rounding: 0,
+        tolerancePercent: 0,
+      });
+      
+      let updated = 0;
+      for (const item of mappedItems) {
+        if (item.is_locked) continue;
+        if (item.product?.product_type === "fixed") continue;
+        
+        const mealResult = result.mealResults.get(item.meal_type as MealType);
+        const newGrams = mealResult?.items.get(item.id);
+        
+        if (newGrams !== undefined && newGrams > 0) {
+          const { error } = await supabase
+            .from("meal_plan_items")
+            .update({ quantity_grams: newGrams })
+            .eq("id", item.id)
+            .eq("user_id", user.id);
+          
+          if (error) throw error;
+          updated++;
+        }
+      }
+      
+      return { success: result.success, updated };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      setLastCalculated(new Date());
+      toast.success(`Generated portions (${result.updated} items)`);
+    },
+    onError: (error) => {
+      toast.error("Failed to generate: " + error.message);
+    },
+  });
+
+  // Generate portions for the entire week
   const recalculateAll = useMutation({
     mutationFn: async ({ 
       settings, 
@@ -461,7 +550,6 @@ export function useMealPlanItems(weekStart: Date) {
     }) => {
       if (!user) throw new Error("Not authenticated");
       
-      // Import the precision algorithm
       const { calculateDayPortions } = await import("@/lib/autoPortioning");
       
       let totalUpdated = 0;
@@ -474,12 +562,28 @@ export function useMealPlanItems(weekStart: Date) {
         
         if (items.length === 0) continue;
         
-        // Use the new precision algorithm that calculates ALL items together
-        // with exact calorie/macro matching and even meal distribution
-        const result = calculateDayPortions(items, targets, {
+        // First, reset all unlocked editable items to 0g (re-generate behavior)
+        for (const item of items) {
+          if (item.is_locked) continue;
+          if (item.product?.product_type === "fixed") continue;
+          
+          if (item.quantity_grams > 0) {
+            await supabase
+              .from("meal_plan_items")
+              .update({ quantity_grams: 0 })
+              .eq("id", item.id)
+              .eq("user_id", user.id);
+          }
+        }
+        
+        // Recalculate with fresh zeroed values
+        const result = calculateDayPortions(items.map(i => ({
+          ...i,
+          quantity_grams: i.is_locked ? i.quantity_grams : 0,
+        })), targets, {
           ...portioningSettings,
-          rounding: 0, // No rounding for exact precision
-          tolerancePercent: 0, // Zero tolerance
+          rounding: 0,
+          tolerancePercent: 0,
         });
         
         if (result.success) successCount++;
@@ -489,11 +593,10 @@ export function useMealPlanItems(weekStart: Date) {
           if (item.is_locked) continue;
           if (item.product?.product_type === "fixed") continue;
           
-          // Find the grams from the meal results
           const mealResult = result.mealResults.get(item.meal_type);
           const newGrams = mealResult?.items.get(item.id);
           
-          if (newGrams !== undefined && Math.abs(newGrams - item.quantity_grams) > 0.1) {
+          if (newGrams !== undefined && newGrams > 0) {
             const { error } = await supabase
               .from("meal_plan_items")
               .update({ quantity_grams: newGrams })
@@ -534,6 +637,7 @@ export function useMealPlanItems(weekStart: Date) {
     copyDayToNext,
     clearDay,
     clearWeek,
+    recalculateDay,
     recalculateAll,
     lastCalculated,
   };
