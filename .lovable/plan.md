@@ -1,456 +1,609 @@
 
-# Plan: Investments Page + Gmail Receipt Integration
+# Plan: Cheaper Bills Feature
 
 ## Overview
 
-This plan covers two major features:
-1. **Investments Page** - Track investments (specifically ChipX AI Fund) with manual entry, projections, and daily valuations
-2. **Gmail Receipt Integration** - Automatically scan Gmail for receipts and match them to transactions
+This plan creates a comprehensive "Cheaper Bills" section to help automatically find better deals for energy, broadband, and mobile services, with automated monthly reports and an AI assistant for usage analysis.
 
 ---
 
-## Part 1: Investments Page
+## Part 1: Database Schema
 
-### 1.1 Navigation Update
+### New Tables
 
-Add "Investments" to the navigation in both sidebar and mobile nav:
-- **Files**: `src/components/layout/AppSidebar.tsx`, `src/components/layout/MobileNav.tsx`
-- **Route**: `/investments` in `src/App.tsx`
-- **Icon**: `TrendingUp` or `PieChart` from lucide-react
+**Table: `tracked_services`**
+Stores the services being monitored for better deals.
 
-### 1.2 Database Schema
-
-Create 4 new tables to store investment data:
-
-**Table: `investment_accounts`**
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid | Primary key |
 | user_id | uuid | Owner |
-| name | text | e.g., "ChipX AI Fund" |
-| provider | text | e.g., "Chip" |
-| fund_type | text | "etf", "fund", "stocks" |
-| start_date | date | When investment started |
-| expected_annual_return | numeric | User's growth assumption (default 8%) |
-| compounding_method | text | "daily" or "monthly" |
-| risk_preset | text | "conservative", "medium", "aggressive" |
+| service_type | text | 'energy', 'broadband', 'mobile', 'insurance', 'streaming' |
+| provider | text | e.g., "British Gas", "EE", "BT" |
+| plan_name | text | e.g., "Fix & Protect 24" |
+| monthly_cost | numeric | Current monthly payment |
+| contract_start_date | date | When contract began |
+| contract_end_date | date | When contract ends (nullable for rolling) |
+| is_tracking_enabled | boolean | ON/OFF toggle |
+| last_scan_date | timestamp | When last comparison ran |
+| last_recommendation | text | 'switch', 'dont_switch', 'review' |
+| last_recommendation_reason | text | Plain English explanation |
+| estimated_savings_annual | numeric | £/year if switched |
+| exit_fee | numeric | Early termination cost |
 | notes | text | Optional |
-| status | text | "active", "closed" |
+| status | text | 'active', 'ended', 'pending' |
 | created_at, updated_at | timestamp | Auto |
 
-**Table: `investment_transactions`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid | Primary key |
-| user_id | uuid | Owner |
-| investment_account_id | uuid | FK to investment_accounts |
-| transaction_date | date | When deposit/withdrawal occurred |
-| type | text | "deposit", "withdrawal", "fee", "dividend" |
-| amount | numeric | Positive = inflow, negative = outflow |
-| is_recurring | boolean | If this is a recurring contribution |
-| recurring_frequency | text | "weekly", "monthly" (nullable) |
-| notes | text | Optional |
-| created_at, updated_at | timestamp | Auto |
+**Table: `service_allowances`**
+Stores allowances/speeds for broadband/mobile.
 
-**Table: `investment_valuations`**
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| tracked_service_id | uuid | FK to tracked_services |
+| allowance_type | text | 'data_gb', 'minutes', 'texts', 'speed_mbps' |
+| allowance_value | numeric | The amount |
+| is_unlimited | boolean | Default false |
+
+**Table: `energy_readings`**
+Stores consumption data (smart meter or manual).
+
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid | Primary key |
 | user_id | uuid | Owner |
-| investment_account_id | uuid | FK to investment_accounts |
-| valuation_date | date | The date of this value |
-| value | numeric | Total value on this date |
-| source | text | "manual", "estimated", "live" |
+| reading_date | date | Date of reading |
+| fuel_type | text | 'electricity', 'gas' |
+| consumption_kwh | numeric | kWh used |
+| cost_estimate | numeric | £ cost for that day/period |
+| source | text | 'smart_meter', 'manual', 'csv_import' |
 | created_at | timestamp | Auto |
 
-**Table: `investment_settings`**
+**Table: `energy_tariffs`**
+Stores current tariff details.
+
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid | Primary key |
-| user_id | uuid | Owner (unique constraint) |
-| default_expected_return | numeric | Default 8% |
-| show_projections | boolean | Toggle projections display |
-| projection_range_months | integer | 12 by default |
+| user_id | uuid | Owner |
+| tariff_name | text | e.g., "SVT", "Fix & Save 12M" |
+| provider | text | e.g., "British Gas" |
+| fuel_type | text | 'electricity', 'gas', 'dual' |
+| unit_rate_kwh | numeric | p/kWh |
+| standing_charge_daily | numeric | p/day |
+| is_fixed | boolean | Fixed vs variable |
+| fix_end_date | date | When fixed rate ends |
 | created_at, updated_at | timestamp | Auto |
 
-### 1.3 ChipX Import Detection (Quick Fail)
+**Table: `comparison_results`**
+Stores results from comparison scans.
 
-ChipX does not provide a public API or Open Banking access for investment data. The implementation will:
-1. Show "Import from Chip" button that opens a dialog
-2. Dialog explains that direct import isn't available
-3. Automatically switches to manual entry mode with pre-filled defaults:
-   - Fund name: "ChipX AI Fund"
-   - Provider: "Chip"
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| user_id | uuid | Owner |
+| tracked_service_id | uuid | FK (nullable) |
+| service_type | text | 'energy', 'broadband', 'mobile' |
+| provider | text | Compared provider |
+| plan_name | text | Deal name |
+| monthly_cost | numeric | £/month |
+| annual_cost | numeric | £/year |
+| features | jsonb | Speed, data, etc. |
+| source | text | 'manual', 'octopus_api', 'guided' |
+| scanned_at | timestamp | When result was captured |
+| is_best_offer | boolean | Marked as best |
+| created_at | timestamp | Auto |
 
-### 1.4 Manual Investment Setup
+**Table: `cheaper_bills_settings`**
+User preferences for the feature.
 
-**New Component: `InvestmentFormDialog.tsx`**
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| user_id | uuid | Owner (unique) |
+| savings_threshold | numeric | Min £/year to recommend switch (default 50) |
+| preferred_contract_type | text | 'fixed', 'flexible', 'any' |
+| risk_preference | text | 'stable', 'balanced', 'lowest_cost' |
+| scan_frequency | text | 'monthly', 'weekly' |
+| email_notifications | boolean | Send email reports |
+| in_app_notifications | boolean | Show in-app alerts |
+| created_at, updated_at | timestamp | Auto |
 
-Form fields:
-- Fund name (default: "ChipX AI Fund")
-- Provider (default: "Chip")
-- Start date (date picker)
-- Initial lump sum (optional number input)
-- Recurring contribution amount (optional)
-- Recurring frequency (weekly/monthly dropdown)
-- Expected annual return % (default 8%)
-- Risk preset (conservative 5% / medium 8% / aggressive 12%)
-- Notes (textarea)
+**Table: `bill_reports`**
+Stores history of sent reports.
 
-**New Component: `ContributionFormDialog.tsx`**
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| user_id | uuid | Owner |
+| report_date | date | When report was generated |
+| report_type | text | 'monthly', 'contract_ending', 'manual' |
+| content | jsonb | Full report data |
+| sent_via | text | 'email', 'in_app', 'both' |
+| created_at | timestamp | Auto |
 
-For adding ad-hoc deposits/withdrawals/fees:
-- Date
-- Amount
-- Type (deposit/withdrawal/fee/dividend)
-- Notes
+---
 
-**CSV Import for Contributions**
+## Part 2: Page Structure
 
-Add a "Import CSV" button that accepts:
-```csv
-date,amount,type
-2025-01-15,500.00,deposit
-2025-02-15,500.00,deposit
-```
+### Navigation
+Add "Cheaper Bills" to both `AppSidebar.tsx` and `MobileNav.tsx`:
+- Icon: `Percent` or `BadgePoundSterling` from lucide-react
+- Route: `/cheaper-bills`
 
-Parser in `src/lib/investmentCsvParser.ts`
-
-### 1.5 Daily Balance & Projections
-
-**Valuation Logic (Priority Order)**
-
-1. **Manual Entry**: User can log actual portfolio value on any date
-2. **Estimated Value**: When no manual entry exists, calculate using:
-   ```
-   estimated_value = total_contributions * (1 + daily_rate)^days_since_start
-   
-   daily_rate = (1 + annual_return)^(1/365) - 1
-   ```
-
-**Projection Features**
-
-New component: `InvestmentProjections.tsx`
-- Editable expected annual return %
-- Preset buttons: Conservative (5%), Medium (8%), Aggressive (12%)
-- Display projected values at:
-  - 3 months
-  - 6 months
-  - 12 months
-- Show contribution totals vs growth totals
-- Optional: Best-case/worst-case range (±2% from expected)
-
-**Daily Valuation Calculation**
-
-Utility in `src/lib/investmentCalculations.ts`:
-- `calculateDailyValues(contributions, startDate, expectedReturn)` - Returns array of daily estimated values
-- `calculateProjection(currentValue, expectedReturn, months)` - Returns future projected value
-- `calculateContributionTotal(transactions)` - Sum of all deposits minus withdrawals
-
-### 1.6 Investment Page Layout
-
-**File: `src/pages/Investments.tsx`**
+### Page Layout: `src/pages/CheaperBills.tsx`
 
 ```text
-+--------------------------------------------------+
-|  Investments                     [+ Add Investment]
-|--------------------------------------------------+
-|  Portfolio Summary Card                          |
-|  +------------+  +-------------+  +-------------+|
-|  | Total      |  | Current     |  | Total       ||
-|  | Invested   |  | Value       |  | Return      ||
-|  | £5,000     |  | £5,450      |  | +£450 (9%)  ||
-|  +------------+  +-------------+  +-------------+|
-|  | Daily Change: +£12.50 (+0.23%)               ||
-+--------------------------------------------------+
-|  Holdings Table                                  |
-|  [ChipX AI Fund] [Chip] [£5,450] [+9%] [Actions]|
-+--------------------------------------------------+
-|  Performance Chart                               |
-|  [1W] [1M] [3M] [6M] [1Y] [ALL]                 |
-|  ~~~~~~~~~~~~ (line chart) ~~~~~~~~~~~          |
-|  Legend: — Actual  ··· Estimated  --- Projected |
-+--------------------------------------------------+
-|  Contributions List                              |
-|  [15 Jan 2025] [Deposit] [+£500] [Initial]     |
-|  [15 Feb 2025] [Deposit] [+£500] [Monthly]     |
-|  [Add Contribution] [Import CSV]                |
-+--------------------------------------------------+
++----------------------------------------------------------+
+|  Cheaper Bills                        [Run Comparison Scan]
+|----------------------------------------------------------+
+|  Overview Cards Row                                       |
+|  +------------------+  +------------------+  +------------+|
+|  | Est. Savings     |  | Next Contract    |  | Last Scan  ||
+|  | £156/year        |  | EE Mobile        |  | 3 days ago ||
+|  | available        |  | ends 15 Mar      |  | Don't      ||
+|  +------------------+  +------------------+  | Switch     ||
+|                                              +------------+|
++----------------------------------------------------------+
+|  Tabs: [Energy] [Broadband] [Mobile] [Other]             |
+|----------------------------------------------------------+
+|  Energy Tab:                                              |
+|  +------------------------------------------------------+|
+|  | Current Tariff: British Gas SVT                      ||
+|  | Monthly: £145 | Unit: 28.4p/kWh | Standing: 54p/day  ||
+|  | Contract: Variable (rolling)                          ||
+|  | [Edit Tariff] [View Usage] [Find Better Deal]        ||
+|  +------------------------------------------------------+|
+|                                                           |
+|  Usage Summary (last 30 days):                           |
+|  ~~~~~~~~~~~~ (bar chart - daily kWh) ~~~~~~~~~~~        |
+|  Total: 342 kWh | Est. Cost: £97.13                      |
+|  [Add Reading] [Import CSV]                              |
+|                                                           |
+|  Best Offers Found:                                       |
+|  +------------------------------------------------------+|
+|  | Octopus Flexible | £128/mo | Save £204/yr | [Compare]||
+|  | EDF Fix 24      | £131/mo | Save £168/yr | [Compare] ||
+|  +------------------------------------------------------+|
+|                                                           |
+|  AI Insights:                                             |
+|  "Your usage peaks on weekday evenings. A time-of-use    |
+|  tariff could save you ~£15/month based on your pattern."|
+|----------------------------------------------------------+
 ```
 
-### 1.7 Performance Chart
+---
 
-**Component: `InvestmentPerformanceChart.tsx`**
+## Part 3: Components
 
-Using Recharts (already installed):
-- Time range buttons: 1W, 1M, 3M, 6M, 1Y, ALL
-- Line types:
-  - **Solid line**: Actual manual-entered values
-  - **Dotted line**: Estimated daily values (interpolated)
-  - **Dashed line**: Future projections
-- Clear visual distinction with legend
+### Overview Components
+- `src/components/cheaper-bills/SavingsOverviewCard.tsx` - Total potential savings
+- `src/components/cheaper-bills/NextContractCard.tsx` - Soonest contract ending
+- `src/components/cheaper-bills/LastScanCard.tsx` - Last scan result
+
+### Service Management
+- `src/components/cheaper-bills/ServiceCard.tsx` - Individual service display
+- `src/components/cheaper-bills/ServiceFormDialog.tsx` - Add/edit service
+- `src/components/cheaper-bills/ServiceList.tsx` - List of tracked services
+
+### Energy Specific
+- `src/components/cheaper-bills/EnergyUsageChart.tsx` - Daily/monthly consumption
+- `src/components/cheaper-bills/TariffFormDialog.tsx` - Add/edit tariff details
+- `src/components/cheaper-bills/ReadingFormDialog.tsx` - Manual reading entry
+- `src/components/cheaper-bills/CsvImportDialog.tsx` - Import readings from CSV
+- `src/components/cheaper-bills/EnergyDashboard.tsx` - Combined energy view
+
+### Comparison
+- `src/components/cheaper-bills/ComparisonResultCard.tsx` - Single offer display
+- `src/components/cheaper-bills/ComparisonDialog.tsx` - Run comparison flow
+- `src/components/cheaper-bills/GuidedComparisonPanel.tsx` - Deep-link to comparison sites
+- `src/components/cheaper-bills/SwitchChecklist.tsx` - What to expect when switching
+
+### AI Assistant
+- `src/components/cheaper-bills/BillsAssistant.tsx` - AI chat/insights panel
+- `src/components/cheaper-bills/UsageInsights.tsx` - AI-generated usage analysis
+
+### Settings
+- `src/components/cheaper-bills/CheaperBillsSettings.tsx` - Preferences card
 
 ---
 
-## Part 2: Gmail Receipt Integration
+## Part 4: Hooks
 
-### 2.1 Important Note on OAuth
-
-Gmail integration requires Google OAuth with the `gmail.readonly` scope. This project uses Lovable Cloud authentication, which supports Google OAuth for sign-in. However, Gmail API access requires additional scopes beyond basic sign-in.
-
-**Approach**: Create a dedicated Gmail connection flow that:
-1. Uses Google OAuth with extended scopes (gmail.readonly)
-2. Stores the refresh token securely in the database
-3. Edge function handles token refresh and API calls
-
-### 2.2 Database Schema for Gmail
-
-**Table: `gmail_connections`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid | Primary key |
-| user_id | uuid | Owner (unique) |
-| email | text | Connected Gmail address |
-| access_token | text | Encrypted short-lived token |
-| refresh_token | text | Encrypted refresh token |
-| token_expires_at | timestamp | When access token expires |
-| last_synced_at | timestamp | Last successful sync |
-| status | text | "active", "error", "revoked" |
-| created_at, updated_at | timestamp | Auto |
-
-**Table: `gmail_receipts`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid | Primary key |
-| user_id | uuid | Owner |
-| gmail_connection_id | uuid | FK to gmail_connections |
-| message_id | text | Gmail message ID (unique) |
-| subject | text | Email subject |
-| from_email | text | Sender email |
-| received_at | timestamp | When email was received |
-| merchant_name | text | Extracted merchant |
-| amount | numeric | Extracted amount (nullable) |
-| order_reference | text | Order/invoice number (nullable) |
-| attachment_path | text | Path in storage bucket (nullable) |
-| attachment_type | text | "pdf", "image", or null |
-| match_status | text | "matched", "pending", "no_match", "review" |
-| matched_transaction_id | uuid | FK to transactions (nullable) |
-| match_confidence | text | "high", "medium", "low" |
-| matched_at | timestamp | When match was made |
-| created_at | timestamp | Auto |
-
-**Table: `gmail_sync_settings`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid | Primary key |
-| user_id | uuid | Owner (unique) |
-| auto_attach | boolean | Default true |
-| scan_days | integer | Default 30 |
-| allowed_domains | text[] | Optional domain whitelist |
-| created_at, updated_at | timestamp | Auto |
-
-**Table: `gmail_match_log`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid | Primary key |
-| user_id | uuid | Owner |
-| receipt_id | uuid | FK to gmail_receipts |
-| transaction_id | uuid | FK to transactions |
-| action | text | "auto_matched", "manual_matched", "rejected" |
-| match_reasons | jsonb | Array of reason strings |
-| created_at | timestamp | Auto |
-
-### 2.3 Edge Function: `gmail-oauth`
-
-Handles the OAuth flow:
-1. Generate OAuth URL with gmail.readonly scope
-2. Handle callback with authorization code
-3. Exchange code for tokens
-4. Store encrypted tokens in database
-
-### 2.4 Edge Function: `gmail-sync-receipts`
-
-Main sync function:
-1. Refresh access token if expired
-2. Search Gmail for receipt-like emails:
-   - Keywords: "receipt", "order confirmation", "invoice", "thank you for your order", "payment received"
-   - Common senders: Amazon, Tesco, PayPal, etc.
-   - Date range: Last X days (from settings)
-3. For each matching email:
-   - Extract merchant name from sender/subject
-   - Extract amount using regex patterns
-   - Extract order reference
-   - Download PDF/image attachments
-   - Store in `gmail_receipts` table
-4. Run matching algorithm against transactions
-5. Auto-attach high-confidence matches
-6. Mark medium-confidence as "review"
-
-### 2.5 Receipt Matching Algorithm
-
-**File: `src/lib/receiptMatcher.ts`**
-
-Matching criteria (similar to existing `transactionMatcher.ts`):
-
-| Factor | Score |
-|--------|-------|
-| Exact amount match | +40 |
-| Amount within ±£0.50 | +25 |
-| Same day | +30 |
-| Within 1-3 days | +15-25 |
-| Merchant name match | +30 |
-| Same payment method (if detectable) | +10 |
-
-Confidence levels:
-- **High** (score >= 80): Auto-attach
-- **Medium** (score >= 50): Mark for review
-- **Low** (score < 50): No match
-
-**Edge Cases Handled**:
-- Duplicate emails: Track message_id to prevent re-processing
-- Split payments: Flag if amount partially matches
-- Multiple same-amount transactions: Mark as "review" instead of auto-matching
-- Currency differences: Only match GBP amounts
-- Partial refunds: Detect "refund" in subject, don't auto-match
-
-### 2.6 UI Components for Gmail Integration
-
-**Settings Tab: `GmailSettings.tsx`**
-
-Add to Settings page:
-- Connect/Disconnect Gmail button
-- Connection status display
-- Toggle: Auto-attach receipts ON/OFF
-- Slider: Scan last X days (7-90)
-- Optional: Allowed sender domains list
-- View sync log button
-
-**Transaction List Enhancement**
-
-Modify `TransactionList.tsx`:
-- Show "Receipt attached" badge with paperclip icon
-- "View" button opens receipt preview
-- If no receipt but potential matches exist: "Find Receipt" action
-- Dropdown action: "Match Receipt Manually"
-
-**New Component: `ReceiptMatchDialog.tsx`**
-
-For manual matching and review:
-- Shows transaction details
-- Lists potential receipts with match scores
-- Preview receipt attachment
-- Confirm match or dismiss
-
-**New Component: `ReceiptReviewPanel.tsx`**
-
-For reviewing medium-confidence matches:
-- List of receipts pending review
-- Side-by-side: receipt info + suggested transaction
-- Accept/Reject buttons
-- Bulk actions
-
-### 2.7 Trigger on Open Banking Sync
-
-When `truelayer-sync` pulls new transactions:
-1. After successful sync, trigger receipt matching
-2. Add to existing edge function or create separate trigger
-3. Only match transactions without existing receipts
+| Hook | Purpose |
+|------|---------|
+| `useTrackedServices.ts` | CRUD for tracked services |
+| `useEnergyReadings.ts` | CRUD for energy readings + aggregations |
+| `useEnergyTariffs.ts` | CRUD for tariff info |
+| `useComparisonResults.ts` | Fetch/store comparison data |
+| `useCheaperBillsSettings.ts` | User preferences |
+| `useBillReports.ts` | Report history |
+| `useBillsAssistant.ts` | AI assistant interactions |
 
 ---
 
-## Part 3: Implementation Order
+## Part 5: Edge Functions
 
-### Phase 1: Investments Page (Core)
-1. Create database tables (migration)
-2. Add navigation items
-3. Create hooks: `useInvestments.ts`, `useInvestmentTransactions.ts`
-4. Build page layout with summary card
-5. Implement `InvestmentFormDialog.tsx`
-6. Implement `ContributionFormDialog.tsx`
+### `compare-energy-deals/index.ts`
+Uses the Octopus Energy API (if available - it's public) or provides a guided comparison flow.
 
-### Phase 2: Investments (Calculations & Charts)
-7. Create `investmentCalculations.ts` utility
-8. Build `InvestmentPerformanceChart.tsx`
-9. Implement projections display
-10. Add CSV import for contributions
+**Logic:**
+1. Accept user's tariff details and consumption
+2. If Octopus API available: fetch current tariffs, calculate costs
+3. Generate comparison results with projected annual cost
+4. Apply user's savings threshold to make recommendation
+5. Store results in `comparison_results`
 
-### Phase 3: Gmail Integration (Foundation)
-11. Create Gmail database tables (migration)
-12. Build `gmail-oauth` edge function
-13. Create `GmailSettings.tsx` component
-14. Add Gmail tab to Settings page
+**Octopus API Note:** Octopus Energy has a public API that doesn't require authentication for tariff data. We can use this to get real rates.
 
-### Phase 4: Gmail Integration (Sync & Match)
-15. Build `gmail-sync-receipts` edge function
-16. Create `receiptMatcher.ts` utility
-17. Update `TransactionList.tsx` with receipt badges
-18. Create `ReceiptMatchDialog.tsx`
-19. Create `ReceiptReviewPanel.tsx`
+### `send-bill-report/index.ts`
+Sends monthly email reports using Resend.
 
-### Phase 5: Polish & Integration
-20. Connect Gmail sync to Open Banking trigger
-21. Add audit logging
-22. Test all edge cases
-23. Mobile optimization
+**Flow:**
+1. Triggered monthly (via pg_cron) or 30 days before contract ends
+2. Gather: current services, latest comparison results, usage summary
+3. Format email with summary and recommendations
+4. Send via Resend
+5. Log in `bill_reports` table
+
+### `analyze-usage-ai/index.ts`
+AI-powered usage analysis.
+
+**Uses Lovable AI** (`google/gemini-2.5-flash`) to:
+1. Analyze consumption patterns
+2. Identify peaks, baselines, anomalies
+3. Suggest simple reduction tips
+4. Answer user questions about bills
 
 ---
 
-## Technical Details
+## Part 6: Energy Auto-Tracking
 
-### Files to Create
+### Smart Meter Integration
+Most smart meter platforms (IHD apps like Chameleon, Bright) don't have public APIs. Implementation approach:
 
+**Option 1: n3rgy Consumer Access**
+The UK's n3rgy service provides free access to smart meter data with user consent. Requires user to authorize via DCC (Data Communications Company).
+
+**Option 2: Manual/CSV Fallback (Primary)**
+- Manual entry form for monthly readings
+- CSV import supporting common export formats:
+  - Columns: date, electricity_kwh, gas_kwh, cost
+  - Auto-detect column order
+
+### SmartThings Integration (Optional)
+If user has SmartThings energy monitor, could potentially use their API. Mark as "coming soon" initially.
+
+---
+
+## Part 7: Comparison Flow (Safe Approach)
+
+Since comparison sites block automation:
+
+### Guided Comparison Flow
+1. User clicks "Find Better Deal"
+2. System generates a "comparison-ready summary":
+   - Annual consumption (kWh)
+   - Current annual cost
+   - Postcode
+   - Current provider
+3. Display deep-links to comparison sites:
+   - **Energy:** Uswitch, Compare the Market, Money Saving Expert
+   - **Broadband:** Uswitch, Broadband Choices
+   - **Mobile:** Uswitch, Compare the Market
+4. Pre-fill what's allowed in URL params
+5. Provide copy-paste box for other fields
+6. After user returns, prompt to log the best offer found
+
+### API-Based (Where Available)
+- **Octopus Energy:** Public tariff API for electricity/gas rates
+- Others: Guided approach only
+
+---
+
+## Part 8: Recommendation Logic
+
+### Switch Recommendation Algorithm
+
+```typescript
+function shouldSwitch(
+  currentAnnualCost: number,
+  bestOfferAnnualCost: number,
+  exitFee: number,
+  savingsThreshold: number,
+  riskPreference: 'stable' | 'balanced' | 'lowest_cost'
+): { recommend: boolean; reason: string } {
+  const grossSavings = currentAnnualCost - bestOfferAnnualCost;
+  const netSavings = grossSavings - exitFee;
+  
+  // Don't switch if net savings below threshold
+  if (netSavings < savingsThreshold) {
+    return { 
+      recommend: false, 
+      reason: `Net savings (£${netSavings.toFixed(0)}) below your £${savingsThreshold} threshold` 
+    };
+  }
+  
+  // Risk preference adjustments
+  if (riskPreference === 'stable' && !bestOffer.isFixed) {
+    return {
+      recommend: false,
+      reason: "Variable tariff doesn't match your preference for stable bills"
+    };
+  }
+  
+  return {
+    recommend: true,
+    reason: `Switch to save £${netSavings.toFixed(0)}/year after exit fees`
+  };
+}
+```
+
+---
+
+## Part 9: Monthly Email Report
+
+### Email Content Structure
+```
+Subject: Your Cheaper Bills Report - February 2026
+
+SUMMARY
+-------
+Potential savings this month: £156/year across all services
+
+ENERGY
+------
+Current: British Gas SVT - £145/mo
+Best offer: Octopus Flexible - £128/mo
+Savings: £204/year
+Last 30 days usage: 342 kWh (£97.13)
+Recommendation: SWITCH ✓
+
+BROADBAND
+---------
+Provider: BT Full Fibre
+Contract ends: 15 April 2026 (67 days away)
+Action: Start comparing deals now
+
+MOBILE (EE)
+-----------
+Contract ends: 15 March 2026 (36 days away)
+Current: £45/mo for 50GB
+Action: Review SIM-only deals
+
+NEXT STEPS
+----------
+1. Switch energy via [link to app]
+2. Set reminder for broadband renewal
+3. Check EE retention offers
+
+[View Full Report in App]
+```
+
+### Email Trigger Rules
+- Monthly: 1st of each month
+- Contract ending: 30 days before end date
+- Prevent duplicates: Check `bill_reports` for existing report in period
+
+---
+
+## Part 10: AI Assistant
+
+### Implementation
+Component: `BillsAssistant.tsx`
+
+**Features:**
+1. **Usage Analysis**
+   - Identify consumption spikes
+   - Calculate baseline usage
+   - Estimate waste/inefficiency
+
+2. **Simple Reduction Tips**
+   - Based on usage patterns
+   - Low-effort suggestions only
+   - e.g., "Your evening usage is 40% higher than morning - consider shifting laundry to off-peak"
+
+3. **Smart Questions**
+   - Only asks when genuinely needed
+   - e.g., "I don't have your gas standing charge - what's the daily rate?"
+
+**Prompt Pattern:**
+```
+You are a helpful energy and bills assistant. Analyze the user's consumption data and provide insights.
+
+Rules:
+- Be concise and actionable
+- Focus on low-effort savings
+- Don't recommend major lifestyle changes
+- Ask questions only when missing critical info
+- Explain costs in simple terms
+
+User's data:
+- Monthly consumption: {kWh}
+- Current tariff: {details}
+- Usage patterns: {daily breakdown}
+```
+
+---
+
+## Part 11: Settings
+
+Add settings under Cheaper Bills page (or Settings tab):
+
+| Setting | Default | Options |
+|---------|---------|---------|
+| Savings threshold | £50/year | £25, £50, £75, £100, custom |
+| Preferred contract | Any | Fixed, Flexible, Any |
+| Risk preference | Balanced | Stable, Balanced, Lowest Cost |
+| Scan frequency | Monthly | Weekly, Monthly, Manual only |
+| Email notifications | ON | ON/OFF |
+| In-app notifications | ON | ON/OFF |
+
+---
+
+## Part 12: Edge Cases
+
+| Scenario | Handling |
+|----------|----------|
+| No smart meter data | Manual entry + CSV import prominent |
+| Multiple meters | Support multiple energy tariff records |
+| Moving house | "Move date" field, archive old data |
+| New tariff mid-month | Pro-rata calculation |
+| Intro offers expiring | Track fix_end_date, warn 60 days before |
+| Exit fees | Factor into net savings calculation |
+| Duplicate reminders | Dedupe by report_type + period in `bill_reports` |
+| No email configured | Resend requires RESEND_API_KEY secret |
+
+---
+
+## Part 13: Auto-Detection from Transactions
+
+### Integration with Gmail/Transactions
+Leverage existing receipt scanning to detect:
+- Provider payments (British Gas, EDF, EE, BT, etc.)
+- Contract renewal patterns
+- Price changes
+
+**Logic:**
+1. Scan transactions for utility provider names
+2. Track payment amounts over time
+3. Detect significant changes (>10% increase)
+4. Suggest adding to tracked services if not already tracked
+
+---
+
+## Part 14: Calendar Integration (Optional)
+
+Add calendar reminders for contract end dates:
+- Button: "Add to Calendar" on service card
+- Generate .ics file download
+- Reminder 30, 14, 7 days before
+
+---
+
+## Part 15: Files to Create
+
+### Pages
 | File | Purpose |
 |------|---------|
-| `src/pages/Investments.tsx` | Main investments page |
-| `src/hooks/useInvestments.ts` | Investment accounts CRUD |
-| `src/hooks/useInvestmentTransactions.ts` | Contributions CRUD |
-| `src/hooks/useInvestmentValuations.ts` | Valuations CRUD |
-| `src/hooks/useGmailConnection.ts` | Gmail OAuth state |
-| `src/hooks/useGmailReceipts.ts` | Receipt sync & matching |
-| `src/lib/investmentCalculations.ts` | Projection math |
-| `src/lib/investmentCsvParser.ts` | CSV import |
-| `src/lib/receiptMatcher.ts` | Receipt matching algorithm |
-| `src/components/investments/InvestmentFormDialog.tsx` | Add/edit investment |
-| `src/components/investments/InvestmentCard.tsx` | Single holding display |
-| `src/components/investments/ContributionFormDialog.tsx` | Add contribution |
-| `src/components/investments/ContributionList.tsx` | Transaction history |
-| `src/components/investments/InvestmentPerformanceChart.tsx` | Chart component |
-| `src/components/investments/ProjectionCard.tsx` | Projections display |
-| `src/components/investments/CsvImportDialog.tsx` | CSV upload |
-| `src/components/settings/GmailSettings.tsx` | Gmail connection settings |
-| `src/components/transactions/ReceiptBadge.tsx` | Receipt status badge |
-| `src/components/transactions/ReceiptMatchDialog.tsx` | Manual matching |
-| `supabase/functions/gmail-oauth/index.ts` | OAuth handler |
-| `supabase/functions/gmail-sync-receipts/index.ts` | Receipt sync |
+| `src/pages/CheaperBills.tsx` | Main page |
+
+### Components (18 files)
+| File | Purpose |
+|------|---------|
+| `src/components/cheaper-bills/SavingsOverviewCard.tsx` | Total savings display |
+| `src/components/cheaper-bills/NextContractCard.tsx` | Soonest expiring contract |
+| `src/components/cheaper-bills/LastScanCard.tsx` | Last scan status |
+| `src/components/cheaper-bills/ServiceCard.tsx` | Individual service row |
+| `src/components/cheaper-bills/ServiceFormDialog.tsx` | Add/edit service |
+| `src/components/cheaper-bills/ServiceList.tsx` | Service list container |
+| `src/components/cheaper-bills/EnergyUsageChart.tsx` | Consumption chart |
+| `src/components/cheaper-bills/TariffFormDialog.tsx` | Tariff details form |
+| `src/components/cheaper-bills/ReadingFormDialog.tsx` | Manual reading entry |
+| `src/components/cheaper-bills/EnergyCsvImportDialog.tsx` | CSV import |
+| `src/components/cheaper-bills/EnergyDashboard.tsx` | Energy tab content |
+| `src/components/cheaper-bills/ComparisonResultCard.tsx` | Offer display |
+| `src/components/cheaper-bills/GuidedComparisonPanel.tsx` | Comparison deep-links |
+| `src/components/cheaper-bills/SwitchChecklist.tsx` | Switch guidance |
+| `src/components/cheaper-bills/BillsAssistant.tsx` | AI assistant |
+| `src/components/cheaper-bills/UsageInsights.tsx` | AI insights display |
+| `src/components/cheaper-bills/CheaperBillsSettings.tsx` | Settings form |
+| `src/components/cheaper-bills/BillHealthScore.tsx` | Competitiveness score |
+
+### Hooks (7 files)
+| File | Purpose |
+|------|---------|
+| `src/hooks/useTrackedServices.ts` | Services CRUD |
+| `src/hooks/useEnergyReadings.ts` | Readings CRUD |
+| `src/hooks/useEnergyTariffs.ts` | Tariffs CRUD |
+| `src/hooks/useComparisonResults.ts` | Comparison data |
+| `src/hooks/useCheaperBillsSettings.ts` | Settings |
+| `src/hooks/useBillReports.ts` | Report history |
+| `src/hooks/useBillsAssistant.ts` | AI chat |
+
+### Utilities (2 files)
+| File | Purpose |
+|------|---------|
+| `src/lib/billsCalculations.ts` | Cost projections, savings |
+| `src/lib/energyCsvParser.ts` | Parse CSV imports |
+
+### Edge Functions (3 files)
+| File | Purpose |
+|------|---------|
+| `supabase/functions/compare-energy-deals/index.ts` | Fetch Octopus rates, compare |
+| `supabase/functions/send-bill-report/index.ts` | Monthly email via Resend |
+| `supabase/functions/analyze-usage-ai/index.ts` | AI usage analysis |
 
 ### Files to Modify
-
 | File | Changes |
 |------|---------|
-| `src/App.tsx` | Add /investments route |
-| `src/components/layout/AppSidebar.tsx` | Add Investments nav item |
-| `src/components/layout/MobileNav.tsx` | Add Investments nav item |
-| `src/pages/Settings.tsx` | Add Gmail tab |
-| `src/components/transactions/TransactionList.tsx` | Add receipt badges & actions |
-| `supabase/config.toml` | Add new edge functions |
-| `supabase/functions/truelayer-sync/index.ts` | Trigger receipt matching |
+| `src/App.tsx` | Add /cheaper-bills route |
+| `src/components/layout/AppSidebar.tsx` | Add nav item |
+| `src/components/layout/MobileNav.tsx` | Add nav item |
+| `supabase/config.toml` | Add edge function configs |
 
 ---
 
-## Storage Requirements
+## Part 16: Implementation Phases
 
-Create a new private storage bucket:
-- **Bucket name**: `gmail-receipts`
-- **Public**: No
-- **File path format**: `{user_id}/{receipt_id}.{ext}`
-- **Allowed types**: PDF, JPG, PNG, WebP
+### Phase 1: Core Structure
+1. Database migration for all tables
+2. Navigation updates
+3. Basic page layout with tabs
+4. Service tracking CRUD (hooks + dialogs)
+
+### Phase 2: Energy Feature
+5. Energy readings form + CSV import
+6. Tariff management
+7. Usage chart
+8. Octopus API integration for comparison
+
+### Phase 3: Comparison & Recommendations
+9. Guided comparison flow
+10. Recommendation algorithm
+11. Comparison results display
+12. Bill health score
+
+### Phase 4: AI Assistant
+13. Usage analysis edge function
+14. BillsAssistant component
+15. Insights display
+
+### Phase 5: Email Reports
+16. RESEND_API_KEY secret (user provides)
+17. send-bill-report edge function
+18. Report history
+19. pg_cron schedule (manual SQL)
+
+### Phase 6: Polish
+20. Calendar .ics export
+21. Transaction auto-detection
+22. Mobile optimization
+23. End-to-end testing
 
 ---
 
-## Security Considerations
+## Part 17: Prerequisites
 
-1. **Gmail tokens**: Store encrypted, refresh automatically
-2. **RLS policies**: All new tables have user_id-based policies
-3. **Edge functions**: Verify JWT before processing
-4. **Attachments**: Private bucket with signed URLs
-5. **Match logging**: Full audit trail for transparency
+### Required Secrets
+- `RESEND_API_KEY` - For sending email reports (user must configure)
+
+### Optional APIs
+- **Octopus Energy API** - Public, no auth needed for tariff data
+- **n3rgy Consumer Access** - Smart meter data (requires user consent flow)
+
+---
+
+## Part 18: Testing Checklist
+
+After implementation:
+- [ ] Add a tracked energy service with tariff details
+- [ ] Manually enter 30 days of readings
+- [ ] Import readings via CSV
+- [ ] Run comparison scan
+- [ ] Verify recommendation logic with different thresholds
+- [ ] Test AI assistant with usage questions
+- [ ] Verify email report sends (requires RESEND_API_KEY)
+- [ ] Test mobile responsiveness
+- [ ] Verify existing Investments page works correctly
+- [ ] Test Gmail receipt integration end-to-end
