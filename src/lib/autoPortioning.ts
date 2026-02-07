@@ -804,11 +804,18 @@ export function calculateDayPortions(
   let totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
   
   // Collect all editable items across meals for global adjustment
-  const allEditables: { item: EditableItem; grams: number }[] = [];
+  // FILTER OUT constrained items (sauces, seasonings, breakfast toppers) - they have fixed portions
+  const allEditables: { item: EditableItem; grams: number; mealType: MealType }[] = [];
   activeMeals.forEach(mealType => {
     editableByMeal[mealType].forEach(item => {
+      // Skip sauces/seasonings - they have fixed smart portions
+      if (isSauceOrSeasoning(item.product)) return;
+      
+      // Skip breakfast toppers - they have fixed 25-40g range
+      if (mealType === "breakfast" && getBreakfastRole(item.product) === "topper") return;
+      
       const currentGrams = allItemGrams.get(item.itemId) || 0;
-      allEditables.push({ item, grams: currentGrams });
+      allEditables.push({ item, grams: currentGrams, mealType });
     });
   });
 
@@ -827,7 +834,7 @@ export function calculateDayPortions(
       break;
     }
     
-    // === Adjust protein ===
+    // === Adjust protein (direction-aware) ===
     if (Math.abs(proErr) >= 0.3) {
       const proteinSources = allEditables
         .filter(e => isHighProteinSource(e.item.product) && e.item.proteinPer100g > 5)
@@ -837,7 +844,11 @@ export function calculateDayPortions(
         const best = proteinSources[0];
         const adjustment = (proErr / best.item.proteinPer100g) * 100;
         const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-        const newGrams = Math.max(settings.minGrams, Math.min(settings.maxGrams, currentGrams + adjustment));
+        const maxForItem = getMaxPortion(best.item.product, settings);
+        
+        // Direction-aware: only increase if under, only decrease if over
+        let newGrams = currentGrams + adjustment;
+        newGrams = Math.max(settings.minGrams, Math.min(maxForItem, newGrams));
         allItemGrams.set(best.item.itemId, Math.round(newGrams * 10) / 10);
       }
     }
@@ -845,7 +856,7 @@ export function calculateDayPortions(
     // Recalculate
     totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
     
-    // === Adjust carbs (using high-carb, low-protein items) ===
+    // === Adjust carbs (using high-carb, low-protein items, direction-aware) ===
     const carbErrAfter = dailyTargets.carbs - totalAchieved.carbs;
     if (Math.abs(carbErrAfter) >= 0.3) {
       const carbSources = allEditables
@@ -856,7 +867,10 @@ export function calculateDayPortions(
         const best = carbSources[0];
         const adjustment = (carbErrAfter / best.item.carbsPer100g) * 100;
         const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-        const newGrams = Math.max(settings.minGrams, Math.min(settings.maxGrams, currentGrams + adjustment));
+        const maxForItem = getMaxPortion(best.item.product, settings);
+        
+        let newGrams = currentGrams + adjustment;
+        newGrams = Math.max(settings.minGrams, Math.min(maxForItem, newGrams));
         allItemGrams.set(best.item.itemId, Math.round(newGrams * 10) / 10);
       }
     }
@@ -864,7 +878,7 @@ export function calculateDayPortions(
     // Recalculate
     totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
     
-    // === Adjust fat ===
+    // === Adjust fat (direction-aware) ===
     const fatErrAfter = dailyTargets.fat - totalAchieved.fat;
     if (Math.abs(fatErrAfter) >= 0.3) {
       const fatSources = allEditables
@@ -875,7 +889,10 @@ export function calculateDayPortions(
         const best = fatSources[0];
         const adjustment = (fatErrAfter / best.item.fatPer100g) * 100;
         const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-        const newGrams = Math.max(settings.minGrams, Math.min(settings.maxGrams, currentGrams + adjustment));
+        const maxForItem = getMaxPortion(best.item.product, settings);
+        
+        let newGrams = currentGrams + adjustment;
+        newGrams = Math.max(settings.minGrams, Math.min(maxForItem, newGrams));
         allItemGrams.set(best.item.itemId, Math.round(newGrams * 10) / 10);
       }
     }
@@ -883,7 +900,7 @@ export function calculateDayPortions(
     // Recalculate
     totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
     
-    // === Final calorie adjustment (using low-protein items to preserve protein) ===
+    // === Final calorie adjustment (direction-aware, using low-protein items) ===
     const calErrAfter = dailyTargets.calories - totalAchieved.calories;
     if (Math.abs(calErrAfter) >= 0.5) {
       // Find item with good calories but low protein impact
@@ -895,11 +912,34 @@ export function calculateDayPortions(
         const best = calSources[0];
         const adjustment = (calErrAfter / best.item.caloriesPer100g) * 100;
         const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-        const newGrams = Math.max(settings.minGrams, Math.min(settings.maxGrams, currentGrams + adjustment));
+        const maxForItem = getMaxPortion(best.item.product, settings);
+        
+        let newGrams = currentGrams + adjustment;
+        newGrams = Math.max(settings.minGrams, Math.min(maxForItem, newGrams));
         allItemGrams.set(best.item.itemId, Math.round(newGrams * 10) / 10);
       }
     }
   }
+
+  // === FINAL VALIDATION PASS: Ensure no item exceeds its max portion ===
+  allEditables.forEach(({ item }) => {
+    const currentGrams = allItemGrams.get(item.itemId) || 0;
+    const maxForItem = getMaxPortion(item.product, settings);
+    if (currentGrams > maxForItem) {
+      allItemGrams.set(item.itemId, maxForItem);
+    }
+  });
+  
+  // Also validate sauces/seasonings and toppers that were excluded from global adjustment
+  activeMeals.forEach(mealType => {
+    editableByMeal[mealType].forEach(item => {
+      const currentGrams = allItemGrams.get(item.itemId) || 0;
+      const maxForItem = getMaxPortion(item.product, settings);
+      if (currentGrams > maxForItem) {
+        allItemGrams.set(item.itemId, maxForItem);
+      }
+    });
+  });
 
   // Final calculation
   totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
