@@ -1126,8 +1126,8 @@ export function calculateDayPortions(
     });
   });
 
-  // Global precision passes (up to 30 iterations)
-  for (let globalPass = 0; globalPass < 30; globalPass++) {
+  // Global precision passes (up to 50 iterations for tighter convergence)
+  for (let globalPass = 0; globalPass < 50; globalPass++) {
     totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
     
     const proErr = dailyTargets.protein - totalAchieved.protein;
@@ -1314,10 +1314,10 @@ export function calculateDayPortions(
     // Step 2: ITERATIVE PRECISION LOOP - run until ALL macros within ±1g
     // This replaces the single-pass ±1g adjustment with calculated exact corrections
     
-    const MAX_PRECISION_ITERATIONS = 50;
+    const MAX_PRECISION_ITERATIONS = 100;  // Increased from 50 for tighter macro constraints
     const MACRO_TOLERANCE = 1.0;  // ±1g for protein, carbs, fat
     const CAL_TOLERANCE = 5.0;    // ±5 kcal for calories
-    const MAX_STEP_SIZE = 25;     // Max gram adjustment per iteration to avoid oscillation
+    const MAX_STEP_SIZE = 20;     // Reduced from 25 for finer adjustments near target
     
     // Filter items available for rebalancing (exclude sauces, fruit)
     // INCLUDE granola toppers (they're valuable fat knobs)
@@ -1386,12 +1386,12 @@ export function calculateDayPortions(
         break; // Success! All targets hit
       }
       
-      // Track progress to detect oscillation
+      // Track progress to detect oscillation - use tighter threshold
       const totalError = Math.abs(proErr) + Math.abs(carbErr) + Math.abs(fatErr);
-      if (totalError >= lastTotalError - 0.1) {
+      if (totalError >= lastTotalError - 0.05) {
         noProgressCount++;
-        if (noProgressCount > 10) {
-          // No progress for 10 iterations - break to avoid infinite loop
+        if (noProgressCount > 15) {
+          // No progress for 15 iterations - break to avoid infinite loop
           break;
         }
       } else {
