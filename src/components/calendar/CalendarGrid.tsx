@@ -8,6 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface CalendarGridProps {
   days: CalendarDay[];
@@ -15,17 +16,22 @@ interface CalendarGridProps {
   onSelectDate?: (date: Date) => void;
 }
 
-const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Full weekday names for desktop, abbreviated for mobile
+const weekDaysFull = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const weekDaysMobile = ["M", "T", "W", "T", "F", "S", "S"];
 
 export function CalendarGrid({ days, selectedDate, onSelectDate }: CalendarGridProps) {
+  const isMobile = useIsMobile();
+  const weekDays = isMobile ? weekDaysMobile : weekDaysFull;
+
   return (
     <div className="border rounded-lg overflow-hidden">
       {/* Week day headers */}
       <div className="grid grid-cols-7 bg-muted/50">
-        {weekDays.map((day) => (
+        {weekDays.map((day, index) => (
           <div
-            key={day}
-            className="py-2 text-center text-sm font-medium text-muted-foreground border-b"
+            key={index}
+            className="py-2 text-center text-xs sm:text-sm font-medium text-muted-foreground border-b"
           >
             {day}
           </div>
@@ -40,6 +46,7 @@ export function CalendarGrid({ days, selectedDate, onSelectDate }: CalendarGridP
             day={day}
             isSelected={selectedDate ? isSameDay(day.date, selectedDate) : false}
             onClick={() => onSelectDate?.(day.date)}
+            isMobile={isMobile}
           />
         ))}
       </div>
@@ -51,17 +58,19 @@ interface CalendarCellProps {
   day: CalendarDay;
   isSelected: boolean;
   onClick: () => void;
+  isMobile: boolean;
 }
 
-function CalendarCell({ day, isSelected, onClick }: CalendarCellProps) {
+function CalendarCell({ day, isSelected, onClick, isMobile }: CalendarCellProps) {
   const today = isToday(day.date);
-  const hasBills = day.bills.length > 0;
+  const maxBills = isMobile ? 2 : 3;
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        "min-h-[100px] p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/30",
+        "p-1.5 sm:p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/30",
+        isMobile ? "min-h-[70px]" : "min-h-[100px]",
         !day.isCurrentMonth && "bg-muted/20 text-muted-foreground",
         isSelected && "bg-primary/10 ring-2 ring-primary ring-inset",
         today && "bg-primary/5"
@@ -71,27 +80,27 @@ function CalendarCell({ day, isSelected, onClick }: CalendarCellProps) {
       <div className="flex items-center justify-between mb-1">
         <span
           className={cn(
-            "text-sm font-medium",
-            today && "bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center"
+            "text-xs sm:text-sm font-medium",
+            today && "bg-primary text-primary-foreground rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs"
           )}
         >
           {format(day.date, "d")}
         </span>
         {day.totalAmount > 0 && day.isCurrentMonth && (
-          <span className="text-xs font-semibold text-destructive">
+          <span className="text-[10px] sm:text-xs font-semibold text-destructive">
             £{day.totalAmount.toFixed(0)}
           </span>
         )}
       </div>
 
       {/* Bills */}
-      <div className="space-y-1">
-        {day.bills.slice(0, 3).map((bill) => (
-          <BillPill key={bill.id} bill={bill} />
+      <div className="space-y-0.5 sm:space-y-1">
+        {day.bills.slice(0, maxBills).map((bill) => (
+          <BillPill key={bill.id} bill={bill} compact={isMobile} />
         ))}
-        {day.bills.length > 3 && (
-          <span className="text-xs text-muted-foreground">
-            +{day.bills.length - 3} more
+        {day.bills.length > maxBills && (
+          <span className="text-[10px] sm:text-xs text-muted-foreground">
+            +{day.bills.length - maxBills} more
           </span>
         )}
       </div>
@@ -101,15 +110,17 @@ function CalendarCell({ day, isSelected, onClick }: CalendarCellProps) {
 
 interface BillPillProps {
   bill: CalendarBill;
+  compact?: boolean;
 }
 
-function BillPill({ bill }: BillPillProps) {
+function BillPill({ bill, compact = false }: BillPillProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "text-xs px-1.5 py-0.5 rounded truncate flex items-center gap-1",
+            "rounded truncate flex items-center gap-0.5 sm:gap-1",
+            compact ? "text-[10px] px-1 py-0.5" : "text-xs px-1.5 py-0.5",
             bill.isPaid
               ? "bg-success/20 text-success line-through"
               : "bg-destructive/10 text-destructive"
@@ -118,7 +129,7 @@ function BillPill({ bill }: BillPillProps) {
             borderLeft: bill.categoryColor ? `3px solid ${bill.categoryColor}` : undefined,
           }}
         >
-          {bill.isPaid && <Check className="h-3 w-3 shrink-0" />}
+          {bill.isPaid && <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />}
           <span className="truncate">{bill.name}</span>
         </div>
       </TooltipTrigger>

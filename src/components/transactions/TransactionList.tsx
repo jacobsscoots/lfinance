@@ -119,7 +119,7 @@ function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) 
             <Button
               variant="ghost"
               size="icon"
-              className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+              className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity h-8 w-8"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>

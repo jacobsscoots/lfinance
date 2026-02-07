@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { format, startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMealPlanItems, MealPlan, MealType } from "@/hooks/useMealPlanItems";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { useProducts } from "@/hooks/useProducts";
@@ -15,13 +21,18 @@ import { WeeklySummaryCard } from "./WeeklySummaryCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 const MEAL_TYPES: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
+const DAY_ABBREVS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function WeeklyMealPlanner() {
   const [weekStart, setWeekStart] = useState(() => 
     startOfWeek(new Date(), { weekStartsOn: 1 }) // Monday
   );
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const isMobile = useIsMobile();
   
   const { mealPlans, isLoading, copyFromPreviousWeek } = useMealPlanItems(weekStart);
   const { settings, isLoading: settingsLoading } = useNutritionSettings();
@@ -53,14 +64,14 @@ export function WeeklyMealPlanner() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Week Navigation */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={goToPreviousWeek}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="text-lg font-medium min-w-[200px] text-center">
+          <div className="text-base sm:text-lg font-medium min-w-[180px] sm:min-w-[200px] text-center">
             {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM yyyy")}
           </div>
           <Button variant="outline" size="icon" onClick={goToNextWeek}>
@@ -76,15 +87,34 @@ export function WeeklyMealPlanner() {
           <Badge variant={settings?.mode === "target_based" ? "default" : "secondary"}>
             {settings?.mode === "target_based" ? "Target Mode" : "Manual Mode"}
           </Badge>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => copyFromPreviousWeek.mutate()}
-            disabled={copyFromPreviousWeek.isPending}
-          >
-            <Copy className="h-4 w-4 mr-1" />
-            Copy Previous Week
-          </Button>
+          {isMobile ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover">
+                <DropdownMenuItem 
+                  onClick={() => copyFromPreviousWeek.mutate()}
+                  disabled={copyFromPreviousWeek.isPending}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Previous Week
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => copyFromPreviousWeek.mutate()}
+              disabled={copyFromPreviousWeek.isPending}
+            >
+              <Copy className="h-4 w-4 mr-1" />
+              Copy Previous Week
+            </Button>
+          )}
         </div>
       </div>
 
@@ -106,28 +136,69 @@ export function WeeklyMealPlanner() {
       )}
 
       <Tabs defaultValue="planner">
-        <TabsList>
-          <TabsTrigger value="planner">
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="planner" className="flex-1 sm:flex-none">
             <UtensilsCrossed className="h-4 w-4 mr-2" />
-            Meal Planner
+            <span className="hidden sm:inline">Meal Planner</span>
+            <span className="sm:hidden">Planner</span>
           </TabsTrigger>
-          <TabsTrigger value="grocery">Grocery List</TabsTrigger>
-          <TabsTrigger value="summary">Weekly Summary</TabsTrigger>
+          <TabsTrigger value="grocery" className="flex-1 sm:flex-none">Grocery</TabsTrigger>
+          <TabsTrigger value="summary" className="flex-1 sm:flex-none">Summary</TabsTrigger>
         </TabsList>
 
         <TabsContent value="planner" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-            {mealPlans.map((plan, index) => (
-              <MealDayCard
-                key={plan.id}
-                plan={plan}
-                dayMacros={dayMacros[index]}
-                products={products}
-                settings={settings}
-                weekStart={weekStart}
-              />
-            ))}
-          </div>
+          {isMobile ? (
+            /* Mobile: Day selector + single day view */
+            <div className="space-y-4">
+              {/* Day Selector Strip */}
+              <div className="flex gap-1 overflow-x-auto pb-2">
+                {mealPlans.map((plan, index) => {
+                  const date = new Date(plan.meal_date);
+                  const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
+                  return (
+                    <Button
+                      key={plan.id}
+                      variant={selectedDayIndex === index ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "flex-shrink-0 flex-col h-auto py-2 px-3 min-w-[52px]",
+                        isToday && selectedDayIndex !== index && "border-primary"
+                      )}
+                      onClick={() => setSelectedDayIndex(index)}
+                    >
+                      <span className="text-xs font-normal">{DAY_ABBREVS[index]}</span>
+                      <span className="text-sm font-semibold">{format(date, "d")}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+
+              {/* Single Day Card */}
+              {mealPlans[selectedDayIndex] && (
+                <MealDayCard
+                  plan={mealPlans[selectedDayIndex]}
+                  dayMacros={dayMacros[selectedDayIndex]}
+                  products={products}
+                  settings={settings}
+                  weekStart={weekStart}
+                />
+              )}
+            </div>
+          ) : (
+            /* Desktop: Full week grid */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+              {mealPlans.map((plan, index) => (
+                <MealDayCard
+                  key={plan.id}
+                  plan={plan}
+                  dayMacros={dayMacros[index]}
+                  products={products}
+                  settings={settings}
+                  weekStart={weekStart}
+                />
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="grocery" className="mt-4">

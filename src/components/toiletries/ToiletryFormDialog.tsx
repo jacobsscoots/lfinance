@@ -3,11 +3,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogFooter,
+} from "@/components/ui/responsive-dialog";
 import {
   Form,
   FormControl,
@@ -120,13 +121,13 @@ export function ToiletryFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-[500px]">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
             {isEditing ? "Edit Item" : "Add Toiletry Item"}
-          </DialogTitle>
-        </DialogHeader>
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -144,7 +145,7 @@ export function ToiletryFormDialog({
               )}
             />
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="category"
@@ -157,7 +158,7 @@ export function ToiletryFormDialog({
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent className="bg-popover">
                         {TOILETRY_CATEGORIES.map(cat => (
                           <SelectItem key={cat.value} value={cat.value}>
                             {cat.label}
@@ -182,7 +183,7 @@ export function ToiletryFormDialog({
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent className="bg-popover">
                         {STATUS_OPTIONS.map(status => (
                           <SelectItem key={status.value} value={status.value}>
                             {status.label}
@@ -223,7 +224,7 @@ export function ToiletryFormDialog({
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent className="bg-popover">
                         {SIZE_UNITS.map(unit => (
                           <SelectItem key={unit.value} value={unit.value}>
                             {unit.label}
@@ -237,7 +238,7 @@ export function ToiletryFormDialog({
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="cost_per_item"
@@ -267,7 +268,7 @@ export function ToiletryFormDialog({
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="usage_rate_per_day"
@@ -315,7 +316,7 @@ export function ToiletryFormDialog({
               )}
             />
             
-            <div className="flex justify-end gap-2 pt-4">
+            <ResponsiveDialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -326,10 +327,10 @@ export function ToiletryFormDialog({
               <Button type="submit" disabled={isLoading}>
                 {isEditing ? "Update" : "Add"} Item
               </Button>
-            </div>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

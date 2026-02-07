@@ -17,24 +17,24 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="nutrition" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto">
-            <TabsTrigger value="nutrition" className="flex items-center gap-2">
+          <TabsList className="w-full flex overflow-x-auto h-auto flex-wrap sm:flex-nowrap">
+            <TabsTrigger value="nutrition" className="flex items-center gap-2 flex-1 sm:flex-none">
               <Target className="h-4 w-4" />
               <span className="hidden sm:inline">Nutrition</span>
             </TabsTrigger>
-            <TabsTrigger value="products" className="flex items-center gap-2">
+            <TabsTrigger value="products" className="flex items-center gap-2 flex-1 sm:flex-none">
               <Package className="h-4 w-4" />
               <span className="hidden sm:inline">Products</span>
             </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-2">
+            <TabsTrigger value="categories" className="flex items-center gap-2 flex-1 sm:flex-none">
               <Tag className="h-4 w-4" />
               <span className="hidden sm:inline">Categories</span>
             </TabsTrigger>
-            <TabsTrigger value="payday" className="flex items-center gap-2">
+            <TabsTrigger value="payday" className="flex items-center gap-2 flex-1 sm:flex-none">
               <CalendarDays className="h-4 w-4" />
               <span className="hidden sm:inline">Payday</span>
             </TabsTrigger>
-            <TabsTrigger value="account" className="flex items-center gap-2">
+            <TabsTrigger value="account" className="flex items-center gap-2 flex-1 sm:flex-none">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Account</span>
             </TabsTrigger>
