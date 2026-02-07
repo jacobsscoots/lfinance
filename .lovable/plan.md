@@ -1,273 +1,135 @@
-Settings Module: Payday Rules & Payslip Upload (Safe, Additive)
-Overview
+# Toiletries Module – Enhanced Usage Tracking System (Revised & Locked)
 
-Extend the Settings module with two additive features:
+## Overview
 
-Editable Payday Rules – user-configurable payday date and adjustment logic
+Extend the existing toiletries system with **weight-based usage tracking**, **automatic usage rate calculation**, **reorder forecasting**, **transaction/receipt linking**, and **loyalty discount calculations**.
 
-Payslip Upload & Extraction – upload payslips (PDF/image), extract pay data, and optionally match to income transactions
+This implementation is **strictly additive** and **must not modify** existing balances, transactions, forecasts, or other modules.
 
-⚠️ Hard rule:
-These features must not modify existing balances, transactions, bill logic, or calculations. All changes are opt-in, additive, and reversible.
+---
 
-Feature 1: Editable Payday Rules
-Current State (Baseline)
+## Documented Assumptions (Locked)
 
-Payday defaults to 20th of the month
+| Area | Assumption | Rationale |
+|------|------------|-----------|
+| Active products | Each toiletry has one active instance at a time | Prevents overlapping usage data |
+| Weight tracking | Grams used for all scale readings | Matches kitchen scales |
+| Usage rate | Calculated from weight deltas over time | More accurate than date-only tracking |
+| Reorder threshold | Default = 14 days remaining | Matches existing stock logic |
+| Purchase linking | Many-to-many | One shop can include multiple items |
+| Discounts | Rounded up before discount | Matches Tesco & EasySaver rules |
+| Delivery data | Manually entered (v1) | Auto-import deferred |
+| Safety | Additive only | No balance or transaction mutation |
 
-UK working-day logic already exists
+---
 
-Some dashboards and calendars already depend on this behaviour
+## Database Changes
 
-Target State (v1 – Safe)
+### Extend `toiletry_items`
 
-User can:
+```sql
+ALTER TABLE toiletry_items
+ADD COLUMN IF NOT EXISTS opened_at date,
+ADD COLUMN IF NOT EXISTS finished_at date,
+ADD COLUMN IF NOT EXISTS empty_weight_grams numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS full_weight_grams numeric,
+ADD COLUMN IF NOT EXISTS current_weight_grams numeric,
+ADD COLUMN IF NOT EXISTS calculated_usage_rate numeric,
+ADD COLUMN IF NOT EXISTS last_weighed_at timestamptz;
+Core Rules (Data Integrity – IMPORTANT)
+full_weight_grams can only be set once per active item
 
-Set payday date (1–28 only)
+empty_weight_grams can only be logged after full
 
-Choose adjustment rule:
+Logging empty:
 
-previous_working_day (default)
+Sets finished_at
 
-next_working_day
+Locks further weight logs
 
-closest_working_day
+Usage rate is calculated using:
 
-no_adjustment
+Previous weigh-in → current weigh-in
 
-Monthly frequency only (explicitly locked for v1)
+Falls back to opened_at → now only if no prior reading exists
 
-If no settings exist, system must behave exactly as it does today
-
-Database Changes
-
-Create a separate, optional table for payday settings:
-
-CREATE TABLE public.user_payday_settings (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  payday_date integer NOT NULL DEFAULT 20 CHECK (payday_date BETWEEN 1 AND 28),
-  adjustment_rule text NOT NULL DEFAULT 'previous_working_day'
-    CHECK (adjustment_rule IN (
-      'previous_working_day',
-      'next_working_day',
-      'closest_working_day',
-      'no_adjustment'
-    )),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (user_id)
-);
-
-
-Enable RLS (read/update own row only).
-
-Payday Calculation Rules (Critical Guardrail)
-
-All payday functions must accept optional settings
-
-If settings are missing → use current hardcoded logic
-
-No existing callers should break
-
-export function getPayday(
-  year: number,
-  month: number,
-  settings?: {
-    paydayDate: number;
-    adjustmentRule: AdjustmentRule;
-  }
-): Date {
-  const effectiveDate = settings?.paydayDate ?? 20;
-  const rule = settings?.adjustmentRule ?? 'previous_working_day';
-  // existing logic reused internally
+Weight-Based Usage Logic
+function calculateUsageRate(
+  previousWeight: number,
+  currentWeight: number,
+  daysBetween: number
+): number | null {
+  if (daysBetween <= 0) return null;
+  const used = previousWeight - currentWeight;
+  if (used <= 0) return null;
+  return used / daysBetween;
 }
+Fallback logic:
 
+If no previous reading → use full weight vs current
 
-⚠️ No global state. No mutation. No overrides.
+If no weight data → use manual rate
 
-Files to Create / Modify (Payday)
-File	Action
-src/hooks/usePaydaySettings.ts	CREATE
-src/components/settings/PaydaySettings.tsx	CREATE
-src/lib/payday.ts	MODIFY (accept settings param only)
-src/lib/ukWorkingDays.ts	MODIFY (add rule helpers)
-src/pages/Settings.tsx	MODIFY
-src/hooks/useDashboardData.ts	MODIFY (pass settings if present)
-Feature 2: Payslip Upload & Extraction
-Scope (v1 – Locked)
+Discount Calculations (Explicit & Intentional)
+Important:
+Discount is calculated on the rounded price, but subtracted from the original price.
+This matches Tesco Benefits on Tap & EasySaver behaviour and is intentional.
 
-Included
+export function calculateLoyaltyDiscount(price: number, type: DiscountType) {
+  const rates = { tesco_benefits: 0.04, easysaver: 0.07, clubcard: 0, none: 0 };
+  const rounded = Math.ceil(price);
+  const discount = rounded * (rates[type] ?? 0);
+  return {
+    originalPrice: price,
+    roundedPrice: rounded,
+    discountAmount: discount,
+    finalPrice: Math.max(0, price - discount),
+  };
+}
+Forecast Logic
+remaining = current_weight_grams - empty_weight_grams
+daysRemaining = remaining / effectiveUsageRate
+Reorder alert triggers when daysRemaining <= threshold.
 
-Upload payslip (PDF/image)
+Safety Guarantees
+No balances modified
 
-Extract key fields
+No transactions edited
 
-Store extracted data
+Linking only via junction tables
 
-Optionally match to income transaction
+Weight data optional
 
-Explicitly Excluded
+Manual rates still supported
 
-OCR correction UI
-
-Expense categorisation
-
-Auto-creation of transactions
-
-Balance changes
-
-Multi-payslip per transaction
-
-Database: Payslips Table
-CREATE TABLE public.payslips (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-
-  file_path text NOT NULL,
-  uploaded_at timestamptz NOT NULL DEFAULT now(),
-
-  gross_pay numeric(10,2),
-  net_pay numeric(10,2),
-  tax_deducted numeric(10,2),
-  ni_deducted numeric(10,2),
-  pension_deducted numeric(10,2),
-
-  pay_period_start date,
-  pay_period_end date,
-  employer_name text,
-
-  extraction_confidence text CHECK (extraction_confidence IN ('high','medium','low')),
-  extraction_raw jsonb,
-
-  matched_transaction_id uuid REFERENCES transactions(id) ON DELETE SET NULL,
-  match_status text DEFAULT 'pending'
-    CHECK (match_status IN ('pending','auto_matched','manual_matched','no_match')),
-  matched_at timestamptz,
-
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-
-RLS: user can only access their own rows.
-
-Storage (Payslips)
-
-Bucket: payslips (private)
-
-Path format: {userId}/{payslipId}/original.ext
-
-Max size: 10MB
-
-MIME types: JPG, PNG, WebP, PDF
-
-Payslip Extraction (Edge Function)
-Guardrails (Very Important)
-
-Extraction runs once per upload
-
-No re-processing unless user explicitly requests
-
-Raw model output always stored (extraction_raw)
-
-Confidence score required
-
-Never overwrite manually edited fields
-
-// supabase/functions/extract-payslip/index.ts
-// Vision-based structured extraction
-// Returns JSON only (no free text)
-
-Auto-Matching Rules (Income Only)
-
-A payslip may auto-match only if ALL are true:
-
-Transaction type = income
-
-Amount within ±£0.50 of extracted net_pay
-
-Date within ±2 days of pay_period_end
-
-Transaction not already linked to another payslip
-
-Exactly one match exists
-
-Otherwise → match_status = 'pending'
-
-⚠️ Never modify the transaction amount. Never affect balances.
-
-UI Components
-Settings → Payslips
-
-Upload button
-
-List of past payslips
-
-Status badges:
-
-Auto-matched
-
-Pending review
-
-No match
-
-Payslip Detail Dialog
-
-Read-only extracted values
-
-Confidence indicator
-
-Link / unlink transaction
-
-View original file
-
-Delete payslip
-
-Files to Create / Modify (Payslips)
-File	Action
-supabase/functions/extract-payslip/index.ts	CREATE
-src/lib/payslipUpload.ts	CREATE
-src/hooks/usePayslips.ts	CREATE
-src/components/settings/PayslipSettings.tsx	CREATE
-src/components/settings/PayslipPreviewDialog.tsx	CREATE
-src/pages/Settings.tsx	MODIFY
-Safety Guarantees (Non-Negotiable)
-
-No balance changes
-
-No transaction edits
-
-No bill logic changes
-
-Payday defaults preserved if settings missing
-
-AI extraction is single-pass and stored
-
-All features opt-in
-
-Clarification Questions (Must Be Answered Before Build)
-
-Should payslip matching ignore refunds/reversals?
-
-If multiple income transactions match, should we always force manual review?
-
-Should employer name be used as a secondary hint for matching (read-only)?
-
-Should users be allowed to manually override extracted values?
-
-Should extraction be disabled entirely if confidence = low?
-
-(Implementation must pause until these are confirmed.)
+Existing items unaffected
 
 Implementation Order
+Database migrations
 
-Payday settings (DB → hook → logic → UI)
+Weight logging UI + rules
 
-Payslip storage + upload
+Usage rate calculations
 
-Extraction edge function
+Purchase & receipt linking
 
-Matching logic
+Orders + delivery tracking
 
-UI review flow
+Summary & savings insights
+
+Summary
+This system:
+
+Uses real-world weighing
+
+Prevents corrupted usage data
+
+Accurately forecasts reorders
+
+Tracks real spend vs forecast
+
+Applies loyalty discounts correctly
+
+Does not risk existing logic
+
+Proceed with implementation exactly as defined above.
