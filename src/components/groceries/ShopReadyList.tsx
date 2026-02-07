@@ -29,7 +29,14 @@ export function ShopReadyListView() {
       return {
         byRetailer: [],
         alreadyCovered: [],
-        totals: { grossCost: 0, totalDiscount: 0, finalCost: 0, itemCount: 0 },
+        totals: { 
+          grossCost: 0, 
+          multiBuyDiscount: 0,
+          loyaltyDiscount: 0,
+          totalDiscount: 0, 
+          finalCost: 0, 
+          itemCount: 0 
+        },
       };
     }
     return generateShopReadyList(mealPlans, products, retailerDiscounts);
