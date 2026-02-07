@@ -2,6 +2,7 @@ import { Product } from "@/hooks/useProducts";
 import { MealPlan, MealPlanItem, MealType, MealStatus } from "@/hooks/useMealPlanItems";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { getCaloriesForDate, getWeekStartMonday, WeeklyCalorieSchedule } from "@/lib/weekTargets";
+import { format } from "date-fns";
 
 export interface MacroTotals {
   calories: number;
@@ -12,7 +13,7 @@ export interface MacroTotals {
 
 // Weekly targets that can override global settings
 export interface WeeklyTargetsOverride {
-  weekStartDate: string;
+  weekStartDate: string; // YYYY-MM-DD format
   schedule: WeeklyCalorieSchedule;
   protein?: number | null;
   carbs?: number | null;
@@ -107,10 +108,12 @@ export function getTargetsForDate(
   settings: NutritionSettings,
   weeklyOverride?: WeeklyTargetsOverride | null
 ): MacroTotals {
-  // If we have weekly targets for this date's week, use them
+  // If we have weekly targets, check if this date falls within that week
   if (weeklyOverride) {
+    // Get the Monday that starts the week containing this date
     const dateWeekStart = getWeekStartMonday(date);
-    const dateWeekStartStr = dateWeekStart.toISOString().split('T')[0];
+    // Use format() for consistent local date string (avoids timezone issues with toISOString)
+    const dateWeekStartStr = format(dateWeekStart, "yyyy-MM-dd");
     
     if (dateWeekStartStr === weeklyOverride.weekStartDate) {
       return {

@@ -64,9 +64,18 @@ export function WeeklyMealPlanner() {
   const { settings, isLoading: settingsLoading, isTargetMode } = useNutritionSettings();
   const { products, isLoading: productsLoading } = useProducts();
 
-  // Fetch weekly nutrition targets for the weeks in this shopping range
-  // Shopping week can span two Mon-Sun weeks, so we check for weekly targets
-  const weekStartMonday = useMemo(() => getWeekStartMonday(weekRange.start), [weekRange.start]);
+  // Fetch weekly nutrition targets for the main Mon-Sun week in this shopping range
+  // Shopping week starts on Sunday, so the main week is actually the NEXT Monday's week
+  // e.g., Shopping week Sun Feb 8 → Mon Feb 16 mostly covers Mon Feb 9 - Sun Feb 15
+  const weekStartMonday = useMemo(() => {
+    // If shopping week starts on Sunday, the main Mon-Sun week starts the next day (Monday)
+    const shoppingStart = weekRange.start;
+    // Get the Monday of the week containing the middle of the shopping range
+    // Shopping week is 9 days, middle is day 4-5, so we use day 3 (Wednesday) to find the week
+    const midWeek = new Date(shoppingStart);
+    midWeek.setDate(midWeek.getDate() + 3); // Move to Wednesday
+    return getWeekStartMonday(midWeek);
+  }, [weekRange.start]);
   const { weeklyTargets, isLoading: weeklyTargetsLoading } = useWeeklyNutritionTargets(weekStartMonday);
 
   // Build the weekly override for macro calculations
