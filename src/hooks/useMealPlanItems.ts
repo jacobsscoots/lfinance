@@ -551,8 +551,9 @@ export function useMealPlanItems(weekStart: Date) {
       
       let totalUpdated = 0;
       let successCount = 0;
+      let nearMatchCount = 0;
       let attemptedDays = 0;
-      const dayWarnings: Array<{ date: string; warnings: string[] }> = [];
+      const dayWarnings: Array<{ date: string; warnings: string[]; nearMatch: boolean }> = [];
 
       for (const plan of mealPlans) {
         const items = plan.items || [];
@@ -583,16 +584,21 @@ export function useMealPlanItems(weekStart: Date) {
         );
 
         // Debug: Log solver outcome
-        console.log(`[Solver] ${plan.meal_date}: success=${result.success}`, {
+        console.log(`[Solver] ${plan.meal_date}: success=${result.success}, nearMatch=${result.nearMatch}`, {
           warnings: result.warnings,
           dayTotals: result.dayTotals,
           targets,
         });
 
-        if (result.success) {
-          successCount++;
+        // Persist if solve succeeded OR is a near-match
+        if (result.success || result.nearMatch) {
+          if (result.success) {
+            successCount++;
+          } else {
+            nearMatchCount++;
+          }
 
-          // Only persist if solve succeeded
+          // Persist portions to DB
           for (const item of items) {
             if (item.is_locked) continue;
             if (item.product?.product_type === "fixed") continue;
@@ -611,6 +617,15 @@ export function useMealPlanItems(weekStart: Date) {
               totalUpdated++;
             }
           }
+          
+          // Track near-match warnings for display
+          if (result.nearMatch && result.warnings && result.warnings.length > 0) {
+            dayWarnings.push({
+              date: plan.meal_date,
+              warnings: result.warnings,
+              nearMatch: true,
+            });
+          }
         } else {
           dayWarnings.push({
             date: plan.meal_date,
@@ -618,35 +633,57 @@ export function useMealPlanItems(weekStart: Date) {
               result.warnings && result.warnings.length > 0
                 ? result.warnings
                 : ["Targets not solvable with current fixed/locked items and constraints."],
+            nearMatch: false,
           });
           // If solve failed, do NOT write anything to DB - preserve existing grams
         }
       }
 
-      return { updated: totalUpdated, daysSucceeded: successCount, totalDays: attemptedDays, dayWarnings };
+      return { 
+        updated: totalUpdated, 
+        daysSucceeded: successCount, 
+        daysNearMatch: nearMatchCount,
+        totalDays: attemptedDays, 
+        dayWarnings 
+      };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       setLastCalculated(new Date());
 
-      const firstFail = result.dayWarnings?.[0];
+      const firstFail = result.dayWarnings?.find(w => !w.nearMatch);
+      const firstNearMatch = result.dayWarnings?.find(w => w.nearMatch);
       const failureHint = firstFail ? ` First failure (${firstFail.date}): ${firstFail.warnings[0]}` : "";
+      const nearMatchHint = firstNearMatch ? ` Near-match on ${firstNearMatch.date}: ${firstNearMatch.warnings[0]}` : "";
+      
+      const totalSolved = result.daysSucceeded + result.daysNearMatch;
+      const unsolved = result.totalDays - totalSolved;
 
       // Provide clear feedback based on success rate
       if (result.totalDays === 0) {
         toast.info("No meal plans with items to generate.");
-      } else if (result.daysSucceeded === result.totalDays) {
+      } else if (unsolved === 0 && result.daysNearMatch === 0) {
+        // All perfect solves
         toast.success(`Generated portions for all ${result.daysSucceeded} days (${result.updated} items)`);
-      } else if (result.daysSucceeded > 0) {
+      } else if (unsolved === 0 && result.daysNearMatch > 0) {
+        // All solved, some near-matches
+        toast.success(
+          `Generated portions for all ${result.totalDays} days (${result.updated} items). ` +
+          `${result.daysNearMatch} day(s) have near-match warnings.` +
+          nearMatchHint
+        );
+      } else if (totalSolved > 0) {
+        // Some solved/near-match, some failed
         toast.warning(
-          `Generated portions for ${result.daysSucceeded}/${result.totalDays} days. ` +
-            `${result.totalDays - result.daysSucceeded} day(s) could not be solved within ±1g tolerance.` +
-            failureHint
+          `Generated portions for ${totalSolved}/${result.totalDays} days (${result.updated} items). ` +
+          `${unsolved} day(s) could not be solved.` +
+          failureHint
         );
       } else {
+        // All failed
         toast.error(
           `No days could be solved. Your macro targets may not be achievable with the selected items and constraints.` +
-            failureHint
+          failureHint
         );
       }
     },

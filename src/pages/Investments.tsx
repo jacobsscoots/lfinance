@@ -33,6 +33,7 @@ import { ParsedContribution } from "@/lib/investmentCsvParser";
 
 export default function Investments() {
   const [investmentDialogOpen, setInvestmentDialogOpen] = useState(false);
+  const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [contributionDialogOpen, setContributionDialogOpen] = useState(false);
   const [csvImportDialogOpen, setCsvImportDialogOpen] = useState(false);
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null);
@@ -118,8 +119,32 @@ export default function Investments() {
       risk_preset: data.risk_preset,
       notes: data.notes,
       initialDeposit: data.initial_deposit,
+      recurringAmount: data.recurring_amount,
+      recurringFrequency: data.recurring_frequency,
     });
     setInvestmentDialogOpen(false);
+    setEditingInvestment(null);
+  };
+  
+  const handleEditInvestment = (data: any) => {
+    if (!editingInvestment) return;
+    updateInvestment({
+      id: editingInvestment.id,
+      name: data.name,
+      provider: data.provider,
+      fund_type: data.fund_type,
+      start_date: data.start_date.toISOString().split('T')[0],
+      expected_annual_return: data.expected_annual_return,
+      risk_preset: data.risk_preset,
+      notes: data.notes,
+    });
+    setInvestmentDialogOpen(false);
+    setEditingInvestment(null);
+  };
+  
+  const openEditDialog = (investment: any) => {
+    setEditingInvestment(investment);
+    setInvestmentDialogOpen(true);
   };
 
   const handleCreateContribution = (data: any) => {
@@ -350,9 +375,7 @@ export default function Investments() {
                   onClick={() => setSelectedInvestmentId(
                     selectedInvestmentId === investment.id ? null : investment.id
                   )}
-                  onEdit={() => {
-                    // TODO: Edit dialog
-                  }}
+                  onEdit={() => openEditDialog(investment)}
                   onDelete={() => deleteInvestment(investment.id)}
                 />
               ))}
@@ -421,9 +444,22 @@ export default function Investments() {
       {/* Dialogs */}
       <InvestmentFormDialog
         open={investmentDialogOpen}
-        onOpenChange={setInvestmentDialogOpen}
-        onSubmit={handleCreateInvestment}
+        onOpenChange={(open) => {
+          setInvestmentDialogOpen(open);
+          if (!open) setEditingInvestment(null);
+        }}
+        onSubmit={editingInvestment ? handleEditInvestment : handleCreateInvestment}
         isLoading={isCreating}
+        mode={editingInvestment ? "edit" : "create"}
+        defaultValues={editingInvestment ? {
+          name: editingInvestment.name,
+          provider: editingInvestment.provider || "",
+          fund_type: editingInvestment.fund_type || "fund",
+          start_date: new Date(editingInvestment.start_date),
+          expected_annual_return: editingInvestment.expected_annual_return,
+          risk_preset: editingInvestment.risk_preset || "medium",
+          notes: editingInvestment.notes || "",
+        } : undefined}
       />
 
       <ContributionFormDialog

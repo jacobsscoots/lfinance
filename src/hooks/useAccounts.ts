@@ -18,6 +18,7 @@ export interface BankAccount {
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface CreateAccountInput {
@@ -123,15 +124,17 @@ export function useAccounts() {
 
   const deleteAccount = useMutation({
     mutationFn: async (id: string) => {
+      // Soft delete - set deleted_at timestamp
       const { error } = await supabase
         .from('bank_accounts')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
       toast.success('Account deleted');
     },
     onError: (error) => {

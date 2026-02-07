@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -24,6 +24,14 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Select,
   SelectContent,
@@ -64,9 +72,9 @@ const SERVICE_TYPES = [
 ];
 
 const COMMON_PROVIDERS: Record<string, string[]> = {
-  energy: ["British Gas", "EDF", "Octopus Energy", "E.ON", "Scottish Power", "SSE", "Bulb", "OVO"],
-  broadband: ["BT", "Sky", "Virgin Media", "TalkTalk", "Plusnet", "EE", "Vodafone"],
-  mobile: ["EE", "Three", "O2", "Vodafone", "Tesco Mobile", "giffgaff", "VOXI"],
+  energy: ["British Gas", "EDF", "Octopus Energy", "E.ON", "Scottish Power", "SSE", "Bulb", "OVO", "Outfox Energy", "Shell Energy", "Utility Warehouse"],
+  broadband: ["BT", "Sky", "Virgin Media", "TalkTalk", "Plusnet", "EE", "Vodafone", "Fibrely", "Zen Internet", "Hyperoptic"],
+  mobile: ["EE", "Three", "O2", "Vodafone", "Tesco Mobile", "giffgaff", "VOXI", "1pMobile", "Lebara", "Smarty"],
   insurance: ["Aviva", "Direct Line", "Admiral", "Churchill", "LV=", "More Than"],
   streaming: ["Netflix", "Disney+", "Amazon Prime", "NOW TV", "Apple TV+", "Spotify"],
 };
@@ -79,6 +87,9 @@ export function ServiceFormDialog({
   defaultValues,
   mode = "create",
 }: ServiceFormDialogProps) {
+  const [providerOpen, setProviderOpen] = useState(false);
+  const [customProvider, setCustomProvider] = useState("");
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -94,14 +105,28 @@ export function ServiceFormDialog({
   });
 
   const serviceType = form.watch("service_type");
-  const providers = COMMON_PROVIDERS[serviceType] || [];
+  const currentProvider = form.watch("provider");
+  const baseProviders = COMMON_PROVIDERS[serviceType] || [];
+  
+  // Include custom provider if it doesn't exist in the list
+  const providers = customProvider && !baseProviders.includes(customProvider) 
+    ? [...baseProviders, customProvider]
+    : baseProviders;
 
   const handleSubmit = (data: FormValues) => {
     onSubmit(data);
     if (mode === "create") {
       form.reset();
+      setCustomProvider("");
     }
   };
+  
+  // Reset provider when service type changes
+  useEffect(() => {
+    if (!baseProviders.includes(currentProvider)) {
+      form.setValue("provider", "");
+    }
+  }, [serviceType]);
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -147,22 +172,73 @@ export function ServiceFormDialog({
                 control={form.control}
                 name="provider"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Provider</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select or type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {providers.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            {p}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={providerOpen} onOpenChange={setProviderOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className={cn(
+                              "w-full justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value || "Select or type..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[200px] p-0" align="start">
+                        <Command>
+                          <CommandInput 
+                            placeholder="Search or type new..." 
+                            value={customProvider}
+                            onValueChange={setCustomProvider}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {customProvider ? (
+                                <button
+                                  type="button"
+                                  className="w-full px-2 py-1.5 text-left text-sm hover:bg-accent rounded"
+                                  onClick={() => {
+                                    field.onChange(customProvider);
+                                    setProviderOpen(false);
+                                  }}
+                                >
+                                  Add "{customProvider}"
+                                </button>
+                              ) : (
+                                "Type to add a provider"
+                              )}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {providers.map((p) => (
+                                <CommandItem
+                                  key={p}
+                                  value={p}
+                                  onSelect={() => {
+                                    field.onChange(p);
+                                    setProviderOpen(false);
+                                    setCustomProvider("");
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === p ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {p}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -81,6 +81,37 @@ export function InvestmentFormDialog({
       notes: defaultValues?.notes || "",
     },
   });
+
+  // Reset form when defaultValues change (for edit mode)
+  useEffect(() => {
+    if (open && defaultValues) {
+      form.reset({
+        name: defaultValues.name || "ChipX AI Fund",
+        provider: defaultValues.provider || "Chip",
+        fund_type: defaultValues.fund_type || "fund",
+        start_date: defaultValues.start_date || new Date(),
+        expected_annual_return: defaultValues.expected_annual_return ?? 8,
+        risk_preset: defaultValues.risk_preset || "medium",
+        initial_deposit: defaultValues.initial_deposit,
+        recurring_amount: defaultValues.recurring_amount,
+        recurring_frequency: defaultValues.recurring_frequency || "monthly",
+        notes: defaultValues.notes || "",
+      });
+    } else if (open && !defaultValues) {
+      form.reset({
+        name: "ChipX AI Fund",
+        provider: "Chip",
+        fund_type: "fund",
+        start_date: new Date(),
+        expected_annual_return: 8,
+        risk_preset: "medium",
+        initial_deposit: undefined,
+        recurring_amount: undefined,
+        recurring_frequency: "monthly",
+        notes: "",
+      });
+    }
+  }, [open, defaultValues]);
 
   const handleSubmit = (data: FormValues) => {
     onSubmit(data);
