@@ -852,6 +852,165 @@ export function calculateDayPortions(
     });
   });
 
+  // === HELPER: Single source of truth for item constraints ===
+  const getItemConstraints = (item: EditableItem, mealType: MealType): { minGrams: number; maxGrams: number } => {
+    const role = mealType === "breakfast" ? getBreakfastRole(item.product) : null;
+    let minGrams = settings.minGrams;
+    let maxGrams = getMaxPortion(item.product, settings);
+    
+    // Breakfast role-specific constraints
+    if (role === "topper") {
+      minGrams = 25;
+      maxGrams = 40;
+    } else if (role === "secondary") {
+      minGrams = 80;
+      maxGrams = 120;
+    } else if (role === "base") {
+      const yogType = getYoghurtType(item.product);
+      if (yogType === "primary") {
+        minGrams = 200;
+        maxGrams = 300;
+      } else if (yogType === "secondary") {
+        minGrams = 50;
+        maxGrams = 150;
+      }
+    }
+    
+    // Staple carbs (rice/pasta) have 80g minimum
+    if (item.carbsPer100g > 25 && item.proteinPer100g < 10) {
+      minGrams = Math.max(minGrams, 80);
+    }
+    
+    return { minGrams, maxGrams };
+  };
+
+  // === PHASE 1.5: Per-Meal Calorie Balance Loop ===
+  // Ensure each meal is within ±15 kcal of its equal share (iterative with early exit)
+  const MEAL_CAL_TOLERANCE = 15;
+  const MAX_MEAL_BALANCE_ITERATIONS = 15;
+
+  const mealCalorieBalanceLoop = () => {
+    let noProgressCount = 0;
+    let lastTotalError = Infinity;
+
+    for (let iteration = 0; iteration < MAX_MEAL_BALANCE_ITERATIONS; iteration++) {
+      let maxMealError = 0;
+
+      for (const mealType of mainMeals) {
+        const mealTarget = mealTargets[mealType].calories;
+        const mealEditables = editableByMeal[mealType];
+        if (mealEditables.length === 0) continue;
+
+        // Calculate current meal calories (editables + locked/fixed)
+        let mealCals = 0;
+
+        // Editable items in this meal
+        mealEditables.forEach(item => {
+          const grams = allItemGrams.get(item.itemId) || 0;
+          mealCals += (item.caloriesPer100g * grams) / 100;
+        });
+
+        // Locked/fixed items in this meal
+        mealItems[mealType].forEach(item => {
+          if (!item.product || item.product.ignore_macros) return;
+          if (item.is_locked || item.product.product_type === "fixed") {
+            const grams = allItemGrams.get(item.id) || item.quantity_grams;
+            mealCals += (item.product.calories_per_100g * grams) / 100;
+          }
+        });
+
+        const mealErr = mealTarget - mealCals;
+        maxMealError = Math.max(maxMealError, Math.abs(mealErr));
+
+        // If outside tolerance, adjust using single source of truth constraints
+        if (Math.abs(mealErr) > MEAL_CAL_TOLERANCE) {
+          const adjustable = mealEditables
+            .filter(i => !isSauceOrSeasoning(i.product))
+            .filter(i => {
+              // Breakfast: avoid adjusting toppers/secondary by default (they have fixed ranges)
+              if (mealType === "breakfast") return getBreakfastRole(i.product) === "base";
+              return true;
+            })
+            .sort((a, b) => b.caloriesPer100g - a.caloriesPer100g);
+
+          if (adjustable.length > 0) {
+            const item = adjustable[0];
+            const currentGrams = allItemGrams.get(item.itemId) || 0;
+
+            // Get constraints from the shared helper
+            const { minGrams, maxGrams } = getItemConstraints(item, mealType);
+
+            const adjustment = (mealErr / item.caloriesPer100g) * 100;
+            const cappedAdjustment = Math.max(-20, Math.min(20, adjustment));
+
+            const newGrams = Math.max(minGrams, Math.min(maxGrams, Math.round(currentGrams + cappedAdjustment)));
+            allItemGrams.set(item.itemId, newGrams);
+          }
+        }
+      }
+
+      // Early exit if all meals within tolerance
+      if (maxMealError <= MEAL_CAL_TOLERANCE) break;
+
+      // No-progress detection
+      if (maxMealError >= lastTotalError - 1) {
+        noProgressCount++;
+        if (noProgressCount > 3) break;
+      } else {
+        noProgressCount = 0;
+      }
+
+      lastTotalError = maxMealError;
+    }
+  };
+
+  mealCalorieBalanceLoop();
+
+  // === COMPOSITION ENFORCEMENT / VALIDATION PASS ===
+  // Ensure lunch/dinner have non-zero protein + carb + veg when selected
+  // Ensure breakfast roles follow non-zero rules (base/secondary/topper) when selected
+  // IMPORTANT: Runs BEFORE the final precision loop so precision is the last mutating step
+  
+  const validateMealComposition = () => {
+    // Lunch & dinner: protein + carb + veg non-zero when those items exist
+    for (const mealType of ["lunch", "dinner"] as MealType[]) {
+      const mealEditables = editableByMeal[mealType];
+      if (mealEditables.length === 0) continue;
+
+      const proteins = mealEditables.filter(i => isHighProteinSource(i.product));
+      const carbs = mealEditables.filter(i => i.carbsPer100g > 25 && i.proteinPer100g < 10);
+      const vegs = mealEditables.filter(i => getFoodType(i.product) === "veg");
+
+      [proteins, carbs, vegs].forEach(category => {
+        category.forEach(item => {
+          const grams = allItemGrams.get(item.itemId) || 0;
+          const { minGrams, maxGrams } = getItemConstraints(item, mealType);
+
+          // If the user selected the item (exists in editables), it must be non-zero (>= min)
+          if (grams < minGrams) {
+            allItemGrams.set(item.itemId, Math.max(minGrams, Math.min(maxGrams, minGrams)));
+          }
+        });
+      });
+    }
+
+    // Breakfast: ensure selected items respect role minimums (topper/secondary/base) via getItemConstraints
+    const breakfastEditables = editableByMeal.breakfast;
+    if (breakfastEditables.length > 0) {
+      breakfastEditables.forEach(item => {
+        const grams = allItemGrams.get(item.itemId) || 0;
+        const { minGrams, maxGrams } = getItemConstraints(item, "breakfast");
+
+        // Selected breakfast items must not end at 0g; enforce min
+        if (grams < minGrams) {
+          allItemGrams.set(item.itemId, Math.max(minGrams, Math.min(maxGrams, minGrams)));
+        }
+      });
+    }
+  };
+
+  validateMealComposition();
+
   // === PHASE 2: Global day-level fine-tuning ===
   // Recalculate totals and adjust across all items to hit exact daily targets
   let totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
@@ -1093,30 +1252,7 @@ export function calculateDayPortions(
         return bRatio - aRatio;
       });
     
-    // Helper to get min/max constraints for an item
-    const getItemConstraints = (item: EditableItem, mealType: MealType) => {
-      const role = mealType === "breakfast" ? getBreakfastRole(item.product) : null;
-      let minGrams = settings.minGrams;
-      let maxGrams = getMaxPortion(item.product, settings);
-      
-      if (role === "base") {
-        const yogType = getYoghurtType(item.product);
-        if (yogType === "primary") {
-          minGrams = 200;
-          maxGrams = 300;
-        } else if (yogType === "secondary") {
-          minGrams = 50;
-          maxGrams = 150;
-        }
-      }
-      
-      // Staple carbs (rice/pasta) have 80g minimum
-      if (item.carbsPer100g > 25 && item.proteinPer100g < 10) {
-        minGrams = Math.max(minGrams, 80);
-      }
-      
-      return { minGrams, maxGrams };
-    };
+    // NOTE: Uses getItemConstraints defined earlier in the function (single source of truth)
     
     let noProgressCount = 0;
     let lastTotalError = Infinity;
