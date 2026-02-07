@@ -9,7 +9,8 @@ import {
   TrendingUp,
   LogOut,
   Sparkles,
-  PieChart
+  PieChart,
+  Percent
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Accounts", href: "/accounts", icon: CreditCard },
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Bills", href: "/bills", icon: TrendingUp },
+  { name: "Cheaper Bills", href: "/cheaper-bills", icon: Percent },
   { name: "Investments", href: "/investments", icon: PieChart },
   { name: "Calendar", href: "/calendar", icon: CalendarDays },
   { name: "Groceries", href: "/groceries", icon: ShoppingCart },

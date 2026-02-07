@@ -14,6 +14,7 @@ import Groceries from "./pages/Groceries";
 import MealPlan from "./pages/MealPlan";
 import Toiletries from "./pages/Toiletries";
 import Investments from "./pages/Investments";
+import CheaperBills from "./pages/CheaperBills";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
             <Route path="/bills" element={<ProtectedRoute><Bills /></ProtectedRoute>} />
             <Route path="/investments" element={<ProtectedRoute><Investments /></ProtectedRoute>} />
+            <Route path="/cheaper-bills" element={<ProtectedRoute><CheaperBills /></ProtectedRoute>} />
             <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
             <Route path="/groceries" element={<ProtectedRoute><Groceries /></ProtectedRoute>} />
             <Route path="/meal-plan" element={<ProtectedRoute><MealPlan /></ProtectedRoute>} />

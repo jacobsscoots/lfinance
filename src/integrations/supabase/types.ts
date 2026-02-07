@@ -179,6 +179,36 @@ export type Database = {
           },
         ]
       }
+      bill_reports: {
+        Row: {
+          content: Json | null
+          created_at: string
+          id: string
+          report_date: string
+          report_type: string
+          sent_via: string | null
+          user_id: string
+        }
+        Insert: {
+          content?: Json | null
+          created_at?: string
+          id?: string
+          report_date: string
+          report_type: string
+          sent_via?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: Json | null
+          created_at?: string
+          id?: string
+          report_date?: string
+          report_type?: string
+          sent_via?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       bills: {
         Row: {
           account_id: string | null
@@ -291,6 +321,182 @@ export type Database = {
           id?: string
           is_default?: boolean | null
           name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      cheaper_bills_settings: {
+        Row: {
+          created_at: string
+          email_notifications: boolean | null
+          id: string
+          in_app_notifications: boolean | null
+          postcode: string | null
+          preferred_contract_type: string | null
+          risk_preference: string | null
+          savings_threshold: number | null
+          scan_frequency: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_notifications?: boolean | null
+          id?: string
+          in_app_notifications?: boolean | null
+          postcode?: string | null
+          preferred_contract_type?: string | null
+          risk_preference?: string | null
+          savings_threshold?: number | null
+          scan_frequency?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_notifications?: boolean | null
+          id?: string
+          in_app_notifications?: boolean | null
+          postcode?: string | null
+          preferred_contract_type?: string | null
+          risk_preference?: string | null
+          savings_threshold?: number | null
+          scan_frequency?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      comparison_results: {
+        Row: {
+          annual_cost: number | null
+          created_at: string
+          features: Json | null
+          id: string
+          is_best_offer: boolean | null
+          monthly_cost: number
+          plan_name: string | null
+          provider: string
+          scanned_at: string | null
+          service_type: string
+          source: string | null
+          tracked_service_id: string | null
+          user_id: string
+        }
+        Insert: {
+          annual_cost?: number | null
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_best_offer?: boolean | null
+          monthly_cost: number
+          plan_name?: string | null
+          provider: string
+          scanned_at?: string | null
+          service_type: string
+          source?: string | null
+          tracked_service_id?: string | null
+          user_id: string
+        }
+        Update: {
+          annual_cost?: number | null
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_best_offer?: boolean | null
+          monthly_cost?: number
+          plan_name?: string | null
+          provider?: string
+          scanned_at?: string | null
+          service_type?: string
+          source?: string | null
+          tracked_service_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comparison_results_tracked_service_id_fkey"
+            columns: ["tracked_service_id"]
+            isOneToOne: false
+            referencedRelation: "tracked_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      energy_readings: {
+        Row: {
+          consumption_kwh: number | null
+          cost_estimate: number | null
+          created_at: string
+          fuel_type: string
+          id: string
+          reading_date: string
+          source: string | null
+          user_id: string
+        }
+        Insert: {
+          consumption_kwh?: number | null
+          cost_estimate?: number | null
+          created_at?: string
+          fuel_type: string
+          id?: string
+          reading_date: string
+          source?: string | null
+          user_id: string
+        }
+        Update: {
+          consumption_kwh?: number | null
+          cost_estimate?: number | null
+          created_at?: string
+          fuel_type?: string
+          id?: string
+          reading_date?: string
+          source?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      energy_tariffs: {
+        Row: {
+          created_at: string
+          fix_end_date: string | null
+          fuel_type: string
+          id: string
+          is_current: boolean | null
+          is_fixed: boolean | null
+          provider: string
+          standing_charge_daily: number | null
+          tariff_name: string
+          unit_rate_kwh: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fix_end_date?: string | null
+          fuel_type: string
+          id?: string
+          is_current?: boolean | null
+          is_fixed?: boolean | null
+          provider: string
+          standing_charge_daily?: number | null
+          tariff_name: string
+          unit_rate_kwh: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fix_end_date?: string | null
+          fuel_type?: string
+          id?: string
+          is_current?: boolean | null
+          is_fixed?: boolean | null
+          provider?: string
+          standing_charge_daily?: number | null
+          tariff_name?: string
+          unit_rate_kwh?: number
           updated_at?: string
           user_id?: string
         }
@@ -1180,6 +1386,44 @@ export type Database = {
         }
         Relationships: []
       }
+      service_allowances: {
+        Row: {
+          allowance_type: string
+          allowance_value: number | null
+          created_at: string
+          id: string
+          is_unlimited: boolean | null
+          tracked_service_id: string
+          user_id: string
+        }
+        Insert: {
+          allowance_type: string
+          allowance_value?: number | null
+          created_at?: string
+          id?: string
+          is_unlimited?: boolean | null
+          tracked_service_id: string
+          user_id: string
+        }
+        Update: {
+          allowance_type?: string
+          allowance_value?: number | null
+          created_at?: string
+          id?: string
+          is_unlimited?: boolean | null
+          tracked_service_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_allowances_tracked_service_id_fkey"
+            columns: ["tracked_service_id"]
+            isOneToOne: false
+            referencedRelation: "tracked_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       toiletry_items: {
         Row: {
           brand: string | null
@@ -1484,6 +1728,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tracked_services: {
+        Row: {
+          contract_end_date: string | null
+          contract_start_date: string | null
+          created_at: string
+          estimated_savings_annual: number | null
+          exit_fee: number | null
+          id: string
+          is_tracking_enabled: boolean | null
+          last_recommendation: string | null
+          last_recommendation_reason: string | null
+          last_scan_date: string | null
+          monthly_cost: number | null
+          notes: string | null
+          plan_name: string | null
+          provider: string
+          service_type: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contract_end_date?: string | null
+          contract_start_date?: string | null
+          created_at?: string
+          estimated_savings_annual?: number | null
+          exit_fee?: number | null
+          id?: string
+          is_tracking_enabled?: boolean | null
+          last_recommendation?: string | null
+          last_recommendation_reason?: string | null
+          last_scan_date?: string | null
+          monthly_cost?: number | null
+          notes?: string | null
+          plan_name?: string | null
+          provider: string
+          service_type: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contract_end_date?: string | null
+          contract_start_date?: string | null
+          created_at?: string
+          estimated_savings_annual?: number | null
+          exit_fee?: number | null
+          id?: string
+          is_tracking_enabled?: boolean | null
+          last_recommendation?: string | null
+          last_recommendation_reason?: string | null
+          last_scan_date?: string | null
+          monthly_cost?: number | null
+          notes?: string | null
+          plan_name?: string | null
+          provider?: string
+          service_type?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       transactions: {
         Row: {
