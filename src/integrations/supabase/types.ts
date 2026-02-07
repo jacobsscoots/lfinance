@@ -1161,16 +1161,26 @@ export type Database = {
       }
       user_nutrition_settings: {
         Row: {
+          activity_level: string | null
+          age: number | null
+          body_fat_percent: number | null
           carbs_target_grams: number | null
           created_at: string
           daily_calorie_target: number | null
+          fat_per_kg: number | null
           fat_target_grams: number | null
+          formula: string | null
+          goal_type: string | null
+          height_cm: number | null
           id: string
+          last_calculated_at: string | null
           max_grams_per_item: number | null
           min_grams_per_item: number | null
           mode: string
           portion_rounding: number | null
+          protein_per_kg: number | null
           protein_target_grams: number | null
+          sex: string | null
           target_tolerance_percent: number | null
           updated_at: string
           user_id: string
@@ -1179,18 +1189,29 @@ export type Database = {
           weekend_fat_target_grams: number | null
           weekend_protein_target_grams: number | null
           weekend_targets_enabled: boolean
+          weight_kg: number | null
         }
         Insert: {
+          activity_level?: string | null
+          age?: number | null
+          body_fat_percent?: number | null
           carbs_target_grams?: number | null
           created_at?: string
           daily_calorie_target?: number | null
+          fat_per_kg?: number | null
           fat_target_grams?: number | null
+          formula?: string | null
+          goal_type?: string | null
+          height_cm?: number | null
           id?: string
+          last_calculated_at?: string | null
           max_grams_per_item?: number | null
           min_grams_per_item?: number | null
           mode?: string
           portion_rounding?: number | null
+          protein_per_kg?: number | null
           protein_target_grams?: number | null
+          sex?: string | null
           target_tolerance_percent?: number | null
           updated_at?: string
           user_id: string
@@ -1199,18 +1220,29 @@ export type Database = {
           weekend_fat_target_grams?: number | null
           weekend_protein_target_grams?: number | null
           weekend_targets_enabled?: boolean
+          weight_kg?: number | null
         }
         Update: {
+          activity_level?: string | null
+          age?: number | null
+          body_fat_percent?: number | null
           carbs_target_grams?: number | null
           created_at?: string
           daily_calorie_target?: number | null
+          fat_per_kg?: number | null
           fat_target_grams?: number | null
+          formula?: string | null
+          goal_type?: string | null
+          height_cm?: number | null
           id?: string
+          last_calculated_at?: string | null
           max_grams_per_item?: number | null
           min_grams_per_item?: number | null
           mode?: string
           portion_rounding?: number | null
+          protein_per_kg?: number | null
           protein_target_grams?: number | null
+          sex?: string | null
           target_tolerance_percent?: number | null
           updated_at?: string
           user_id?: string
@@ -1219,6 +1251,7 @@ export type Database = {
           weekend_fat_target_grams?: number | null
           weekend_protein_target_grams?: number | null
           weekend_targets_enabled?: boolean
+          weight_kg?: number | null
         }
         Relationships: []
       }
