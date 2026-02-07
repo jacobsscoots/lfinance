@@ -31,6 +31,8 @@ export function CsvImportDialog({
     success: boolean;
     contributions: ParsedContribution[];
     errors: string[];
+    warnings: string[];
+    format: 'simple' | 'chip_statement' | 'unknown';
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -120,6 +122,34 @@ export function CsvImportDialog({
           {/* Parse Results */}
           {parseResult && (
             <div className="space-y-4">
+              {/* Format Detection */}
+              {parseResult.format === 'chip_statement' && (
+                <Alert>
+                  <FileText className="h-4 w-4" />
+                  <AlertTitle>Chip Statement Detected</AlertTitle>
+                  <AlertDescription>
+                    Extracted transactions from your Chip valuation statement.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Warnings */}
+              {parseResult.warnings && parseResult.warnings.length > 0 && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Notes</AlertTitle>
+                  <AlertDescription>
+                    <ScrollArea className="max-h-20">
+                      <ul className="list-disc list-inside text-sm">
+                        {parseResult.warnings.map((warning, i) => (
+                          <li key={i}>{warning}</li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {parseResult.errors.length > 0 && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -127,9 +157,12 @@ export function CsvImportDialog({
                   <AlertDescription>
                     <ScrollArea className="h-24">
                       <ul className="list-disc list-inside text-sm">
-                        {parseResult.errors.map((error, i) => (
+                        {parseResult.errors.slice(0, 5).map((error, i) => (
                           <li key={i}>{error}</li>
                         ))}
+                        {parseResult.errors.length > 5 && (
+                          <li className="text-muted-foreground">+{parseResult.errors.length - 5} more errors</li>
+                        )}
                       </ul>
                     </ScrollArea>
                   </AlertDescription>
