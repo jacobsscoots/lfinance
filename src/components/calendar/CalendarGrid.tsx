@@ -114,6 +114,26 @@ interface BillPillProps {
 }
 
 function BillPill({ bill, compact = false }: BillPillProps) {
+  const getStatusStyle = () => {
+    if (bill.isPaid || bill.status === "paid") {
+      return "bg-success/20 text-success line-through";
+    }
+    if (bill.status === "skipped") {
+      return "bg-muted text-muted-foreground line-through";
+    }
+    if (bill.status === "overdue") {
+      return "bg-destructive/20 text-destructive";
+    }
+    return "bg-destructive/10 text-destructive";
+  };
+
+  const getStatusIcon = () => {
+    if (bill.isPaid || bill.status === "paid") {
+      return <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />;
+    }
+    return null;
+  };
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -121,15 +141,13 @@ function BillPill({ bill, compact = false }: BillPillProps) {
           className={cn(
             "rounded truncate flex items-center gap-0.5 sm:gap-1",
             compact ? "text-[10px] px-1 py-0.5" : "text-xs px-1.5 py-0.5",
-            bill.isPaid
-              ? "bg-success/20 text-success line-through"
-              : "bg-destructive/10 text-destructive"
+            getStatusStyle()
           )}
           style={{
             borderLeft: bill.categoryColor ? `3px solid ${bill.categoryColor}` : undefined,
           }}
         >
-          {bill.isPaid && <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />}
+          {getStatusIcon()}
           <span className="truncate">{bill.name}</span>
         </div>
       </TooltipTrigger>
@@ -142,8 +160,14 @@ function BillPill({ bill, compact = false }: BillPillProps) {
               {bill.categoryName}
             </Badge>
           )}
-          {bill.isPaid && (
+          {bill.status === "paid" && (
             <p className="text-sm text-success">✓ Paid</p>
+          )}
+          {bill.status === "skipped" && (
+            <p className="text-sm text-muted-foreground">Skipped</p>
+          )}
+          {bill.status === "overdue" && (
+            <p className="text-sm text-destructive">Overdue</p>
           )}
         </div>
       </TooltipContent>

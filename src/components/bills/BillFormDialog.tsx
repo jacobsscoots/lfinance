@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -15,6 +17,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -24,7 +32,9 @@ import {
 } from "@/components/ui/select";
 import { Bill, BillInsert, useBills } from "@/hooks/useBills";
 import { useCategories } from "@/hooks/useCategories";
+import { useAccounts } from "@/hooks/useAccounts";
 import { Constants } from "@/integrations/supabase/types";
+import { cn } from "@/lib/utils";
 
 const billFrequencies = Constants.public.Enums.bill_frequency;
 
@@ -35,8 +45,11 @@ const billSchema = z.object({
   frequency: z.enum(billFrequencies as unknown as [string, ...string[]]),
   provider: z.string().trim().max(100, "Provider must be less than 100 characters").optional(),
   category_id: z.string().optional(),
+  account_id: z.string().optional(),
   notes: z.string().trim().max(500, "Notes must be less than 500 characters").optional(),
   is_active: z.boolean(),
+  start_date: z.date().optional().nullable(),
+  end_date: z.date().optional().nullable(),
 });
 
 type BillFormData = z.infer<typeof billSchema>;
@@ -50,6 +63,7 @@ interface BillFormDialogProps {
 export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps) {
   const { createBill, updateBill } = useBills();
   const { data: categories = [] } = useCategories();
+  const { accounts } = useAccounts();
   const isEditing = !!bill;
 
   const form = useForm<BillFormData>({
@@ -61,8 +75,11 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
       frequency: "monthly",
       provider: "",
       category_id: "",
+      account_id: "",
       notes: "",
       is_active: true,
+      start_date: null,
+      end_date: null,
     },
   });
 
@@ -75,8 +92,11 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
         frequency: bill.frequency,
         provider: bill.provider || "",
         category_id: bill.category_id || "",
+        account_id: bill.account_id || "",
         notes: bill.notes || "",
         is_active: bill.is_active ?? true,
+        start_date: bill.start_date ? new Date(bill.start_date) : null,
+        end_date: bill.end_date ? new Date(bill.end_date) : null,
       });
     } else {
       form.reset({
@@ -86,8 +106,11 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
         frequency: "monthly",
         provider: "",
         category_id: "",
+        account_id: "",
         notes: "",
         is_active: true,
+        start_date: null,
+        end_date: null,
       });
     }
   }, [bill, form, open]);
@@ -100,8 +123,11 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
       frequency: data.frequency as typeof billFrequencies[number],
       provider: data.provider || null,
       category_id: data.category_id || null,
+      account_id: data.account_id || null,
       notes: data.notes || null,
       is_active: data.is_active,
+      start_date: data.start_date ? format(data.start_date, "yyyy-MM-dd") : null,
+      end_date: data.end_date ? format(data.end_date, "yyyy-MM-dd") : null,
     };
 
     if (isEditing && bill) {
@@ -115,7 +141,7 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent>
+      <ResponsiveDialogContent className="max-h-[90vh] overflow-y-auto">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{isEditing ? "Edit Bill" : "Add Bill"}</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
@@ -210,13 +236,117 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="provider">Provider</Label>
-            <Input
-              id="provider"
-              placeholder="e.g., Virgin Media, EE"
-              {...form.register("provider")}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="provider">Provider</Label>
+              <Input
+                id="provider"
+                placeholder="e.g., Virgin Media, EE"
+                {...form.register("provider")}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="account">Payment Account</Label>
+              <Select
+                value={form.watch("account_id") || "none"}
+                onValueChange={(value) => form.setValue("account_id", value === "none" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="none">Any account</SelectItem>
+                  {accounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !form.watch("start_date") && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {form.watch("start_date") 
+                      ? format(form.watch("start_date")!, "PPP")
+                      : "No start date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={form.watch("start_date") || undefined}
+                    onSelect={(date) => form.setValue("start_date", date || null)}
+                    initialFocus
+                  />
+                  {form.watch("start_date") && (
+                    <div className="p-2 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => form.setValue("start_date", null)}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label>End Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !form.watch("end_date") && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {form.watch("end_date") 
+                      ? format(form.watch("end_date")!, "PPP")
+                      : "No end date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={form.watch("end_date") || undefined}
+                    onSelect={(date) => form.setValue("end_date", date || null)}
+                    initialFocus
+                  />
+                  {form.watch("end_date") && (
+                    <div className="p-2 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => form.setValue("end_date", null)}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
           <div className="space-y-2">

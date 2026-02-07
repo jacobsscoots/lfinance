@@ -6,6 +6,7 @@ import {
   endOfMonth, 
   eachDayOfInterval, 
   isSameMonth,
+  isSameDay,
   addMonths,
   format,
   getDay,
@@ -32,6 +33,8 @@ export interface CalendarBill {
   categoryName?: string;
   categoryColor?: string | null;
   isPaid?: boolean;
+  status?: "due" | "paid" | "overdue" | "skipped";
+  matchConfidence?: string;
 }
 
 export interface CalendarDay {
@@ -149,26 +152,23 @@ export function useCalendarData(currentDate: Date) {
 
       if (billsError) throw billsError;
 
-      // Fetch transactions for the month to check if bills are paid
-      const { data: accounts } = await supabase
-        .from("bank_accounts")
-        .select("id")
-        .eq("user_id", user.id);
+      // Fetch stored occurrence statuses (paid/skipped)
+      const { data: storedOccurrences } = await supabase
+        .from("bill_occurrences")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("due_date", format(monthStart, "yyyy-MM-dd"))
+        .lte("due_date", format(monthEnd, "yyyy-MM-dd"));
 
-      const accountIds = accounts?.map(a => a.id) || [];
-      
-      const { data: transactions } = await supabase
-        .from("transactions")
-        .select("bill_id, transaction_date")
-        .in("account_id", accountIds)
-        .not("bill_id", "is", null)
-        .gte("transaction_date", format(monthStart, "yyyy-MM-dd"))
-        .lte("transaction_date", format(monthEnd, "yyyy-MM-dd"));
-
-      const paidBillIds = new Set(transactions?.map(t => t.bill_id) || []);
+      // Create a map for quick lookup: "billId-dueDate" -> occurrence
+      const occurrenceMap = new Map<string, typeof storedOccurrences[0]>();
+      (storedOccurrences || []).forEach(occ => {
+        occurrenceMap.set(`${occ.bill_id}-${occ.due_date}`, occ);
+      });
 
       // Generate calendar days
       const allDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+      const today = new Date();
       
       let monthTotal = 0;
       
@@ -181,6 +181,26 @@ export function useCalendarData(currentDate: Date) {
           const occurrences = getBillOccurrencesForMonth(bill, monthStart, monthEnd);
           occurrences.forEach(occurrence => {
             if (format(occurrence, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")) {
+              const occKey = `${bill.id}-${format(occurrence, "yyyy-MM-dd")}`;
+              const storedOcc = occurrenceMap.get(occKey);
+              
+              // Determine status
+              let status: CalendarBill["status"] = "due";
+              let isPaid = false;
+              let matchConfidence: string | undefined;
+              
+              if (storedOcc) {
+                const storedStatus = storedOcc.status;
+                if (storedStatus === "paid" || storedStatus === "skipped" || storedStatus === "overdue" || storedStatus === "due") {
+                  status = storedStatus;
+                }
+                isPaid = storedStatus === "paid";
+                matchConfidence = storedOcc.match_confidence || undefined;
+              } else if (isBefore(date, today) && !isSameDay(date, today)) {
+                // If due date is in the past and no stored status, mark as overdue
+                status = "overdue";
+              }
+              
               const calendarBill: CalendarBill = {
                 id: bill.id,
                 name: bill.name,
@@ -189,10 +209,12 @@ export function useCalendarData(currentDate: Date) {
                 frequency: bill.frequency,
                 categoryName: bill.category?.name,
                 categoryColor: bill.category?.color,
-                isPaid: paidBillIds.has(bill.id),
+                isPaid,
+                status,
+                matchConfidence,
               };
               dayBills.push(calendarBill);
-              if (isCurrentMonth) {
+              if (isCurrentMonth && status !== "skipped" && status !== "paid") {
                 monthTotal += calendarBill.amount;
               }
             }
