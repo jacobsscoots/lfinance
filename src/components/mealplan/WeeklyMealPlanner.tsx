@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, startOfWeek, addDays, addWeeks, subWeeks, formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,8 +9,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useMealPlanItems, MealPlan, MealType } from "@/hooks/useMealPlanItems";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { useProducts } from "@/hooks/useProducts";
@@ -33,9 +44,10 @@ export function WeeklyMealPlanner() {
     startOfWeek(new Date(), { weekStartsOn: 1 }) // Monday
   );
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [resetWeekOpen, setResetWeekOpen] = useState(false);
   const isMobile = useIsMobile();
   
-  const { mealPlans, isLoading, copyFromPreviousWeek, recalculateAll, lastCalculated } = useMealPlanItems(weekStart);
+  const { mealPlans, isLoading, copyFromPreviousWeek, clearWeek, recalculateAll, lastCalculated } = useMealPlanItems(weekStart);
   const { settings, isLoading: settingsLoading, isTargetMode } = useNutritionSettings();
   const { products, isLoading: productsLoading } = useProducts();
 
@@ -46,6 +58,8 @@ export function WeeklyMealPlanner() {
   // Calculate macros for all days
   const dayMacros: DayMacros[] = mealPlans.map(plan => calculateDayMacros(plan, settings));
   const weeklyAverages = calculateWeeklyAverages(dayMacros);
+  // Check if week has any items
+  const weekHasItems = mealPlans.some(plan => (plan.items?.length || 0) > 0);
   
   // Collect all warnings
   const allWarnings = dayMacros.flatMap(dm => getBalanceWarnings(dm, settings));
@@ -134,6 +148,15 @@ export function WeeklyMealPlanner() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-popover">
                 <DropdownMenuItem 
+                  onClick={() => setResetWeekOpen(true)}
+                  disabled={!weekHasItems || clearWeek.isPending}
+                  className="text-destructive"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset Week
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
                   onClick={() => copyFromPreviousWeek.mutate()}
                   disabled={copyFromPreviousWeek.isPending}
                 >
@@ -143,18 +166,51 @@ export function WeeklyMealPlanner() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => copyFromPreviousWeek.mutate()}
-              disabled={copyFromPreviousWeek.isPending}
-            >
-              <Copy className="h-4 w-4 mr-1" />
-              Copy Previous Week
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setResetWeekOpen(true)}
+                disabled={!weekHasItems || clearWeek.isPending}
+              >
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Reset Week
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => copyFromPreviousWeek.mutate()}
+                disabled={copyFromPreviousWeek.isPending}
+              >
+                <Copy className="h-4 w-4 mr-1" />
+                Copy Previous Week
+              </Button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Reset Week Confirmation Dialog (shared for mobile & desktop) */}
+      <AlertDialog open={resetWeekOpen} onOpenChange={setResetWeekOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset entire week?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clear all meals and portions for the week. 
+              Your saved foods and settings will not be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => clearWeek.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Reset Week
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Last Calculated Timestamp */}
       {isTargetMode && lastCalculated && (

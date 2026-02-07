@@ -130,8 +130,54 @@ function isHighProteinSource(product: Product): boolean {
  */
 function isSauceOrSeasoning(product: Product): boolean {
   const name = product.name.toLowerCase();
-  const sauceKeywords = ["sauce", "seasoning", "spice", "oil", "butter", "dressing", "mayo", "ketchup", "mustard", "herb", "pepper", "salt", "schwartz"];
+  const sauceKeywords = ["sauce", "seasoning", "spice", "oil", "butter", "dressing", "mayo", "ketchup", "mustard", "herb", "pepper", "salt", "schwartz", "paprika", "garlic", "cajun", "curry", "teriyaki", "soy"];
   return sauceKeywords.some(kw => name.includes(kw)) || product.food_type === "sauce";
+}
+
+/**
+ * Seasoning-to-protein pairing map with realistic gram quantities.
+ */
+const SEASONING_PAIRINGS: Record<string, { proteins: string[]; grams: number }> = {
+  "schwartz": { proteins: ["chicken", "beef", "pork", "lamb"], grams: 8 },
+  "paprika": { proteins: ["chicken", "pork"], grams: 3 },
+  "garlic": { proteins: ["chicken", "fish", "prawn", "shrimp"], grams: 6 },
+  "herbs": { proteins: ["fish", "chicken", "lamb"], grams: 5 },
+  "lemon": { proteins: ["fish", "salmon", "cod", "prawn"], grams: 10 },
+  "pepper": { proteins: ["beef", "steak", "chicken"], grams: 2 },
+  "curry": { proteins: ["chicken", "tofu", "prawn"], grams: 10 },
+  "soy": { proteins: ["fish", "tofu", "prawn", "salmon"], grams: 15 },
+  "teriyaki": { proteins: ["salmon", "chicken"], grams: 20 },
+  "cajun": { proteins: ["chicken", "fish", "prawn"], grams: 5 },
+  "bbq": { proteins: ["chicken", "pork", "beef"], grams: 15 },
+  "honey": { proteins: ["chicken", "salmon"], grams: 12 },
+};
+
+const DEFAULT_SEASONING_GRAMS = 10;
+
+/**
+ * Get smart seasoning portion based on protein pairing.
+ */
+function getSeasoningPortion(product: Product, allItems: EditableItem[]): number {
+  const seasoningName = product.name.toLowerCase();
+  
+  // Find proteins in the same meal
+  const proteins = allItems.filter(i => isHighProteinSource(i.product));
+  
+  // Find best match
+  for (const [key, config] of Object.entries(SEASONING_PAIRINGS)) {
+    if (seasoningName.includes(key)) {
+      // Check if any protein in meal matches
+      const hasMatchingProtein = proteins.some(p => 
+        config.proteins.some(pName => p.product.name.toLowerCase().includes(pName))
+      );
+      if (hasMatchingProtein) {
+        return config.grams;
+      }
+    }
+  }
+  
+  // Default: small portion if no specific match
+  return DEFAULT_SEASONING_GRAMS;
 }
 
 /**
@@ -145,6 +191,18 @@ function getMaxPortion(product: Product, settings: PortioningSettings): number {
     return 40; // Max 40g for granola/toppings
   }
   return settings.maxGrams;
+}
+
+/**
+ * Get minimum portion for breakfast items by role.
+ */
+function getBreakfastMinimum(role: "base" | "secondary" | "topper" | "other"): number {
+  switch (role) {
+    case "base": return 100;       // Yogurt min 100g
+    case "secondary": return 80;   // Fruit min 80g
+    case "topper": return 25;      // Granola min 25g
+    default: return 10;
+  }
 }
 
 /**
@@ -264,9 +322,9 @@ function solveSimultaneous(
     }
   });
 
-  // === STEP 0: Set sauce/seasoning items to small fixed portions ===
+  // === STEP 0: Set sauce/seasoning items using smart pairing logic ===
   sauceItems.forEach(idx => {
-    grams[idx] = 15; // Fixed small portion for sauces/seasonings
+    grams[idx] = getSeasoningPortion(items[idx].product, items);
   });
 
   // === Calculate sauce contribution (applies to all meals) ===
@@ -288,9 +346,9 @@ function solveSimultaneous(
 
   // === BREAKFAST SPECIAL HANDLING ===
   if (mealType === "breakfast") {
-    // Step 1: Cap granola at 35g (topper)
+    // Step 1: Set granola (topper) to 30g - within 25-40g range
     breakfastTopper.forEach(idx => {
-      grams[idx] = 35;
+      grams[idx] = 30; // Sensible default, will be clamped to 25-40g
     });
     
     // Step 2: Calculate calories used by toppers
@@ -309,7 +367,8 @@ function solveSimultaneous(
         // Size to hit ~90% of remaining protein (leave room for fine-tuning)
         const gramsNeeded = (remainingProtein * 0.9 / totalProteinPer100g) * 100;
         breakfastBase.forEach(idx => {
-          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, gramsNeeded));
+          const min = getBreakfastMinimum("base");
+          grams[idx] = Math.max(min, Math.min(settings.maxGrams, gramsNeeded));
         });
       }
     }
@@ -322,16 +381,29 @@ function solveSimultaneous(
     
     const afterBaseCals = remainingCalories - baseCalories;
     
-    // Step 5: Size fruit (secondary) to fill remaining calories
-    if (breakfastSecondary.length > 0 && afterBaseCals > 0) {
+    // Step 5: Size fruit (secondary) to fill remaining calories - ENFORCE MINIMUM
+    if (breakfastSecondary.length > 0) {
+      const minSecondary = getBreakfastMinimum("secondary");
       const totalCalsPer100g = breakfastSecondary.reduce((sum, idx) => sum + items[idx].caloriesPer100g, 0);
-      if (totalCalsPer100g > 0) {
+      if (totalCalsPer100g > 0 && afterBaseCals > 0) {
         const gramsNeeded = (afterBaseCals / totalCalsPer100g) * 100;
         breakfastSecondary.forEach(idx => {
-          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, gramsNeeded));
+          // Enforce minimum 80g for fruit even if calorie budget is exceeded
+          grams[idx] = Math.max(minSecondary, Math.min(settings.maxGrams, gramsNeeded));
+        });
+      } else {
+        // Even with no remaining calories, fruit gets minimum portion
+        breakfastSecondary.forEach(idx => {
+          grams[idx] = minSecondary;
         });
       }
     }
+    
+    // Step 5.5: Ensure toppers have sensible minimums (25-40g range)
+    breakfastTopper.forEach(idx => {
+      const min = getBreakfastMinimum("topper");
+      grams[idx] = Math.max(min, Math.min(40, grams[idx] || 30));
+    });
     
     // Step 6: Other items get minimal portions
     otherItems.forEach(idx => {

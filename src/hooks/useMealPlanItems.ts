@@ -253,10 +253,42 @@ export function useMealPlanItems(weekStart: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
-      toast.success("Cleared all items from day");
+      toast.success("Reset day");
     },
     onError: (error) => {
-      toast.error("Failed to clear: " + error.message);
+      toast.error("Failed to reset: " + error.message);
+    },
+  });
+
+  // Clear all items from the entire week
+  const clearWeek = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      
+      // Get all plan IDs for this week
+      const planIds = mealPlans.map(p => p.id);
+      
+      if (planIds.length === 0) {
+        throw new Error("No plans to clear");
+      }
+      
+      // Delete all items from all plans
+      const { error } = await supabase
+        .from("meal_plan_items")
+        .delete()
+        .eq("user_id", user.id)
+        .in("meal_plan_id", planIds);
+      
+      if (error) throw error;
+      
+      return { plansCleared: planIds.length };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      toast.success(`Reset ${result.plansCleared} days`);
+    },
+    onError: (error) => {
+      toast.error("Failed to reset week: " + error.message);
     },
   });
 
@@ -501,6 +533,7 @@ export function useMealPlanItems(weekStart: Date) {
     copyFromPreviousWeek,
     copyDayToNext,
     clearDay,
+    clearWeek,
     recalculateAll,
     lastCalculated,
   };
