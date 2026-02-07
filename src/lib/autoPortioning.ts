@@ -301,7 +301,7 @@ function getBreakfastRole(product: Product): "base" | "secondary" | "topper" | "
 
 /**
  * Calculate multi-macro error between achieved and target values.
- * Weights: Protein 1.5x, Calories 1.0x, Carbs 0.8x, Fat 0.8x
+ * Weights: Protein 1.5x, Calories 1.0x, Carbs 0.8x, Fat 1.2x (increased from 0.8x for parity)
  */
 function calculateMacroError(achieved: MacroTotals, targets: MacroTotals): MacroError {
   const calError = targets.calories - achieved.calories;
@@ -314,8 +314,9 @@ function calculateMacroError(achieved: MacroTotals, targets: MacroTotals): Macro
     protein: proError,
     carbs: carbError,
     fat: fatError,
+    // Fat weighting increased to 1.2 to treat it as first-class with protein
     totalWeighted: Math.abs(calError) + 1.5 * Math.abs(proError) + 
-                   0.8 * Math.abs(carbError) + 0.8 * Math.abs(fatError),
+                   0.8 * Math.abs(carbError) + 1.2 * Math.abs(fatError),
   };
 }
 
@@ -848,6 +849,35 @@ export function calculateDayPortions(
     };
   }
 
+  // === FEASIBILITY PRE-CHECK ===
+  // Calculate achievable macro ranges from editable items
+  const allEditablesForCheck = activeMeals.flatMap(mt => editableByMeal[mt]);
+  let minAchievableFat = 0;
+  let maxAchievableFat = 0;
+  let minAchievableCal = 0;
+  let maxAchievableCal = 0;
+  
+  allEditablesForCheck.forEach(item => {
+    const minG = isSauceOrSeasoning(item.product) ? 3 : settings.minGrams;
+    const maxG = getMaxPortion(item.product, settings);
+    
+    minAchievableFat += (item.fatPer100g * minG) / 100;
+    maxAchievableFat += (item.fatPer100g * maxG) / 100;
+    minAchievableCal += (item.caloriesPer100g * minG) / 100;
+    maxAchievableCal += (item.caloriesPer100g * maxG) / 100;
+  });
+
+  // Check if remaining fat is achievable
+  const fatInfeasible = remainingTargets.fat > maxAchievableFat || remainingTargets.fat < minAchievableFat;
+  const calInfeasible = remainingTargets.calories > maxAchievableCal || remainingTargets.calories < minAchievableCal;
+
+  if (fatInfeasible) {
+    warnings.push(`Fat target (${Math.round(dailyTargets.fat)}g) may be unreachable. Fixed items contribute ${Math.round(fixedContribution.fat)}g; editable items can only provide ${Math.round(minAchievableFat)}-${Math.round(maxAchievableFat)}g more.`);
+  }
+  if (calInfeasible && !fatInfeasible) {
+    warnings.push(`Calorie target (${Math.round(dailyTargets.calories)}) may be unreachable with current item constraints.`);
+  }
+
   // Calculate meal-level targets (split remaining across meals)
   const mainMeals = activeMeals.filter(m => m !== "snack");
   const hasSnacks = activeMeals.includes("snack");
@@ -1148,11 +1178,13 @@ export function calculateDayPortions(
     // Recalculate
     totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
     
-    // === Adjust fat (direction-aware) ===
+    // === Adjust fat (direction-aware) - relaxed filter to include more items ===
     const fatErrAfter = dailyTargets.fat - totalAchieved.fat;
     if (Math.abs(fatErrAfter) >= 0.3) {
+      // Relaxed filter: fatPer100g > 3 (was > 5) and no protein restriction
+      // This includes items like salmon, Greek yogurt, nuts with moderate fat
       const fatSources = allEditables
-        .filter(e => e.item.fatPer100g > 5 && e.item.proteinPer100g < 10)
+        .filter(e => e.item.fatPer100g > 3 && !isSauceOrSeasoning(e.item.product))
         .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
       
       if (fatSources.length > 0) {
@@ -1476,8 +1508,9 @@ export function calculateDayPortions(
     .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.carbsPer100g > 15)
     .sort((a, b) => b.item.carbsPer100g - a.item.carbsPer100g);
   
+  // Relaxed fat sources filter: fatPer100g > 3 (was > 5) to include more items
   const finalFatSources = allEditables
-    .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.fatPer100g > 5)
+    .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.fatPer100g > 3)
     .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
   
   microCorrect(finalProteinSources, finalProErr, i => i.proteinPer100g);
