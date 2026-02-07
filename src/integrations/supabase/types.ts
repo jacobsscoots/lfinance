@@ -410,6 +410,60 @@ export type Database = {
         }
         Relationships: []
       }
+      toiletry_items: {
+        Row: {
+          category: string
+          cost_per_item: number
+          created_at: string
+          current_remaining: number
+          id: string
+          last_restocked_at: string | null
+          name: string
+          notes: string | null
+          pack_size: number
+          size_unit: string
+          status: string
+          total_size: number
+          updated_at: string
+          usage_rate_per_day: number
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          cost_per_item?: number
+          created_at?: string
+          current_remaining?: number
+          id?: string
+          last_restocked_at?: string | null
+          name: string
+          notes?: string | null
+          pack_size?: number
+          size_unit?: string
+          status?: string
+          total_size: number
+          updated_at?: string
+          usage_rate_per_day?: number
+          user_id: string
+        }
+        Update: {
+          category?: string
+          cost_per_item?: number
+          created_at?: string
+          current_remaining?: number
+          id?: string
+          last_restocked_at?: string | null
+          name?: string
+          notes?: string | null
+          pack_size?: number
+          size_unit?: string
+          status?: string
+          total_size?: number
+          updated_at?: string
+          usage_rate_per_day?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account_id: string

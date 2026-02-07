@@ -12,6 +12,7 @@ import Bills from "./pages/Bills";
 import Calendar from "./pages/Calendar";
 import Groceries from "./pages/Groceries";
 import MealPlan from "./pages/MealPlan";
+import Toiletries from "./pages/Toiletries";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
             <Route path="/groceries" element={<ProtectedRoute><Groceries /></ProtectedRoute>} />
             <Route path="/meal-plan" element={<ProtectedRoute><MealPlan /></ProtectedRoute>} />
+            <Route path="/toiletries" element={<ProtectedRoute><Toiletries /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
