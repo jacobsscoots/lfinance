@@ -3,7 +3,7 @@ import { MealPlan, MealPlanItem, MealType, MealStatus } from "@/hooks/useMealPla
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { getCaloriesForDate, getWeekStartMonday, WeeklyCalorieSchedule } from "@/lib/weekTargets";
 import { format, parse } from "date-fns";
-
+import { getDailyTargets, MacroTotals as UnifiedMacroTotals, WeeklyTargetsOverride as UnifiedOverride } from "@/lib/dailyTargets";
 
 export interface MacroTotals {
   calories: number;
@@ -103,48 +103,30 @@ export function calculateMealMacros(
   return { mealType, status, ...totals };
 }
 
-// Get targets for a specific date (weekday vs weekend, or weekly override)
+/**
+ * Get targets for a specific date.
+ * 
+ * @deprecated Use getDailyTargets from '@/lib/dailyTargets' instead.
+ * This function is kept for backward compatibility but delegates to the unified function.
+ * 
+ * IMPORTANT: Fat is now DERIVED from remaining calories, not stored independently.
+ * This ensures calorie/macro consistency.
+ */
 export function getTargetsForDate(
   date: Date, 
   settings: NutritionSettings,
   weeklyOverride?: WeeklyTargetsOverride | null
 ): MacroTotals {
-  // If we have weekly targets, check if this date falls within that week
-  if (weeklyOverride) {
-    // Get the Monday that starts the week containing this date
-    const dateWeekStart = getWeekStartMonday(date);
-    // Use format() for consistent local date string (avoids timezone issues with toISOString)
-    const dateWeekStartStr = format(dateWeekStart, "yyyy-MM-dd");
-    
-    if (dateWeekStartStr === weeklyOverride.weekStartDate) {
-      return {
-        calories: getCaloriesForDate(date, weeklyOverride.schedule),
-        protein: weeklyOverride.protein ?? settings.protein_target_grams ?? 150,
-        carbs: weeklyOverride.carbs ?? settings.carbs_target_grams ?? 200,
-        fat: weeklyOverride.fat ?? settings.fat_target_grams ?? 65,
-      };
-    }
-  }
-
-  // Fall back to global settings (weekday/weekend logic)
-  const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-  if (isWeekend && settings.weekend_targets_enabled) {
-    return {
-      calories: settings.weekend_calorie_target ?? settings.daily_calorie_target ?? 2000,
-      protein: settings.weekend_protein_target_grams ?? settings.protein_target_grams ?? 150,
-      carbs: settings.weekend_carbs_target_grams ?? settings.carbs_target_grams ?? 200,
-      fat: settings.weekend_fat_target_grams ?? settings.fat_target_grams ?? 65,
-    };
-  }
-
-  return {
-    calories: settings.daily_calorie_target ?? 2000,
-    protein: settings.protein_target_grams ?? 150,
-    carbs: settings.carbs_target_grams ?? 200,
-    fat: settings.fat_target_grams ?? 65,
-  };
+  // Convert to unified format and delegate
+  const unifiedOverride: UnifiedOverride | undefined = weeklyOverride ? {
+    weekStartDate: weeklyOverride.weekStartDate,
+    schedule: weeklyOverride.schedule,
+    protein: weeklyOverride.protein,
+    carbs: weeklyOverride.carbs,
+    fat: weeklyOverride.fat, // Will be ignored - fat is derived
+  } : undefined;
+  
+  return getDailyTargets(date, settings, unifiedOverride);
 }
 
 // Calculate macros for a day

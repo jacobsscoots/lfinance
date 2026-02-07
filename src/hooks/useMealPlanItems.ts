@@ -6,9 +6,8 @@ import { toast } from "sonner";
 import { addDays, parse } from "date-fns";
 import { Product, ProductType } from "./useProducts";
 import { NutritionSettings } from "./useNutritionSettings";
-import { getTargetsForDate, WeeklyTargetsOverride } from "@/lib/mealCalculations";
+import { getDailyTargets, WeeklyTargetsOverride } from "@/lib/dailyTargets";
 import { calculateMealPortions, PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
-
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type MealStatus = "planned" | "skipped" | "eating_out";
@@ -476,7 +475,8 @@ export function useMealPlanItems(weekStart: Date) {
       
       // Parse as local date to avoid UTC-shift target mismatches.
       const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
-      const targets = getTargetsForDate(dayDate, settings, weeklyOverride);
+      // Use unified getDailyTargets for single source of truth
+      const targets = getDailyTargets(dayDate, settings, weeklyOverride);
 
       // Virtualize unlocked editable items as 0g for the solve (regen behavior),
       // but do NOT write 0g to the DB unless the solve succeeds.
@@ -554,7 +554,8 @@ export function useMealPlanItems(weekStart: Date) {
       
       for (const plan of mealPlans) {
         const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
-        const targets = getTargetsForDate(dayDate, settings, weeklyOverride);
+        // Use unified getDailyTargets for single source of truth
+        const targets = getDailyTargets(dayDate, settings, weeklyOverride);
         const items = plan.items || [];
         
         if (items.length === 0) continue;
