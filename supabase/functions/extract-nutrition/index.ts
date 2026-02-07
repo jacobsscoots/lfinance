@@ -29,6 +29,7 @@ interface ExtractedNutrition {
   offer_price?: number;
   offer_label?: string;
   pack_size_grams?: number;
+  retailer?: string;
   energy_kj?: number;
   energy_kcal?: number;
   fat?: number;
@@ -40,6 +41,33 @@ interface ExtractedNutrition {
   salt?: number;
   source_url?: string;
   confidence: Record<string, "high" | "medium" | "low">;
+}
+
+// Auto-detect retailer from URL domain
+function detectRetailerFromUrl(url: string): string | undefined {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    
+    if (hostname.includes("tesco")) return "Tesco";
+    if (hostname.includes("sainsburys") || hostname.includes("sainsbury")) return "Sainsbury's";
+    if (hostname.includes("asda")) return "ASDA";
+    if (hostname.includes("morrisons")) return "Morrisons";
+    if (hostname.includes("aldi")) return "Aldi";
+    if (hostname.includes("lidl")) return "Lidl";
+    if (hostname.includes("iceland")) return "Iceland";
+    if (hostname.includes("ocado")) return "Ocado";
+    if (hostname.includes("waitrose")) return "Waitrose";
+    if (hostname.includes("coop") || hostname.includes("co-op")) return "Co-op";
+    if (hostname.includes("myprotein")) return "MyProtein";
+    if (hostname.includes("amazon")) return "Amazon";
+    if (hostname.includes("boots")) return "Boots";
+    if (hostname.includes("superdrug")) return "Superdrug";
+    if (hostname.includes("savers")) return "Savers";
+    
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 serve(async (req) => {
@@ -714,10 +742,18 @@ Extract the size value separately from the unit.`;
 
   try {
     const parsed = JSON.parse(jsonMatch2[0]);
+    // Auto-detect retailer from URL
+    const detectedRetailer = detectRetailerFromUrl(url);
+    
     return {
       ...parsed,
       source_url: url,
-      confidence: parsed.confidence || {},
+      // Use detected retailer if AI didn't extract one
+      retailer: parsed.retailer || detectedRetailer,
+      confidence: {
+        ...(parsed.confidence || {}),
+        ...(detectedRetailer && !parsed.retailer ? { retailer: "high" as const } : {}),
+      },
     };
   } catch {
     throw new Error("Could not parse product data from URL. Try 'Upload Photo' or 'Paste Text' instead.");

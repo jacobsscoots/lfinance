@@ -208,8 +208,14 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
     if (selectedFields.has("offer_price") && extracted.offer_price) {
       form.setValue("offer_price", extracted.offer_price);
     }
+    if (selectedFields.has("offer_label") && extracted.offer_label) {
+      form.setValue("offer_label", extracted.offer_label);
+    }
     if (selectedFields.has("pack_size_grams") && extracted.pack_size_grams) {
       form.setValue("pack_size_grams", extracted.pack_size_grams);
+    }
+    if (selectedFields.has("retailer") && extracted.retailer) {
+      form.setValue("retailer", extracted.retailer);
     }
     if (extracted.source_url) {
       form.setValue("source_url", extracted.source_url);

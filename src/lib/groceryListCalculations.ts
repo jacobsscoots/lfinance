@@ -1,7 +1,7 @@
 import { Product } from "@/hooks/useProducts";
 import { MealPlan } from "@/hooks/useMealPlanItems";
 import { generateGroceryList, GroceryItem } from "./mealCalculations";
-import { calculateBasketDiscount, DiscountType } from "./discounts";
+import { calculateBasketDiscount, DiscountType, parseMultiBuyOffer, calculateMultiBuyPrice, MultiBuyOffer } from "./discounts";
 
 // ============= Types =============
 
@@ -22,15 +22,24 @@ export interface ShopReadyItem {
   
   // Cost calculations (per item, before basket discount)
   grossCost: number;
+  
+  // Multi-buy offer (if applicable)
+  multiBuyOffer: MultiBuyOffer | null;
+  multiBuyDiscount: number;
+  costAfterMultiBuy: number;
 }
 
 export interface RetailerGroup {
   retailer: string;
   items: ShopReadyItem[];
   subtotal: number;
+  multiBuyDiscount: number;
+  subtotalAfterMultiBuy: number;
   discountType: DiscountType;
-  discountAmount: number;
+  loyaltyDiscountAmount: number;
   finalTotal: number;
+  // Legacy field for backwards compatibility
+  discountAmount: number;
 }
 
 export interface ShopReadyList {
@@ -38,6 +47,8 @@ export interface ShopReadyList {
   alreadyCovered: ShopReadyItem[];
   totals: {
     grossCost: number;
+    multiBuyDiscount: number;
+    loyaltyDiscount: number;
     totalDiscount: number;
     finalCost: number;
     itemCount: number;
@@ -126,6 +137,9 @@ export function generateShopReadyList(
     // Get retailer (default from product or 'Unassigned')
     const retailer = product.retailer || "Unassigned";
     
+    // Parse multi-buy offer from offer_label
+    const multiBuyOffer = parseMultiBuyOffer(product.offer_label);
+    
     // Create shop ready item
     const shopItem: ShopReadyItem = {
       product,
@@ -136,6 +150,9 @@ export function generateShopReadyList(
       purchasePacks: 0,
       packNetGrams,
       grossCost: 0,
+      multiBuyOffer,
+      multiBuyDiscount: 0,
+      costAfterMultiBuy: 0,
     };
     
     // Check if fully covered by stock
@@ -152,8 +169,13 @@ export function generateShopReadyList(
       shopItem.purchasePacks = 1;
     }
     
-    // Calculate gross cost (before discount)
+    // Calculate gross cost (before any discount)
     shopItem.grossCost = shopItem.purchasePacks * product.price;
+    
+    // Apply multi-buy discount if applicable
+    const multiBuyResult = calculateMultiBuyPrice(product.price, shopItem.purchasePacks, multiBuyOffer);
+    shopItem.multiBuyDiscount = multiBuyResult.discountAmount;
+    shopItem.costAfterMultiBuy = multiBuyResult.finalCost;
     
     // Group by retailer
     if (!byRetailerMap.has(retailer)) {
@@ -165,31 +187,45 @@ export function generateShopReadyList(
   // Calculate totals and apply basket-level discounts per retailer
   const byRetailer: RetailerGroup[] = [];
   let totalGrossCost = 0;
-  let totalDiscount = 0;
+  let totalMultiBuyDiscount = 0;
+  let totalLoyaltyDiscount = 0;
   let totalFinalCost = 0;
   let totalItemCount = 0;
   
   for (const [retailer, items] of byRetailerMap) {
+    // Gross subtotal before any discounts
     const subtotal = items.reduce((sum, item) => sum + item.grossCost, 0);
+    
+    // Multi-buy discounts for this retailer
+    const multiBuyDiscount = items.reduce((sum, item) => sum + item.multiBuyDiscount, 0);
+    
+    // Subtotal after multi-buy (this is what loyalty discount applies to)
+    const subtotalAfterMultiBuy = subtotal - multiBuyDiscount;
+    
     const discountType = retailerDiscounts[retailer] ?? "none";
     
-    // Apply basket-level discount
-    const discountResult = calculateBasketDiscount(subtotal, discountType);
+    // Apply basket-level loyalty discount on subtotal AFTER multi-buy
+    const loyaltyResult = calculateBasketDiscount(subtotalAfterMultiBuy, discountType);
     
     const group: RetailerGroup = {
       retailer,
       items,
       subtotal,
+      multiBuyDiscount,
+      subtotalAfterMultiBuy,
       discountType,
-      discountAmount: discountResult.discountAmount,
-      finalTotal: discountResult.finalPrice,
+      loyaltyDiscountAmount: loyaltyResult.discountAmount,
+      finalTotal: loyaltyResult.finalPrice,
+      // Legacy field for backwards compatibility
+      discountAmount: multiBuyDiscount + loyaltyResult.discountAmount,
     };
     
     byRetailer.push(group);
     
     totalGrossCost += subtotal;
-    totalDiscount += discountResult.discountAmount;
-    totalFinalCost += discountResult.finalPrice;
+    totalMultiBuyDiscount += multiBuyDiscount;
+    totalLoyaltyDiscount += loyaltyResult.discountAmount;
+    totalFinalCost += loyaltyResult.finalPrice;
     totalItemCount += items.length;
   }
   
@@ -205,7 +241,9 @@ export function generateShopReadyList(
     alreadyCovered,
     totals: {
       grossCost: totalGrossCost,
-      totalDiscount,
+      multiBuyDiscount: totalMultiBuyDiscount,
+      loyaltyDiscount: totalLoyaltyDiscount,
+      totalDiscount: totalMultiBuyDiscount + totalLoyaltyDiscount,
       finalCost: totalFinalCost,
       itemCount: totalItemCount,
     },

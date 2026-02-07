@@ -8,6 +8,7 @@ export interface ExtractedNutrition {
   offer_price?: number;
   offer_label?: string;
   pack_size_grams?: number;
+  retailer?: string;
   energy_kj?: number;
   energy_kcal?: number;
   fat?: number;
@@ -175,7 +176,9 @@ export function mergeExtractedData<T extends Record<string, any>>(
     salt_per_100g: "salt",
     price: "price",
     offer_price: "offer_price",
+    offer_label: "offer_label",
     pack_size_grams: "pack_size_grams",
+    retailer: "retailer",
     source_url: "source_url",
     image_url: "image_url",
   };

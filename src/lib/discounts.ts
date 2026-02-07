@@ -11,6 +11,12 @@ export interface DiscountCalculation {
   finalPrice: number;
 }
 
+export interface MultiBuyOffer {
+  buyQuantity: number;
+  payQuantity: number;
+  offerLabel: string;
+}
+
 const DISCOUNT_RATES: Record<DiscountType, number> = {
   tesco_benefits: 0.04, // 4%
   easysaver: 0.07,      // 7%
@@ -18,6 +24,89 @@ const DISCOUNT_RATES: Record<DiscountType, number> = {
   none: 0,
   other: 0,
 };
+
+/**
+ * Parse offer_label to detect multi-buy offers like "4 for 3", "3 for 2", "Buy 2 Get 1 Free"
+ * 
+ * @param offerLabel The offer description string
+ * @returns MultiBuyOffer if detected, null otherwise
+ */
+export function parseMultiBuyOffer(offerLabel: string | null | undefined): MultiBuyOffer | null {
+  if (!offerLabel) return null;
+  
+  const normalized = offerLabel.toLowerCase().trim();
+  
+  // Pattern: "X for Y" (e.g., "4 for 3", "3 for 2")
+  const forPattern = /(\d+)\s*for\s*(?:the\s*price\s*of\s*)?(\d+)/i;
+  const forMatch = normalized.match(forPattern);
+  if (forMatch) {
+    const buyQty = parseInt(forMatch[1], 10);
+    const payQty = parseInt(forMatch[2], 10);
+    if (buyQty > payQty && buyQty > 0 && payQty > 0) {
+      return { buyQuantity: buyQty, payQuantity: payQty, offerLabel };
+    }
+  }
+  
+  // Pattern: "Buy X Get Y Free" (e.g., "Buy 2 Get 1 Free", "Buy 3 Get 1 Free")
+  const bogofPattern = /buy\s*(\d+)\s*get\s*(\d+)\s*free/i;
+  const bogofMatch = normalized.match(bogofPattern);
+  if (bogofMatch) {
+    const buyQty = parseInt(bogofMatch[1], 10);
+    const freeQty = parseInt(bogofMatch[2], 10);
+    if (buyQty > 0 && freeQty > 0) {
+      return { buyQuantity: buyQty + freeQty, payQuantity: buyQty, offerLabel };
+    }
+  }
+  
+  // Pattern: "BOGOF" or "Buy One Get One Free"
+  if (normalized.includes("bogof") || normalized.includes("buy one get one")) {
+    return { buyQuantity: 2, payQuantity: 1, offerLabel };
+  }
+  
+  // Pattern: "3 for £X" - this is a fixed price, not a multi-buy ratio
+  // We don't handle this here as it needs the actual price
+  
+  return null;
+}
+
+/**
+ * Calculate the effective unit price when multi-buy offer is applied.
+ * 
+ * @param unitPrice Price per single item
+ * @param quantity Number of items being purchased
+ * @param offer Multi-buy offer details
+ * @returns Object with gross cost, discount amount, and final cost
+ */
+export function calculateMultiBuyPrice(
+  unitPrice: number,
+  quantity: number,
+  offer: MultiBuyOffer | null
+): { grossCost: number; discountAmount: number; finalCost: number } {
+  const grossCost = unitPrice * quantity;
+  
+  if (!offer || quantity < offer.buyQuantity) {
+    // Offer doesn't apply - not enough items
+    return { grossCost, discountAmount: 0, finalCost: grossCost };
+  }
+  
+  // Calculate how many complete offer sets we have
+  const completeSets = Math.floor(quantity / offer.buyQuantity);
+  const remainder = quantity % offer.buyQuantity;
+  
+  // Cost for complete sets (pay for payQuantity per set)
+  const setCost = completeSets * offer.payQuantity * unitPrice;
+  // Cost for remaining items at full price
+  const remainderCost = remainder * unitPrice;
+  
+  const finalCost = setCost + remainderCost;
+  const discountAmount = grossCost - finalCost;
+  
+  return {
+    grossCost: Math.round(grossCost * 100) / 100,
+    discountAmount: Math.round(discountAmount * 100) / 100,
+    finalCost: Math.round(finalCost * 100) / 100,
+  };
+}
 
 /**
  * Calculate loyalty discount using the "round up then apply" rule.
