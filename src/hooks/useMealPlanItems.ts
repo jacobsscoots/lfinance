@@ -1,8 +1,12 @@
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
 import { Product, ProductType } from "./useProducts";
+import { NutritionSettings } from "./useNutritionSettings";
+import { getTargetsForDate } from "@/lib/mealCalculations";
+import { calculateMealPortions, PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type MealStatus = "planned" | "skipped" | "eating_out";
@@ -317,6 +321,75 @@ export function useMealPlanItems(weekStart: Date) {
     },
   });
 
+  // Track last calculation time
+  const [lastCalculated, setLastCalculated] = useState<Date | null>(null);
+
+  const recalculateAll = useMutation({
+    mutationFn: async ({ 
+      settings, 
+      portioningSettings = DEFAULT_PORTIONING_SETTINGS 
+    }: { 
+      settings: NutritionSettings; 
+      portioningSettings?: PortioningSettings;
+    }) => {
+      if (!user) throw new Error("Not authenticated");
+      
+      let totalUpdated = 0;
+      
+      for (const plan of mealPlans) {
+        const dayDate = new Date(plan.meal_date);
+        const targets = getTargetsForDate(dayDate, settings);
+        const items = plan.items || [];
+        
+        // Get products for this day
+        const products = items
+          .map(i => i.product)
+          .filter((p): p is Product => !!p);
+        
+        // Get locked items
+        const lockedItems = items
+          .filter(i => i.is_locked && i.product)
+          .map(i => ({ productId: i.product_id, grams: i.quantity_grams }));
+        
+        // Calculate optimal portions
+        const result = calculateMealPortions(
+          products,
+          targets,
+          lockedItems,
+          portioningSettings
+        );
+        
+        // Update each editable, unlocked item
+        for (const item of items) {
+          if (item.is_locked) continue;
+          if (item.product?.product_type === "fixed") continue;
+          
+          const newGrams = result.items.get(item.product_id);
+          if (newGrams !== undefined && newGrams !== item.quantity_grams) {
+            const { error } = await supabase
+              .from("meal_plan_items")
+              .update({ quantity_grams: newGrams })
+              .eq("id", item.id)
+              .eq("user_id", user.id);
+            
+            if (error) throw error;
+            totalUpdated++;
+          }
+        }
+      }
+      
+      return totalUpdated;
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      setLastCalculated(new Date());
+      toast.success(`Recalculated portions${updated > 0 ? ` (${updated} items updated)` : ""}`);
+    },
+    onError: (error) => {
+      toast.error("Failed to recalculate: " + error.message);
+    },
+  });
+
   return {
     mealPlans,
     isLoading,
@@ -326,5 +399,7 @@ export function useMealPlanItems(weekStart: Date) {
     removeItem,
     updateMealStatus,
     copyFromPreviousWeek,
+    recalculateAll,
+    lastCalculated,
   };
 }
