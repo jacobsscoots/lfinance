@@ -2,7 +2,8 @@ import { Product } from "@/hooks/useProducts";
 import { MealPlan, MealPlanItem, MealType, MealStatus } from "@/hooks/useMealPlanItems";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { getCaloriesForDate, getWeekStartMonday, WeeklyCalorieSchedule } from "@/lib/weekTargets";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
+
 
 export interface MacroTotals {
   calories: number;
@@ -174,9 +175,10 @@ export function calculateDayMacros(
   let targetDiff: MacroTotals | undefined;
   if (settings && settings.mode === "target_based") {
     // Use day-specific targets (weekday vs weekend, or weekly override)
-    const planDate = new Date(plan.meal_date);
+    // Parse as local date to avoid UTC-shift bugs when resolving week/day targets.
+    const planDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
     const targets = getTargetsForDate(planDate, settings, weeklyOverride);
-    
+
     targetDiff = {
       calories: totals.calories - targets.calories,
       protein: totals.protein - targets.protein,
