@@ -1,142 +1,170 @@
+# Fix Account Deduplication – Database as Source of Truth
 
-# Accounts Page - Fix Display Issues and Deduplicate
+## Current Problems
 
-## Problems Identified
+### 1. Column Name Inconsistency (Resolved)
+- Database column: `external_id`
+- Earlier plan referenced: `external_account_id`
+- **Decision**: Use `external_id` consistently everywhere (confirmed existing column)
 
-### 1. Database Duplicates (Root Cause)
-The database contains **actual duplicate rows** with the same `external_id` but different `id` values:
-- "Clothing" savings account: 5 duplicate rows
-- "Groceries" savings account: 5 duplicate rows
+All references (DB, types, sync, UI) must use:
+- `provider`
+- `external_id`
 
-The unique index on `(provider, external_id)` wasn't preventing this because `provider` is NULL for all accounts - NULL values don't match in unique constraints.
-
-### 2. Provider is NULL
-All bank accounts have `provider: NULL`. The sync function tries to extract the provider from TrueLayer's response (`account.provider?.provider_id`), but this data may not be reliably returned.
-
-### 3. "Connected Bank" Label
-The `bankProviders.ts` maps "truelayer" to "Connected Bank". Since `bank_connections` stores `provider: truelayer`, this is technically correct but unhelpful. The actual bank name (Monzo, Starling, etc.) isn't being stored.
+No aliases, no fallbacks, no mixed naming.
 
 ---
 
-## Solution
+### 2. Conflicting Unique Indexes
+Two previous migrations caused confusion:
+- One migration created a composite index `(provider, external_id)`
+- A later migration dropped it and created a unique index on `external_id` only
 
-### Step 1: Clean Up Duplicate Accounts (Database Migration)
-Delete duplicate account rows, keeping only the oldest record for each `external_id`:
+**Current state (verified):**
+- Only `external_id` unique index exists
+- This allows duplicates when the same external_id appears across providers
 
-```sql
--- Delete duplicate bank accounts, keeping the oldest by created_at
-DELETE FROM bank_accounts
-WHERE id NOT IN (
-  SELECT DISTINCT ON (external_id) id
-  FROM bank_accounts
-  WHERE external_id IS NOT NULL
-  ORDER BY external_id, created_at ASC
-);
-```
+This must be corrected.
 
-### Step 2: Create Unique Index on `external_id`
-Since `provider` is NULL and may remain so, create a unique index just on `external_id` (which is the TrueLayer account ID):
+---
 
-```sql
--- Drop the old index if exists and create new one
-DROP INDEX IF EXISTS bank_accounts_provider_external_id;
-CREATE UNIQUE INDEX bank_accounts_external_id_unique 
-ON bank_accounts(external_id) WHERE external_id IS NOT NULL;
-```
+### 3. TrueLayer Sync Not Using Composite Key
+The TrueLayer sync currently checks existence using:
 
-### Step 3: Update Truelayer Sync - Extract Bank Provider
-Modify the sync function to extract the actual bank provider from TrueLayer's API response. TrueLayer returns `provider.provider_id` (e.g., "ob-monzo", "ob-starling"):
+```ts
+.eq('external_id', account.account_id)
+.eq('user_id', userId)
+This is insufficient and allows duplicate rows when:
 
-```typescript
-// In truelayer-sync/index.ts
-const accountProvider = account.provider?.provider_id?.replace('ob-', '') || 
-                        account.provider?.display_name ||
-                        connectionProvider;
-```
+provider differs
 
-### Step 4: Update Provider Label Mapping
-Extend `bankProviders.ts` to handle more variations and add a status indicator color function:
+provider is NULL
 
-```typescript
-// Add status indicator function
-export function getConnectionStatusColor(status?: string): {
-  color: string;
-  label: string;
-} {
-  switch (status) {
-    case 'connected':
-      return { color: 'text-green-500', label: 'Connected' };
-    case 'expired':
-    case 'pending':
-      return { color: 'text-amber-500', label: 'Needs Attention' };
-    case 'error':
-    case 'failed':
-      return { color: 'text-red-500', label: 'Error' };
-    default:
-      return { color: 'text-muted-foreground', label: 'Unknown' };
-  }
-}
+multiple banks reuse similar account IDs
 
-// Extend BANK_PROVIDER_LABELS for TrueLayer prefixes
-"ob-monzo": "Monzo",
-"ob-starling": "Starling Bank",
-// etc.
-```
+4. UI Deduplication Acting as Primary Fix
+The UI currently deduplicates accounts in useAccounts.ts.
 
-### Step 5: Update AccountCard UI
-Add a connection status indicator dot next to the bank name:
-- Green dot: Connected and syncing normally
-- Amber dot: Connection needs attention (expired/pending)
-- Red dot: Error requiring fix
+This must remain defensive only, not relied upon to correct data integrity issues.
 
-```tsx
-// In AccountCard.tsx
-// Add status indicator based on connection status or last_synced_at
-<span className="h-2 w-2 rounded-full bg-green-500" />
-```
+Final Design Decision (Source of Truth)
+Database is the source of truth.
 
-### Step 6: Update useAccounts Hook
-Add deduplication by `external_id` (not just by `id`) to handle any remaining edge cases:
+Uniqueness is enforced by:
 
-```typescript
-// Deduplicate by external_id, keeping first occurrence
-const deduped = Array.from(
+(provider, external_id) at the database level
+
+TrueLayer sync using the same composite key
+
+UI deduplication only as a safety net
+
+Solution
+1. Database Migration – Composite Unique Index
+Replace the current external_id-only uniqueness with a composite key.
+
+Important design choice:
+
+We explicitly handle NULL providers using COALESCE
+
+This prevents duplicates even if provider data is temporarily missing
+
+-- Drop the existing single-column unique index
+DROP INDEX IF EXISTS public.bank_accounts_external_id_unique;
+
+-- Create composite unique index on (provider, external_id)
+-- COALESCE ensures NULL providers are treated consistently
+CREATE UNIQUE INDEX IF NOT EXISTS bank_accounts_provider_external_id_key
+ON public.bank_accounts (COALESCE(provider, 'unknown'), external_id)
+WHERE external_id IS NOT NULL;
+
+COMMENT ON INDEX bank_accounts_provider_external_id_key IS
+  'Source of truth for bank account uniqueness: (provider, external_id). UI deduplication is defensive only.';
+This guarantees:
+
+No duplicate bank accounts at DB level
+
+Safe handling of NULL provider edge cases
+
+Deterministic UPSERT behavior
+
+2. TrueLayer Sync – Composite Lookup + UPSERT
+Update the existing account lookup to fully match the unique key.
+
+Before (insufficient)
+.eq('external_id', account.account_id)
+.eq('user_id', userId)
+After (correct)
+// Source of truth lookup: (provider, external_id)
+const { data: existingAccount } = await supabase
+  .from('bank_accounts')
+  .select('id, display_name, provider')
+  .eq('external_id', account.account_id)
+  .eq('provider', accountProvider)
+  .eq('user_id', userId)
+  .maybeSingle();
+Rules:
+
+Inserts and updates must include provider
+
+UPSERT must align with the composite unique index
+
+No fallback matching by name or display label
+
+3. useAccounts.ts – Mark UI Deduplication as Defensive
+UI deduplication stays, but is explicitly documented as non-authoritative.
+
+// DEFENSIVE ONLY:
+// Database uniqueness on (provider, external_id) is the source of truth.
+// This client-side deduplication is a safety net for rare edge cases
+// and should not be relied upon to fix data integrity issues.
+const uniqueAccounts = Array.from(
   new Map((data || []).map(a => [a.external_id || a.id, a])).values()
-);
-```
+) as BankAccount[];
+This avoids:
 
----
+masking real sync bugs
 
-## Files to Modify
+future devs relying on UI dedup instead of DB constraints
 
-| File | Action |
-|------|--------|
-| `supabase/migrations/xxx.sql` | CREATE - Cleanup duplicates + fix unique index |
-| `src/lib/bankProviders.ts` | MODIFY - Add TrueLayer prefixes + status color function |
-| `src/components/accounts/AccountCard.tsx` | MODIFY - Add status indicator dot |
-| `src/hooks/useAccounts.ts` | MODIFY - Dedupe by external_id |
-| `supabase/functions/truelayer-sync/index.ts` | MODIFY - Extract bank name from provider data |
+Files to Modify
+File	Action
+supabase/migrations/xxx_fix_unique_index.sql	CREATE – Replace unique index with composite key
+supabase/functions/truelayer-sync/index.ts	MODIFY – Use (provider, external_id) for lookup & UPSERT
+src/hooks/useAccounts.ts	MODIFY – Mark deduplication as defensive only
+Column Name Verification (Locked)
+Location	Column	Status
+bank_accounts table	external_id	Confirmed
+bank_accounts table	provider	Confirmed
+Type definitions	external_id	Matches
+Type definitions	provider	Matches
+TrueLayer sync	external_id	Uses account.account_id
+TrueLayer sync	provider	Uses accountProvider
+No other column names should be introduced.
 
----
+Expected Behavior After Fix
+Database is authoritative
 
-## Expected Results
+Duplicate accounts cannot be created at DB level
 
-1. Duplicate accounts removed from database (from ~14 to ~5 unique accounts)
-2. Future syncs cannot create duplicates
-3. Bank name displayed correctly (Monzo, Starling, etc. instead of "Connected Bank")
-4. Green/amber/red status indicator shows connection health
-5. UI shows each account exactly once
+TrueLayer sync is deterministic
 
----
+Existing accounts are updated, not reinserted
 
-## Technical Details
+UI dedup is defensive
 
-### Status Indicator Logic
-- **Green**: `last_synced_at` within last 24 hours OR connection status is "connected"
-- **Amber**: `last_synced_at` > 24 hours OR connection status is "pending"/"expired"
-- **Red**: Connection status is "error" OR no connection found
+Rare edge cases only, not a primary fix
 
-### Deduplication Strategy
-1. Database level: Unique index prevents new duplicates
-2. Hook level: Dedupe by `external_id` as defensive measure
-3. UI level: React key by `id` (already done)
+No silent UPSERT failures
+
+Column names and unique keys are consistent everywhere
+
+Explicit Non-Goals
+No data backfills
+
+No account merging logic
+
+No transaction refactors
+
+No manual cleanup scripts
+
+If duplicates already exist, they will be handled separately.
