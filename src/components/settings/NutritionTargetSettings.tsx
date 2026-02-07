@@ -412,7 +412,7 @@ export function NutritionTargetSettings() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Sex</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || "male"}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select" />
@@ -487,7 +487,7 @@ export function NutritionTargetSettings() {
                             <Activity className="h-4 w-4" />
                             Activity Level
                           </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || "moderately_active"}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select activity level" />
@@ -510,7 +510,7 @@ export function NutritionTargetSettings() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Formula</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || "mifflin_st_jeor"}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue />
@@ -533,7 +533,7 @@ export function NutritionTargetSettings() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Goal</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || "maintain"}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue />
