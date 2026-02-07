@@ -54,14 +54,16 @@ export function useBankConnections() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // Query connections but explicitly exclude sensitive token fields
   const connectionsQuery = useQuery({
     queryKey: ["bank-connections", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
+      // Only select non-sensitive fields - tokens stay server-side
       const { data, error } = await supabase
         .from("bank_connections")
-        .select("*")
+        .select("id, user_id, provider, status, last_synced_at, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -85,13 +87,13 @@ export function useBankConnections() {
           provider: "truelayer",
           status: "pending",
         })
-        .select()
+        .select("id")
         .single();
 
       if (connError) throw connError;
 
       try {
-        // Get auth URL from edge function - explicitly pass action in body
+        // Get auth URL from edge function - JWT is automatically included
         const { data, error } = await supabase.functions.invoke("truelayer-auth", {
           body: { action: "auth-url", redirectUri },
         });
@@ -131,43 +133,20 @@ export function useBankConnections() {
     mutationFn: async ({ code, connectionId }: { code: string; connectionId: string }) => {
       const redirectUri = `${window.location.origin}/accounts?truelayer_callback=true`;
 
-      // Exchange code for tokens - explicitly pass action
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
+      // Exchange code for tokens - tokens are stored server-side, never returned to client
+      const { data: exchangeData, error: tokenError } = await supabase.functions.invoke(
         "truelayer-auth",
         {
-          body: { action: "exchange-code", code, redirectUri },
+          body: { action: "exchange-code", code, redirectUri, connectionId },
         }
       );
 
       if (tokenError) throw tokenError;
-      if (!tokenData?.access_token) throw new Error("No access token returned");
+      if (!exchangeData?.success) throw new Error("Token exchange failed");
 
-      // Update connection with tokens
-      const expiresAt = new Date();
-      expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
-
-      const { error: updateError } = await supabase
-        .from("bank_connections")
-        .update({
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          token_expires_at: expiresAt.toISOString(),
-          status: "connected",
-        })
-        .eq("id", connectionId);
-
-      if (updateError) throw updateError;
-
-      // Sync accounts and transactions
-      const session = await supabase.auth.getSession();
+      // Sync accounts and transactions - tokens are fetched server-side
       const { error: syncError } = await supabase.functions.invoke("truelayer-sync", {
-        body: {
-          connectionId,
-          accessToken: tokenData.access_token,
-        },
-        headers: {
-          Authorization: `Bearer ${session.data.session?.access_token}`,
-        },
+        body: { connectionId },
       });
 
       if (syncError) throw syncError;
@@ -197,54 +176,9 @@ export function useBankConnections() {
 
   const syncConnection = useMutation({
     mutationFn: async (connectionId: string) => {
-      // Get connection details
-      const { data: connection, error: connError } = await supabase
-        .from("bank_connections")
-        .select("*")
-        .eq("id", connectionId)
-        .single();
-
-      if (connError) throw connError;
-
-      let accessToken = connection.access_token;
-
-      // Check if token needs refresh
-      if (connection.token_expires_at && new Date(connection.token_expires_at) < new Date()) {
-        const { data: tokenData, error: refreshError } = await supabase.functions.invoke(
-          "truelayer-auth",
-          {
-            body: { action: "refresh-token", refreshToken: connection.refresh_token },
-          }
-        );
-
-        if (refreshError) throw refreshError;
-
-        // Update tokens
-        const expiresAt = new Date();
-        expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
-
-        await supabase
-          .from("bank_connections")
-          .update({
-            access_token: tokenData.access_token,
-            refresh_token: tokenData.refresh_token,
-            token_expires_at: expiresAt.toISOString(),
-          })
-          .eq("id", connectionId);
-
-        accessToken = tokenData.access_token;
-      }
-
-      // Sync accounts and transactions
-      const session = await supabase.auth.getSession();
+      // Simply call sync - all token handling happens server-side
       const { error: syncError } = await supabase.functions.invoke("truelayer-sync", {
-        body: {
-          connectionId,
-          accessToken,
-        },
-        headers: {
-          Authorization: `Bearer ${session.data.session?.access_token}`,
-        },
+        body: { connectionId },
       });
 
       if (syncError) throw syncError;

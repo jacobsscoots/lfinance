@@ -3,10 +3,24 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const TRUELAYER_API_URL = 'https://api.truelayer.com';
+const TRUELAYER_AUTH_URL = 'https://auth.truelayer.com';
+
+function jsonResponse(data: object, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function errorResponse(error: string, stage: string, status = 400, details?: unknown) {
+  console.error(`[${stage}] ${error}`, details || '');
+  return jsonResponse({ error, stage, details }, status);
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -15,12 +29,10 @@ serve(async (req) => {
   }
 
   try {
+    // Validate JWT authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Missing or invalid Authorization header', 'auth', 401);
     }
 
     const supabase = createClient(
@@ -32,14 +44,103 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
     const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
     if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Invalid or expired token', 'auth', 401);
     }
 
-    const userId = claimsData.claims.sub;
-    const { connectionId, accessToken } = await req.json();
+    const userId = claimsData.claims.sub as string;
+    console.log(`[sync] Authenticated user: ${userId}`);
+
+    const { connectionId } = await req.json();
+
+    if (!connectionId) {
+      return errorResponse('Missing connectionId parameter', 'validation', 400);
+    }
+
+    // Get connection details server-side - tokens never exposed to client
+    // Use service role to bypass RLS and access tokens securely
+    const serviceSupabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    const { data: connection, error: connError } = await serviceSupabase
+      .from('bank_connections')
+      .select('id, user_id, access_token, refresh_token, token_expires_at')
+      .eq('id', connectionId)
+      .single();
+
+    if (connError || !connection) {
+      return errorResponse('Connection not found', 'sync', 404);
+    }
+
+    // Verify ownership
+    if (connection.user_id !== userId) {
+      return errorResponse('Connection does not belong to this user', 'sync', 403);
+    }
+
+    if (!connection.access_token) {
+      return errorResponse('No access token available. Please reconnect your bank.', 'sync', 400);
+    }
+
+    let accessToken = connection.access_token;
+
+    // Check if token needs refresh
+    if (connection.token_expires_at && new Date(connection.token_expires_at) < new Date()) {
+      console.log('[sync] Token expired, refreshing...');
+      
+      const TRUELAYER_CLIENT_ID = Deno.env.get('TRUELAYER_CLIENT_ID');
+      const TRUELAYER_CLIENT_SECRET = Deno.env.get('TRUELAYER_CLIENT_SECRET');
+
+      if (!TRUELAYER_CLIENT_ID || !TRUELAYER_CLIENT_SECRET) {
+        return errorResponse('TrueLayer credentials not configured', 'sync', 500);
+      }
+
+      const tokenResponse = await fetch(`${TRUELAYER_AUTH_URL}/connect/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: TRUELAYER_CLIENT_ID,
+          client_secret: TRUELAYER_CLIENT_SECRET,
+          refresh_token: connection.refresh_token!,
+        }),
+      });
+
+      const tokenData = await tokenResponse.json();
+
+      if (!tokenResponse.ok) {
+        // Mark connection as needing reauthorization
+        await serviceSupabase
+          .from('bank_connections')
+          .update({ status: 'expired' })
+          .eq('id', connectionId);
+
+        return errorResponse(
+          'Token refresh failed. Please reconnect your bank.',
+          'sync',
+          401,
+          tokenData
+        );
+      }
+
+      // Update tokens
+      const expiresAt = new Date();
+      expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
+
+      await serviceSupabase
+        .from('bank_connections')
+        .update({
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token,
+          token_expires_at: expiresAt.toISOString(),
+        })
+        .eq('id', connectionId);
+
+      accessToken = tokenData.access_token;
+      console.log('[sync] Token refreshed successfully');
+    }
 
     // Fetch accounts from TrueLayer
     const accountsResponse = await fetch(`${TRUELAYER_API_URL}/data/v1/accounts`, {
@@ -50,11 +151,8 @@ serve(async (req) => {
 
     if (!accountsResponse.ok) {
       const errorData = await accountsResponse.json();
-      console.error('TrueLayer accounts fetch failed:', errorData);
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch accounts from bank', details: errorData }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('[sync] TrueLayer accounts fetch failed:', errorData);
+      return errorResponse('Failed to fetch accounts from bank', 'sync', 400, errorData);
     }
 
     const { results: accounts } = await accountsResponse.json();
@@ -78,7 +176,7 @@ serve(async (req) => {
         balance = balances[0]?.current || 0;
       }
 
-      // Check if account already exists
+      // Check if account already exists (use user-scoped client for RLS)
       const { data: existingAccount } = await supabase
         .from('bank_accounts')
         .select('id')
@@ -97,14 +195,14 @@ serve(async (req) => {
           .eq('id', existingAccount.id);
 
         if (updateError) {
-          console.error('Error updating account:', updateError);
+          console.error('[sync] Error updating account:', updateError);
         } else {
           syncedAccounts.push({ ...account, balance, action: 'updated' });
         }
       } else {
         // Create new account
         const accountType = account.account_type === 'SAVINGS' ? 'savings' : 'current';
-        const { data: newAccount, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from('bank_accounts')
           .insert({
             user_id: userId,
@@ -114,12 +212,10 @@ serve(async (req) => {
             external_id: account.account_id,
             connection_id: connectionId,
             last_synced_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
+          });
 
         if (insertError) {
-          console.error('Error creating account:', insertError);
+          console.error('[sync] Error creating account:', insertError);
         } else {
           syncedAccounts.push({ ...account, balance, action: 'created' });
         }
@@ -190,20 +286,20 @@ serve(async (req) => {
       })
       .eq('id', connectionId);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        accounts: syncedAccounts.length,
-        transactions: totalTransactions,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.log(`[sync] Completed: ${syncedAccounts.length} accounts, ${totalTransactions} new transactions`);
+
+    return jsonResponse({
+      success: true,
+      accounts: syncedAccounts.length,
+      transactions: totalTransactions,
+    });
 
   } catch (error) {
-    console.error('Error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    console.error('[sync] Unexpected error:', error);
+    return errorResponse(
+      error instanceof Error ? error.message : 'Unknown error',
+      'unexpected',
+      500
     );
   }
 });
