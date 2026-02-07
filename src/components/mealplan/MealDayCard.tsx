@@ -130,8 +130,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
           {/* Macro Summary */}
           <div className="mt-2">
             {hasUncalculatedItems && isTargetMode ? (
-              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1">
-                Not calculated yet — click Recalculate
+              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1.5 text-center">
+                <span className="font-medium">Add items → click Generate</span>
               </div>
             ) : (
               <DayMacroSummary
@@ -229,7 +229,12 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
                           <span className="truncate">{item.product?.name}</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">{item.quantity_grams}g</span>
+                          <span className={cn(
+                            "text-muted-foreground tabular-nums",
+                            item.quantity_grams === 0 && "text-amber-600"
+                          )}>
+                            {item.quantity_grams === 0 ? "—" : `${item.quantity_grams}g`}
+                          </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-5 sm:w-5">

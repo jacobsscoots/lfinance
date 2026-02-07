@@ -334,38 +334,39 @@ export function useMealPlanItems(weekStart: Date) {
     }) => {
       if (!user) throw new Error("Not authenticated");
       
+      // Import the precision algorithm
+      const { calculateDayPortions } = await import("@/lib/autoPortioning");
+      
       let totalUpdated = 0;
+      let successCount = 0;
       
       for (const plan of mealPlans) {
         const dayDate = new Date(plan.meal_date);
         const targets = getTargetsForDate(dayDate, settings);
         const items = plan.items || [];
         
-        // Get products for this day
-        const products = items
-          .map(i => i.product)
-          .filter((p): p is Product => !!p);
+        if (items.length === 0) continue;
         
-        // Get locked items
-        const lockedItems = items
-          .filter(i => i.is_locked && i.product)
-          .map(i => ({ productId: i.product_id, grams: i.quantity_grams }));
+        // Use the new precision algorithm that calculates ALL items together
+        // with exact calorie/macro matching and even meal distribution
+        const result = calculateDayPortions(items, targets, {
+          ...portioningSettings,
+          rounding: 0, // No rounding for exact precision
+          tolerancePercent: 0, // Zero tolerance
+        });
         
-        // Calculate optimal portions
-        const result = calculateMealPortions(
-          products,
-          targets,
-          lockedItems,
-          portioningSettings
-        );
+        if (result.success) successCount++;
         
-        // Update each editable, unlocked item
+        // Update each editable, unlocked item with new calculated grams
         for (const item of items) {
           if (item.is_locked) continue;
           if (item.product?.product_type === "fixed") continue;
           
-          const newGrams = result.items.get(item.product_id);
-          if (newGrams !== undefined && newGrams !== item.quantity_grams) {
+          // Find the grams from the meal results
+          const mealResult = result.mealResults.get(item.meal_type);
+          const newGrams = mealResult?.items.get(item.id);
+          
+          if (newGrams !== undefined && Math.abs(newGrams - item.quantity_grams) > 0.1) {
             const { error } = await supabase
               .from("meal_plan_items")
               .update({ quantity_grams: newGrams })
@@ -378,15 +379,18 @@ export function useMealPlanItems(weekStart: Date) {
         }
       }
       
-      return totalUpdated;
+      return { updated: totalUpdated, daysSucceeded: successCount, totalDays: mealPlans.length };
     },
-    onSuccess: (updated) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       setLastCalculated(new Date());
-      toast.success(`Recalculated portions${updated > 0 ? ` (${updated} items updated)` : ""}`);
+      toast.success(
+        `Generated exact portions for ${result.daysSucceeded}/${result.totalDays} days` +
+        (result.updated > 0 ? ` (${result.updated} items updated)` : "")
+      );
     },
     onError: (error) => {
-      toast.error("Failed to recalculate: " + error.message);
+      toast.error("Failed to generate: " + error.message);
     },
   });
 

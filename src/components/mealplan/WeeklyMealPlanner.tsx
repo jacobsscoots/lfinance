@@ -102,10 +102,10 @@ export function WeeklyMealPlanner() {
             {isTargetMode ? "Target Mode" : "Manual Mode"}
           </Badge>
           
-          {/* Recalculate Button - only in Target Mode */}
+          {/* Generate Button - only in Target Mode */}
           {isTargetMode && (
             <Button 
-              variant="outline" 
+              variant="default" 
               size="sm" 
               onClick={handleRecalculate}
               disabled={recalculateAll.isPending || !settings}
@@ -117,7 +117,10 @@ export function WeeklyMealPlanner() {
                 <RefreshCw className="h-4 w-4" />
               )}
               <span className="hidden sm:inline">
-                {recalculateAll.isPending ? "Recalculating..." : "Recalculate"}
+                {recalculateAll.isPending ? "Generating..." : "Generate Portions"}
+              </span>
+              <span className="sm:hidden">
+                {recalculateAll.isPending ? "..." : "Generate"}
               </span>
             </Button>
           )}
