@@ -89,23 +89,23 @@ export function InvestmentCard({
       className="group cursor-pointer hover:shadow-md transition-shadow"
       onClick={onClick}
     >
-      <CardHeader className="flex flex-row items-start justify-between pb-2">
-        <div>
-          <CardTitle className="text-lg">{investment.name}</CardTitle>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-start justify-between pb-2 gap-2">
+        <div className="min-w-0 flex-1">
+          <CardTitle className="text-base sm:text-lg truncate">{investment.name}</CardTitle>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground mt-1">
             {investment.provider && (
               <div className="flex items-center gap-1">
-                <Building className="h-3 w-3" />
-                <span>{investment.provider}</span>
+                <Building className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{investment.provider}</span>
               </div>
             )}
             <div className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
+              <Calendar className="h-3 w-3 flex-shrink-0" />
               <span>{format(new Date(investment.start_date), "MMM yyyy")}</span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start">
           <Badge variant={investment.status === 'active' ? 'default' : 'secondary'}>
             {investment.status}
           </Badge>
@@ -130,11 +130,11 @@ export function InvestmentCard({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
           {/* Current Value */}
           <div>
             <p className="text-xs text-muted-foreground">Current Value</p>
-            <p className="text-xl font-bold">
+            <p className="text-base sm:text-xl font-bold">
               £{metrics.currentValue.toLocaleString("en-GB", { 
                 minimumFractionDigits: 2, 
                 maximumFractionDigits: 2 
@@ -145,7 +145,7 @@ export function InvestmentCard({
           {/* Total Invested */}
           <div>
             <p className="text-xs text-muted-foreground">Total Invested</p>
-            <p className="text-xl font-bold">
+            <p className="text-base sm:text-xl font-bold">
               £{metrics.totalContributions.toLocaleString("en-GB", { 
                 minimumFractionDigits: 2, 
                 maximumFractionDigits: 2 
@@ -158,12 +158,12 @@ export function InvestmentCard({
             <p className="text-xs text-muted-foreground">Total Return</p>
             <div className="flex items-center gap-1">
               {isPositive ? (
-                <TrendingUp className="h-4 w-4 text-success" />
+                <TrendingUp className="h-4 w-4 text-success flex-shrink-0" />
               ) : (
-                <TrendingDown className="h-4 w-4 text-destructive" />
+                <TrendingDown className="h-4 w-4 text-destructive flex-shrink-0" />
               )}
               <p className={cn(
-                "text-xl font-bold",
+                "text-base sm:text-xl font-bold",
                 isPositive ? "text-success" : "text-destructive"
               )}>
                 {isPositive ? "+" : "-"}£{Math.abs(metrics.totalReturn).toLocaleString("en-GB", { 
@@ -184,8 +184,8 @@ export function InvestmentCard({
           <div>
             <p className="text-xs text-muted-foreground">Daily Change</p>
             <div className="flex items-center gap-1">
-              <Percent className="h-4 w-4 text-muted-foreground" />
-              <p className="text-xl font-bold text-success">
+              <Percent className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <p className="text-base sm:text-xl font-bold text-success">
                 +£{metrics.dailyChange.amount.toLocaleString("en-GB", { 
                   minimumFractionDigits: 2, 
                   maximumFractionDigits: 2 

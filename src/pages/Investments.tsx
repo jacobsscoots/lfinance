@@ -235,17 +235,20 @@ export default function Investments() {
               Track your investment portfolio and projections
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => setShowChipImportInfo(true)}
+              className="gap-1 sm:gap-2"
             >
-              <Download className="h-4 w-4 mr-2" />
-              Import from Chip
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Import from Chip</span>
+              <span className="sm:hidden">Import</span>
             </Button>
-            <Button onClick={() => setInvestmentDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Investment
+            <Button onClick={() => setInvestmentDialogOpen(true)} className="gap-1 sm:gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Investment</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         </div>
@@ -291,10 +294,10 @@ export default function Investments() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
               <div>
                 <p className="text-xs text-muted-foreground">Total Invested</p>
-                <p className="text-2xl font-bold">
+                <p className="text-lg sm:text-2xl font-bold">
                   £{portfolioSummary.totalInvested.toLocaleString("en-GB", { 
                     minimumFractionDigits: 2, 
                     maximumFractionDigits: 2 
@@ -303,7 +306,7 @@ export default function Investments() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Current Value</p>
-                <p className="text-2xl font-bold">
+                <p className="text-lg sm:text-2xl font-bold">
                   £{portfolioSummary.totalValue.toLocaleString("en-GB", { 
                     minimumFractionDigits: 2, 
                     maximumFractionDigits: 2 
@@ -312,7 +315,7 @@ export default function Investments() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Return £</p>
-                <p className={`text-2xl font-bold ${portfolioSummary.totalReturn >= 0 ? 'text-success' : 'text-destructive'}`}>
+                <p className={`text-lg sm:text-2xl font-bold ${portfolioSummary.totalReturn >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {portfolioSummary.totalReturn >= 0 ? '+' : '-'}£{Math.abs(portfolioSummary.totalReturn).toLocaleString("en-GB", { 
                     minimumFractionDigits: 2, 
                     maximumFractionDigits: 2 
@@ -321,7 +324,7 @@ export default function Investments() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Return %</p>
-                <p className={`text-2xl font-bold ${portfolioSummary.returnPercentage >= 0 ? 'text-success' : 'text-destructive'}`}>
+                <p className={`text-lg sm:text-2xl font-bold ${portfolioSummary.returnPercentage >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {portfolioSummary.returnPercentage >= 0 ? '+' : ''}{portfolioSummary.returnPercentage.toFixed(2)}%
                 </p>
               </div>
@@ -329,7 +332,7 @@ export default function Investments() {
                 <p className="text-xs text-muted-foreground">Daily Change</p>
                 <div className="flex items-center gap-1">
                   <ArrowUpRight className="h-4 w-4 text-success" />
-                  <p className="text-2xl font-bold text-success">
+                  <p className="text-lg sm:text-2xl font-bold text-success">
                     +£{portfolioSummary.dailyChange.amount.toLocaleString("en-GB", { 
                       minimumFractionDigits: 2, 
                       maximumFractionDigits: 2 

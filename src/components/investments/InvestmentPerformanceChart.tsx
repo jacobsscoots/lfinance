@@ -163,16 +163,16 @@ export function InvestmentPerformanceChart({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-2">
         <CardTitle className="text-base font-medium">Performance</CardTitle>
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto pb-1 -mb-1">
           {(["1W", "1M", "3M", "6M", "1Y", "ALL"] as TimeRange[]).map((range) => (
             <Button
               key={range}
               variant={timeRange === range ? "default" : "ghost"}
               size="sm"
               onClick={() => setTimeRange(range)}
-              className="h-7 px-2 text-xs"
+              className="h-7 px-2 text-xs flex-shrink-0"
             >
               {range}
             </Button>
@@ -180,7 +180,7 @@ export function InvestmentPerformanceChart({
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[300px]">
+        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -250,7 +250,7 @@ export function InvestmentPerformanceChart({
           </ResponsiveContainer>
         </ChartContainer>
 
-        <div className="flex justify-center gap-6 mt-4 text-sm">
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-6 mt-4 text-xs sm:text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-[var(--color-value)]" />
             <span className="text-muted-foreground">Actual Value</span>

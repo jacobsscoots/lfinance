@@ -65,24 +65,24 @@ export function ServiceCard({ service, onEdit, onDelete, onToggleTracking }: Ser
 
   return (
     <Card className={isEnding ? "border-amber-500/50" : ""}>
-      <CardHeader className="flex flex-row items-start justify-between pb-2">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Icon className="h-5 w-5 text-primary" />
+      <CardHeader className="flex flex-col sm:flex-row sm:items-start justify-between pb-2 gap-2">
+        <div className="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
           </div>
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              {service.provider}
-              <Badge variant="outline" className="capitalize text-xs">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-sm sm:text-base flex flex-wrap items-center gap-1 sm:gap-2">
+              <span className="truncate">{service.provider}</span>
+              <Badge variant="outline" className="capitalize text-xs flex-shrink-0">
                 {service.service_type}
               </Badge>
             </CardTitle>
             {service.plan_name && (
-              <p className="text-sm text-muted-foreground">{service.plan_name}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">{service.plan_name}</p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start">
           <Switch
             checked={service.is_tracking_enabled}
             onCheckedChange={onToggleTracking}
@@ -113,28 +113,28 @@ export function ServiceCard({ service, onEdit, onDelete, onToggleTracking }: Ser
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
           <div>
             <p className="text-xs text-muted-foreground">Monthly Cost</p>
-            <p className="text-lg font-bold">
+            <p className="text-base sm:text-lg font-bold">
               £{service.monthly_cost.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Contract Ends</p>
-            <p className={`text-sm font-medium ${isEnding ? "text-amber-500" : ""}`}>
+            <p className={`text-xs sm:text-sm font-medium ${isEnding ? "text-amber-500" : ""}`}>
               {service.contract_end_date
-                ? format(new Date(service.contract_end_date), "d MMM yyyy")
+                ? format(new Date(service.contract_end_date), "d MMM yy")
                 : "Rolling"}
             </p>
             {daysLeft !== null && daysLeft > 0 && (
-              <p className="text-xs text-muted-foreground">{daysLeft} days left</p>
+              <p className="text-xs text-muted-foreground">{daysLeft}d left</p>
             )}
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Potential Savings</p>
-            <p className={`text-lg font-bold ${service.estimated_savings_annual > 0 ? "text-success" : ""}`}>
-              £{service.estimated_savings_annual.toLocaleString("en-GB", { minimumFractionDigits: 0 })}/yr
+            <p className="text-xs text-muted-foreground">Savings</p>
+            <p className={`text-base sm:text-lg font-bold ${service.estimated_savings_annual > 0 ? "text-success" : ""}`}>
+              £{service.estimated_savings_annual.toLocaleString("en-GB", { minimumFractionDigits: 0 })}<span className="text-xs">/yr</span>
             </p>
           </div>
           <div>
