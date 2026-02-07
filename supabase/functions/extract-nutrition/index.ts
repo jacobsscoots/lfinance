@@ -110,24 +110,27 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("extract-nutrition error:", e);
-    
+
     const errorMessage = e instanceof Error ? e.message : "Unknown error";
-    
+    const messageLower = errorMessage.toLowerCase();
+
     // User-actionable errors should return 200 so the client can display the message
-    const isUserError = 
-      errorMessage.includes("anti-bot") ||
-      errorMessage.includes("blocking") ||
-      errorMessage.includes("blocked") ||
-      errorMessage.includes("Rate limit") ||
-      errorMessage.includes("could not") ||
-      errorMessage.includes("Try 'Upload") ||
-      errorMessage.includes("Try using");
-    
+    const isUserError =
+      messageLower.includes("anti-bot") ||
+      messageLower.includes("bot protection") ||
+      messageLower.includes("blocking") ||
+      messageLower.includes("blocked") ||
+      messageLower.includes("rate limit") ||
+      messageLower.includes("try 'upload") ||
+      messageLower.includes("try using") ||
+      messageLower.includes("please try using 'upload") ||
+      messageLower.includes("please try using 'paste");
+
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      { 
-        status: isUserError ? 200 : 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      {
+        status: isUserError ? 200 : 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }
@@ -298,70 +301,158 @@ function extractFromText(text: string): ExtractedNutrition {
 
 async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNutrition> {
   const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
-  
+
   let html: string | undefined;
+  let rawHtml: string | undefined;
   let markdown: string | undefined;
-  
+
   // Block page detection indicators
-  const blockIndicators = [
+  const strongBlockIndicators = [
     "security check",
     "something is not right",
-    "access denied",
-    "captcha",
-    "please verify",
-    "blocked",
     "unusual traffic",
-    "bot detection",
     "challenge-platform",
-    "ray id",
+    "captcha",
+    "verify you are",
+    "access denied",
   ];
-  
+
+  const weakBlockIndicators = [
+    "please verify",
+    "bot detection",
+    "ray id",
+    "blocked",
+  ];
+
+  const isLikelyBlocked = (content: string) => {
+    const lower = content.toLowerCase();
+    const strong = strongBlockIndicators.some((i) => lower.includes(i));
+    const weakCount = weakBlockIndicators.reduce((acc, i) => acc + (lower.includes(i) ? 1 : 0), 0);
+    return strong || weakCount >= 2;
+  };
+
   // Try Firecrawl first if available (handles anti-bot protection better)
   if (FIRECRAWL_API_KEY) {
-    try {
-      console.log("Using Firecrawl to fetch URL:", url);
+    const scrapeFirecrawl = async (body: Record<string, unknown>) => {
       const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${FIRECRAWL_API_KEY}`,
+          Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          url,
-          formats: ["markdown", "html"],
-          onlyMainContent: false,
-          waitFor: 5000, // Wait for JS content to load
-          timeout: 30000, // 30 second timeout for slow pages
-        }),
+        body: JSON.stringify(body),
       });
 
-      const firecrawlData = await firecrawlResponse.json();
+      let firecrawlData: any = null;
+      try {
+        firecrawlData = await firecrawlResponse.json();
+      } catch {
+        firecrawlData = null;
+      }
 
       if (!firecrawlResponse.ok) {
         console.error("Firecrawl API error:", firecrawlData);
-        // Fall through to direct fetch
-      } else if (firecrawlData.success) {
-        // Access data correctly - Firecrawl v1 nests content in data.data
-        const responseData = firecrawlData.data || firecrawlData;
-        markdown = responseData.markdown;
-        html = responseData.html;
-        
-        // Log first 500 chars for debugging
-        const preview = (markdown || html || "").substring(0, 500);
+        return null;
+      }
+
+      if (!firecrawlData?.success) return null;
+
+      // Firecrawl v1 sometimes nests content in data.data
+      const responseData = firecrawlData?.data?.data || firecrawlData?.data || firecrawlData;
+
+      return {
+        markdown: responseData?.markdown as string | undefined,
+        html: responseData?.html as string | undefined,
+        rawHtml: responseData?.rawHtml as string | undefined,
+      };
+    };
+
+    try {
+      const formattedUrl = url.trim();
+      console.log("Using Firecrawl to fetch URL:", formattedUrl);
+
+      const userAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+      const commonBody = {
+        url: formattedUrl,
+        formats: ["markdown", "html", "rawHtml"],
+        onlyMainContent: false,
+        headers: {
+          "Accept-Language": "en-GB,en;q=0.9",
+          "User-Agent": userAgent,
+        },
+      };
+
+      // Attempt 1: UK location + mobile (may use proxy)
+      let firecrawlResult = await scrapeFirecrawl({
+        ...commonBody,
+        waitFor: 8000,
+        timeout: 45000,
+        mobile: true,
+        location: { country: "GB", languages: ["en-GB", "en"] },
+      });
+
+      // Attempt 2: no location/proxy (avoids proxy tunnel failures)
+      if (!firecrawlResult) {
+        console.log("Firecrawl primary scrape failed; retrying without proxy/location...");
+        firecrawlResult = await scrapeFirecrawl({
+          ...commonBody,
+          waitFor: 8000,
+          timeout: 45000,
+          mobile: false,
+        });
+      }
+
+      if (firecrawlResult) {
+        markdown = firecrawlResult.markdown;
+        html = firecrawlResult.html;
+        rawHtml = firecrawlResult.rawHtml;
+
+        const contentCandidate = markdown && markdown.length > 200 ? markdown : html || rawHtml || "";
+        const preview = contentCandidate.substring(0, 500);
         console.log("Firecrawl content preview:", preview);
-        
-        if (markdown || html) {
+
+        if (contentCandidate) {
           console.log("Successfully fetched via Firecrawl");
-          
-          // Check if the content is actually a block page
-          const contentToCheck = (markdown || html || "").toLowerCase();
-          const isBlocked = blockIndicators.some(indicator => 
-            contentToCheck.includes(indicator)
-          );
-          
-          if (isBlocked) {
-            console.log("Detected blocked page content");
-            throw new Error("This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product.");
+
+          // Detect if the content is actually a block/challenge page
+          const detectionSample = contentCandidate.substring(0, 5000);
+          if (isLikelyBlocked(detectionSample)) {
+            console.log("Detected blocked page content (primary)");
+
+            // Retry once with alternate settings (desktop + longer wait)
+            console.log("Retrying Firecrawl with alternate settings...");
+            const retry = await scrapeFirecrawl({
+              ...commonBody,
+              waitFor: 12000,
+              timeout: 60000,
+              mobile: false,
+              location: { country: "GB", languages: ["en-GB", "en"] },
+            });
+
+            if (retry) {
+              markdown = retry.markdown;
+              html = retry.html;
+              rawHtml = retry.rawHtml;
+
+              const retryCandidate = markdown && markdown.length > 200 ? markdown : html || rawHtml || "";
+              const retryPreview = retryCandidate.substring(0, 500);
+              console.log("Firecrawl retry preview:", retryPreview);
+
+              if (retryCandidate && !isLikelyBlocked(retryCandidate.substring(0, 5000))) {
+                console.log("Retry succeeded (not blocked)");
+              } else {
+                console.log("Detected blocked page content (retry)");
+                throw new Error(
+                  "This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product."
+                );
+              }
+            } else {
+              throw new Error(
+                "This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product."
+              );
+            }
           }
         }
       }
@@ -375,54 +466,77 @@ async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNut
     }
   }
 
+  const hostname = (() => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  })();
+
+  // For highly-protected sites (e.g. Tesco), direct fetch is almost always blocked.
+  // If Firecrawl couldn't fetch content, return the user-actionable guidance instead of a generic fetch error.
+  if (FIRECRAWL_API_KEY && hostname === "tesco.com" && !html && !markdown && !rawHtml) {
+    throw new Error(
+      "This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product."
+    );
+  }
+
   // Fallback to direct fetch if Firecrawl didn't work
-  if (!html && !markdown) {
+  if (!html && !markdown && !rawHtml) {
     try {
       console.log("Attempting direct fetch for URL:", url);
       const response = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
           "Accept-Language": "en-GB,en;q=0.9",
         },
       });
-      
+
       if (!response.ok) {
         if (response.status === 403 || response.status === 429) {
-          throw new Error("This website is blocking automated access. Please try using 'Upload Photo' or 'Paste Text' instead.");
+          throw new Error(
+            "This website is blocking automated access. Please try using 'Upload Photo' or 'Paste Text' instead."
+          );
         }
-        throw new Error(`Failed to fetch URL (status ${response.status}). Try 'Upload Photo' or 'Paste Text' instead.`);
+        throw new Error(
+          `Failed to fetch URL (status ${response.status}). Try 'Upload Photo' or 'Paste Text' instead.`
+        );
       }
-      
+
       html = await response.text();
-      
+
       // Check direct fetch for block pages too
-      const contentToCheck = html.toLowerCase();
-      const isBlocked = blockIndicators.some(indicator => 
-        contentToCheck.includes(indicator)
-      );
-      
-      if (isBlocked) {
-        throw new Error("This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead.");
+      if (html && isLikelyBlocked(html.substring(0, 5000))) {
+        throw new Error(
+          "This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead."
+        );
       }
     } catch (e) {
       if (e instanceof Error && (e.message.includes("blocking") || e.message.includes("anti-bot"))) {
         throw e;
       }
-      throw new Error("Could not access this URL. The website may be blocking automated access. Try 'Upload Photo' or 'Paste Text' instead.");
+      throw new Error(
+        "Could not access this URL. The website may be blocking automated access. Try 'Upload Photo' or 'Paste Text' instead."
+      );
     }
   }
 
-  // Prefer markdown (cleaner, more token-efficient) over HTML
-  const contentForAi = markdown && markdown.length > 200 ? markdown : html;
-  
+  // Prefer markdown (cleaner, more token-efficient) over HTML, then raw HTML
+  const contentForAi = markdown && markdown.length > 200 ? markdown : html || rawHtml;
+
   if (!contentForAi) {
     throw new Error("Could not retrieve content from this URL. Try 'Upload Photo' or 'Paste Text' instead.");
   }
 
   // Try to find JSON-LD first (only in HTML)
-  if (html) {
-    const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  const htmlForParsing = html || rawHtml;
+  if (htmlForParsing) {
+    const jsonLdMatch = htmlForParsing.match(
+      /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+    );
 
     if (jsonLdMatch) {
       for (const match of jsonLdMatch) {
@@ -441,7 +555,8 @@ async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNut
   }
 
   // Use AI to extract from content (markdown preferred)
-  const contentType = markdown && markdown.length > 200 ? "markdown" : "HTML";
+  const contentType =
+    markdown && markdown.length > 200 ? "markdown" : html ? "HTML" : "raw HTML";
   const systemPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this ${contentType} content.
 
 Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
