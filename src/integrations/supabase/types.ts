@@ -296,6 +296,195 @@ export type Database = {
         }
         Relationships: []
       }
+      gmail_connections: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          email: string
+          id: string
+          last_synced_at: string | null
+          refresh_token: string | null
+          status: string | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          last_synced_at?: string | null
+          refresh_token?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          last_synced_at?: string | null
+          refresh_token?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gmail_match_log: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          match_reasons: Json | null
+          receipt_id: string | null
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          match_reasons?: Json | null
+          receipt_id?: string | null
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          match_reasons?: Json | null
+          receipt_id?: string | null
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_match_log_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_match_log_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmail_receipts: {
+        Row: {
+          amount: number | null
+          attachment_path: string | null
+          attachment_type: string | null
+          created_at: string
+          from_email: string | null
+          gmail_connection_id: string | null
+          id: string
+          match_confidence: string | null
+          match_status: string | null
+          matched_at: string | null
+          matched_transaction_id: string | null
+          merchant_name: string | null
+          message_id: string
+          order_reference: string | null
+          received_at: string | null
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          attachment_path?: string | null
+          attachment_type?: string | null
+          created_at?: string
+          from_email?: string | null
+          gmail_connection_id?: string | null
+          id?: string
+          match_confidence?: string | null
+          match_status?: string | null
+          matched_at?: string | null
+          matched_transaction_id?: string | null
+          merchant_name?: string | null
+          message_id: string
+          order_reference?: string | null
+          received_at?: string | null
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          attachment_path?: string | null
+          attachment_type?: string | null
+          created_at?: string
+          from_email?: string | null
+          gmail_connection_id?: string | null
+          id?: string
+          match_confidence?: string | null
+          match_status?: string | null
+          matched_at?: string | null
+          matched_transaction_id?: string | null
+          merchant_name?: string | null
+          message_id?: string
+          order_reference?: string | null
+          received_at?: string | null
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_receipts_gmail_connection_id_fkey"
+            columns: ["gmail_connection_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_receipts_matched_transaction_id_fkey"
+            columns: ["matched_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmail_sync_settings: {
+        Row: {
+          allowed_domains: string[] | null
+          auto_attach: boolean | null
+          created_at: string
+          id: string
+          scan_days: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allowed_domains?: string[] | null
+          auto_attach?: boolean | null
+          created_at?: string
+          id?: string
+          scan_days?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allowed_domains?: string[] | null
+          auto_attach?: boolean | null
+          created_at?: string
+          id?: string
+          scan_days?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       grocery_cycles: {
         Row: {
           actual_spend: number | null
@@ -472,6 +661,172 @@ export type Database = {
             columns: ["transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      investment_accounts: {
+        Row: {
+          compounding_method: string | null
+          created_at: string
+          expected_annual_return: number | null
+          fund_type: string | null
+          id: string
+          name: string
+          notes: string | null
+          provider: string | null
+          risk_preset: string | null
+          start_date: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          compounding_method?: string | null
+          created_at?: string
+          expected_annual_return?: number | null
+          fund_type?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          provider?: string | null
+          risk_preset?: string | null
+          start_date: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          compounding_method?: string | null
+          created_at?: string
+          expected_annual_return?: number | null
+          fund_type?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          provider?: string | null
+          risk_preset?: string | null
+          start_date?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      investment_settings: {
+        Row: {
+          created_at: string
+          default_expected_return: number | null
+          id: string
+          projection_range_months: number | null
+          show_projections: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_expected_return?: number | null
+          id?: string
+          projection_range_months?: number | null
+          show_projections?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          default_expected_return?: number | null
+          id?: string
+          projection_range_months?: number | null
+          show_projections?: boolean | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      investment_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          investment_account_id: string
+          is_recurring: boolean | null
+          notes: string | null
+          recurring_frequency: string | null
+          transaction_date: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          investment_account_id: string
+          is_recurring?: boolean | null
+          notes?: string | null
+          recurring_frequency?: string | null
+          transaction_date: string
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          investment_account_id?: string
+          is_recurring?: boolean | null
+          notes?: string | null
+          recurring_frequency?: string | null
+          transaction_date?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_transactions_investment_account_id_fkey"
+            columns: ["investment_account_id"]
+            isOneToOne: false
+            referencedRelation: "investment_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      investment_valuations: {
+        Row: {
+          created_at: string
+          id: string
+          investment_account_id: string
+          source: string | null
+          user_id: string
+          valuation_date: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          investment_account_id: string
+          source?: string | null
+          user_id: string
+          valuation_date: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          investment_account_id?: string
+          source?: string | null
+          user_id?: string
+          valuation_date?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_valuations_investment_account_id_fkey"
+            columns: ["investment_account_id"]
+            isOneToOne: false
+            referencedRelation: "investment_accounts"
             referencedColumns: ["id"]
           },
         ]
