@@ -386,160 +386,115 @@ export function NutritionTargetSettings() {
 
             {/* Calculator Tab */}
             <TabsContent value="calculator" className="space-y-6">
-              <div className="grid lg:grid-cols-2 gap-6">
-                {/* Left: Inputs */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Your Stats</h4>
-                  
-                  <div className="grid grid-cols-2 gap-4">
+              <Form {...calcForm}>
+                <div className="grid lg:grid-cols-2 gap-6">
+                  {/* Left: Inputs */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Your Stats</h4>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={calcForm.control}
+                        name="age"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Age</FormLabel>
+                            <FormControl>
+                              <Input type="number" placeholder="30" {...field} />
+                            </FormControl>
+                            <FormDescription>years</FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={calcForm.control}
+                        name="sex"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sex</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="male">Male</SelectItem>
+                                <SelectItem value="female">Female</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={calcForm.control}
+                        name="height_cm"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Height</FormLabel>
+                            <FormControl>
+                              <Input type="number" placeholder="175" {...field} />
+                            </FormControl>
+                            <FormDescription>cm</FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={calcForm.control}
+                        name="weight_kg"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Weight</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="0.1" placeholder="75" {...field} />
+                            </FormControl>
+                            <FormDescription>kg</FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
                     <FormField
                       control={calcForm.control}
-                      name="age"
+                      name="body_fat_percent"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Age</FormLabel>
+                          <FormLabel>Body Fat % (optional)</FormLabel>
                           <FormControl>
-                            <Input type="number" placeholder="30" {...field} />
+                            <Input 
+                              type="number" 
+                              step="0.5" 
+                              placeholder="15"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                            />
                           </FormControl>
-                          <FormDescription>years</FormDescription>
+                          <FormDescription>Required for Katch-McArdle formula</FormDescription>
                         </FormItem>
                       )}
                     />
+
                     <FormField
                       control={calcForm.control}
-                      name="sex"
+                      name="activity_level"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Sex</FormLabel>
+                          <FormLabel className="flex items-center gap-2">
+                            <Activity className="h-4 w-4" />
+                            Activity Level
+                          </FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select" />
+                                <SelectValue placeholder="Select activity level" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="male">Male</SelectItem>
-                              <SelectItem value="female">Female</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={calcForm.control}
-                      name="height_cm"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Height</FormLabel>
-                          <FormControl>
-                            <Input type="number" placeholder="175" {...field} />
-                          </FormControl>
-                          <FormDescription>cm</FormDescription>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={calcForm.control}
-                      name="weight_kg"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Weight</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.1" placeholder="75" {...field} />
-                          </FormControl>
-                          <FormDescription>kg</FormDescription>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={calcForm.control}
-                    name="body_fat_percent"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Body Fat % (optional)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.5" 
-                            placeholder="15"
-                            {...field}
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                          />
-                        </FormControl>
-                        <FormDescription>Required for Katch-McArdle formula</FormDescription>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={calcForm.control}
-                    name="activity_level"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center gap-2">
-                          <Activity className="h-4 w-4" />
-                          Activity Level
-                        </FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select activity level" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.entries(ACTIVITY_LABELS).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>{label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={calcForm.control}
-                      name="formula"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Formula</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="mifflin_st_jeor">Mifflin-St Jeor</SelectItem>
-                              <SelectItem value="harris_benedict">Harris-Benedict</SelectItem>
-                              <SelectItem value="katch_mcardle" disabled={!calcValues.body_fat_percent}>
-                                Katch-McArdle
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={calcForm.control}
-                      name="goal_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Goal</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {Object.entries(GOAL_LABELS).map(([value, label]) => (
+                              {Object.entries(ACTIVITY_LABELS).map(([value, label]) => (
                                 <SelectItem key={value} value={value}>{label}</SelectItem>
                               ))}
                             </SelectContent>
@@ -547,103 +502,150 @@ export function NutritionTargetSettings() {
                         </FormItem>
                       )}
                     />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={calcForm.control}
+                        name="formula"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Formula</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="mifflin_st_jeor">Mifflin-St Jeor</SelectItem>
+                                <SelectItem value="harris_benedict">Harris-Benedict</SelectItem>
+                                <SelectItem value="katch_mcardle" disabled={!calcValues.body_fat_percent}>
+                                  Katch-McArdle
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={calcForm.control}
+                        name="goal_type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Goal</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {Object.entries(GOAL_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* Advanced macro rules */}
+                    <Collapsible>
+                      <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium hover:text-primary w-full py-2">
+                        <Settings2 className="h-4 w-4" />
+                        Macro Rules
+                        <ChevronDown className="h-4 w-4 ml-auto transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-2 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={calcForm.control}
+                            name="protein_per_kg"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Protein</FormLabel>
+                                <FormControl>
+                                  <Input type="number" step="0.1" {...field} />
+                                </FormControl>
+                                <FormDescription>g per kg bodyweight</FormDescription>
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={calcForm.control}
+                            name="fat_per_kg"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Fat</FormLabel>
+                                <FormControl>
+                                  <Input type="number" step="0.1" {...field} />
+                                </FormControl>
+                                <FormDescription>g per kg bodyweight</FormDescription>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
 
-                  {/* Advanced macro rules */}
-                  <Collapsible>
-                    <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium hover:text-primary w-full py-2">
-                      <Settings2 className="h-4 w-4" />
-                      Macro Rules
-                      <ChevronDown className="h-4 w-4 ml-auto transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-2 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={calcForm.control}
-                          name="protein_per_kg"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Protein</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.1" {...field} />
-                              </FormControl>
-                              <FormDescription>g per kg bodyweight</FormDescription>
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={calcForm.control}
-                          name="fat_per_kg"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Fat</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.1" {...field} />
-                              </FormControl>
-                              <FormDescription>g per kg bodyweight</FormDescription>
-                            </FormItem>
-                          )}
-                        />
+                  {/* Right: Results */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Results</h4>
+                    
+                    {calculatorResult ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-4 rounded-lg bg-muted/50 text-center">
+                            <div className="text-2xl font-bold">{calculatorResult.bmr.toLocaleString()}</div>
+                            <div className="text-sm text-muted-foreground">BMR kcal</div>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50 text-center">
+                            <div className="text-2xl font-bold">{calculatorResult.tdee.toLocaleString()}</div>
+                            <div className="text-sm text-muted-foreground">TDEE kcal</div>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
+                          <div className="text-3xl font-bold text-primary">{calculatorResult.targetCalories.toLocaleString()}</div>
+                          <div className="text-sm text-muted-foreground">Target kcal/day</div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="p-3 rounded-lg bg-muted/50 text-center">
+                            <div className="text-xl font-semibold">{calculatorResult.proteinGrams}g</div>
+                            <div className="text-xs text-muted-foreground">Protein</div>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/50 text-center">
+                            <div className="text-xl font-semibold">{calculatorResult.carbsGrams}g</div>
+                            <div className="text-xs text-muted-foreground">Carbs</div>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/50 text-center">
+                            <div className="text-xl font-semibold">{calculatorResult.fatGrams}g</div>
+                            <div className="text-xs text-muted-foreground">Fat</div>
+                          </div>
+                        </div>
+
+                        <Button 
+                          type="button" 
+                          className="w-full gap-2" 
+                          onClick={applyCalculatorResults}
+                          disabled={upsertSettings.isPending}
+                        >
+                          <Zap className="h-4 w-4" />
+                          Use These Targets
+                        </Button>
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm">
+                        <Calculator className="h-8 w-8 mb-2 opacity-50" />
+                        Fill in your stats to see results
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                {/* Right: Results */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Results</h4>
-                  
-                  {calculatorResult ? (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 rounded-lg bg-muted/50 text-center">
-                          <div className="text-2xl font-bold">{calculatorResult.bmr.toLocaleString()}</div>
-                          <div className="text-sm text-muted-foreground">BMR kcal</div>
-                        </div>
-                        <div className="p-4 rounded-lg bg-muted/50 text-center">
-                          <div className="text-2xl font-bold">{calculatorResult.tdee.toLocaleString()}</div>
-                          <div className="text-sm text-muted-foreground">TDEE kcal</div>
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
-                        <div className="text-3xl font-bold text-primary">{calculatorResult.targetCalories.toLocaleString()}</div>
-                        <div className="text-sm text-muted-foreground">Target kcal/day</div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="p-3 rounded-lg bg-muted/50 text-center">
-                          <div className="text-xl font-semibold">{calculatorResult.proteinGrams}g</div>
-                          <div className="text-xs text-muted-foreground">Protein</div>
-                        </div>
-                        <div className="p-3 rounded-lg bg-muted/50 text-center">
-                          <div className="text-xl font-semibold">{calculatorResult.carbsGrams}g</div>
-                          <div className="text-xs text-muted-foreground">Carbs</div>
-                        </div>
-                        <div className="p-3 rounded-lg bg-muted/50 text-center">
-                          <div className="text-xl font-semibold">{calculatorResult.fatGrams}g</div>
-                          <div className="text-xs text-muted-foreground">Fat</div>
-                        </div>
-                      </div>
-
-                      <Button 
-                        type="button" 
-                        className="w-full gap-2" 
-                        onClick={applyCalculatorResults}
-                        disabled={upsertSettings.isPending}
-                      >
-                        <Zap className="h-4 w-4" />
-                        Use These Targets
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm">
-                      <Calculator className="h-8 w-8 mb-2 opacity-50" />
-                      Fill in your stats to see results
-                    </div>
-                  )}
-                </div>
-              </div>
+              </Form>
             </TabsContent>
 
             {/* Manual Tab */}
