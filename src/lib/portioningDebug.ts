@@ -1,5 +1,5 @@
-// Dev-only debug helpers to prove whether solver totals/targets match UI totals/targets.
-// This file is intentionally side-effect free; callers decide when to log/store.
+// Debug helpers to prove whether solver totals/targets match UI totals/targets.
+// Works in ANY environment when localStorage.debug_portioning === "1"
 
 export type PortioningDebugTotals = {
   calories: number;
@@ -37,8 +37,8 @@ export type PortioningSolverDebugPayload = {
   createdAt: string;
 };
 
+/** Check if debug mode is enabled - works in ANY environment */
 function isDebugEnabled(): boolean {
-  if (!import.meta.env.DEV) return false;
   try {
     return localStorage.getItem("debug_portioning") === "1";
   } catch {
@@ -52,9 +52,31 @@ function getStore(): Record<string, PortioningSolverDebugPayload> {
   return w.__portioningDebug;
 }
 
+/** Store solver debug payload immediately after calculation */
 export function storePortioningSolverDebug(payload: PortioningSolverDebugPayload) {
   if (!isDebugEnabled()) return;
   getStore()[payload.mealDate] = payload;
+  
+  // IMMEDIATE log so we can see solver output right away
+  // eslint-disable-next-line no-console
+  console.log(`%c[SOLVER DEBUG] ${payload.mealDate}`, "background: #4CAF50; color: white; padding: 2px 6px; border-radius: 3px;");
+  // eslint-disable-next-line no-console
+  console.log("  Targets:", payload.targets);
+  // eslint-disable-next-line no-console
+  console.log("  Achieved:", payload.achieved);
+  // eslint-disable-next-line no-console
+  console.log("  Warnings:", payload.warnings);
+  // eslint-disable-next-line no-console
+  console.table(payload.items.map(i => ({
+    name: i.name.substring(0, 30),
+    grams: i.grams,
+    kcal: Math.round(i.contribution.calories),
+    P: Math.round(i.contribution.protein * 10) / 10,
+    C: Math.round(i.contribution.carbs * 10) / 10,
+    F: Math.round(i.contribution.fat * 10) / 10,
+    locked: i.flags.locked ? "🔒" : "",
+    fixed: i.flags.fixed ? "📌" : "",
+  })));
 }
 
 export function readPortioningSolverDebug(mealDate: string): PortioningSolverDebugPayload | null {
@@ -62,6 +84,7 @@ export function readPortioningSolverDebug(mealDate: string): PortioningSolverDeb
   return store[mealDate] ?? null;
 }
 
+/** Compare UI totals with solver totals - called when modal opens */
 export function logPortioningUiComparison(args: {
   mealDate: string;
   uiTargets: PortioningDebugTotals;
@@ -70,43 +93,52 @@ export function logPortioningUiComparison(args: {
 }) {
   if (!isDebugEnabled()) return;
 
+  // eslint-disable-next-line no-console
+  console.log(`%c[UI DEBUG] ${args.mealDate} - Modal Opened`, "background: #2196F3; color: white; padding: 2px 6px; border-radius: 3px;");
+
   const solver = readPortioningSolverDebug(args.mealDate);
+  
   // eslint-disable-next-line no-console
-  console.groupCollapsed(`[portioning debug] ${args.mealDate}`);
+  console.log("=== UI VALUES ===");
   // eslint-disable-next-line no-console
-  console.log("UI targets:", args.uiTargets);
+  console.log("  UI Targets:", args.uiTargets);
   // eslint-disable-next-line no-console
-  console.log("UI achieved:", args.uiAchieved);
+  console.log("  UI Achieved:", args.uiAchieved);
   // eslint-disable-next-line no-console
-  console.log("UI items:", args.uiItems);
+  console.table(args.uiItems.map(i => ({
+    name: i.name.substring(0, 30),
+    grams: i.grams,
+    kcal: Math.round(i.contribution.calories),
+    P: Math.round(i.contribution.protein * 10) / 10,
+    C: Math.round(i.contribution.carbs * 10) / 10,
+    F: Math.round(i.contribution.fat * 10) / 10,
+    locked: i.flags.locked ? "🔒" : "",
+    fixed: i.flags.fixed ? "📌" : "",
+  })));
 
   if (!solver) {
     // eslint-disable-next-line no-console
-    console.warn("No solver debug payload stored for this date (toggle localStorage debug_portioning=1 BEFORE generating).");
-    // eslint-disable-next-line no-console
-    console.groupEnd();
+    console.warn("⚠️ No solver debug payload stored for this date. Make sure to set localStorage.debug_portioning='1' BEFORE clicking Generate Portions.");
     return;
   }
 
   // eslint-disable-next-line no-console
-  console.log("Solver targets:", solver.targets);
+  console.log("=== SOLVER VALUES ===");
   // eslint-disable-next-line no-console
-  console.log("Solver achieved:", solver.achieved);
+  console.log("  Solver Targets:", solver.targets);
   // eslint-disable-next-line no-console
-  console.log("Solver warnings:", solver.warnings);
-  if (solver.phases?.length) {
-    // eslint-disable-next-line no-console
-    console.log("Solver phases:", solver.phases);
-  }
+  console.log("  Solver Achieved:", solver.achieved);
+  // eslint-disable-next-line no-console
+  console.log("  Solver Warnings:", solver.warnings);
 
-  const diff = (a: number, b: number) => Math.round((a - b) * 1000) / 1000;
+  // Calculate deltas
+  const diff = (a: number, b: number) => Math.round((a - b) * 100) / 100;
   const totalsDelta = {
     calories: diff(args.uiAchieved.calories, solver.achieved.calories),
     protein: diff(args.uiAchieved.protein, solver.achieved.protein),
     carbs: diff(args.uiAchieved.carbs, solver.achieved.carbs),
     fat: diff(args.uiAchieved.fat, solver.achieved.fat),
   };
-
   const targetsDelta = {
     calories: diff(args.uiTargets.calories, solver.targets.calories),
     protein: diff(args.uiTargets.protein, solver.targets.protein),
@@ -115,9 +147,20 @@ export function logPortioningUiComparison(args: {
   };
 
   // eslint-disable-next-line no-console
-  console.log("Δ achieved (UI - solver):", totalsDelta);
+  console.log("=== DELTA (UI - Solver) ===");
   // eslint-disable-next-line no-console
-  console.log("Δ targets (UI - solver):", targetsDelta);
+  console.log("  Δ Targets:", targetsDelta);
   // eslint-disable-next-line no-console
-  console.groupEnd();
+  console.log("  Δ Achieved:", totalsDelta);
+
+  // Highlight mismatch
+  const hasMismatch = Object.values(totalsDelta).some(v => Math.abs(v) > 0.5) ||
+                      Object.values(targetsDelta).some(v => Math.abs(v) > 0.5);
+  if (hasMismatch) {
+    // eslint-disable-next-line no-console
+    console.warn("🚨 MISMATCH DETECTED between UI and Solver values!");
+  } else {
+    // eslint-disable-next-line no-console
+    console.log("✅ UI and Solver values match within 0.5 tolerance");
+  }
 }
