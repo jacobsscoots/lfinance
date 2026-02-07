@@ -1657,29 +1657,31 @@ export function calculateDayPortions(
   const fatDiff = Math.abs(totalAchieved.fat - dailyTargets.fat);
 
   // Tolerances:
-  // - Macros within ±1g (inclusive) - THIS IS THE PRIMARY SUCCESS CRITERIA
-  // - Calorie check is informational only because:
-  //   1) Calories are derived from (P×4 + C×4 + F×9), so if macros are hit, calories follow
-  //   2) Integer gram rounding means we can't always hit an exact calorie number
-  //   3) A ±1g variance in each macro can result in ~25 kcal variance
+  // - Calories can be up to 50 kcal over target (user preference)
+  // - Macros within ±1g (inclusive) - PRIMARY SUCCESS CRITERIA
+  const CAL_TOLERANCE = 50;
   const MACRO_TOLERANCE = 1;
+  
+  // Calories: allow up to 50 over, but not under by more than a small margin
+  const caloriesWithinTolerance = calDiff <= CAL_TOLERANCE;
   const macrosWithinTolerance =
     proDiff <= MACRO_TOLERANCE &&
     carbDiff <= MACRO_TOLERANCE &&
     fatDiff <= MACRO_TOLERANCE;
 
-  // Success = all macros within ±1g (calories will naturally follow from macro achievement)
-  const success = macrosWithinTolerance;
+  // Success = macros within ±1g AND calories within tolerance
+  const success = macrosWithinTolerance && caloriesWithinTolerance;
 
   if (!success) {
     if (proDiff > MACRO_TOLERANCE) warnings.push(`Protein: ${Math.round(totalAchieved.protein)}g (target: ${dailyTargets.protein}g)`);
     if (carbDiff > MACRO_TOLERANCE) warnings.push(`Carbs: ${Math.round(totalAchieved.carbs)}g (target: ${dailyTargets.carbs}g)`);
     if (fatDiff > MACRO_TOLERANCE) warnings.push(`Fat: ${Math.round(totalAchieved.fat)}g (target: ${dailyTargets.fat}g)`);
+    if (!caloriesWithinTolerance) warnings.push(`Calories: ${Math.round(totalAchieved.calories)} (target: ${dailyTargets.calories}, max +${CAL_TOLERANCE})`);
   }
 
-  // Add informational calorie variance warning if >10 kcal off (but doesn't affect success)
+  // Add informational calorie variance warning if >10 kcal off (but doesn't affect success if within 50)
   if (calDiff > 10 && success) {
-    warnings.push(`Note: Calories ${Math.round(totalAchieved.calories)} (${calDiff > 0 ? "+" : ""}${Math.round(calDiff)} from target ${dailyTargets.calories}) due to gram rounding`);
+    warnings.push(`Note: Calories ${Math.round(totalAchieved.calories)} (${totalAchieved.calories > dailyTargets.calories ? "+" : ""}${Math.round(totalAchieved.calories - dailyTargets.calories)} from target ${dailyTargets.calories})`);
   }
 
   // Emit debug payload for dev-only console comparison (via localStorage flag)

@@ -77,6 +77,9 @@ export interface ProductFormData {
   offer_price?: number | null;
   offer_label?: string | null;
   pack_size_grams?: number | null;
+  // Grocery tracking
+  retailer?: string | null;
+  default_discount_type?: string | null;
   // Serving basis
   serving_basis?: ServingBasis;
   serving_size_grams?: number | null;
