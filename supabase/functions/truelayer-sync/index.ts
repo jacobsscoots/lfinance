@@ -76,7 +76,7 @@ serve(async (req) => {
 
     const { data: connection, error: connError } = await serviceSupabase
       .from('bank_connections')
-      .select('id, user_id, access_token, refresh_token, token_expires_at')
+      .select('id, user_id, access_token, refresh_token, token_expires_at, provider')
       .eq('id', connectionId)
       .single();
 
@@ -94,6 +94,7 @@ serve(async (req) => {
     }
 
     let accessToken = connection.access_token;
+    const connectionProvider = connection.provider || 'truelayer';
 
     // Check if token needs refresh
     if (connection.token_expires_at && new Date(connection.token_expires_at) < new Date()) {
@@ -168,7 +169,7 @@ serve(async (req) => {
 
     const { results: accounts } = await accountsResponse.json();
 
-    // Process each account
+    // Process each account using UPSERT by (provider, external_id)
     const syncedAccounts = [];
     for (const account of accounts) {
       // Fetch balance for this account
@@ -187,21 +188,29 @@ serve(async (req) => {
         balance = balances[0]?.current || 0;
       }
 
-      // Check if account already exists (use user-scoped client for RLS)
+      // Extract provider from account data if available, fallback to connection provider
+      const accountProvider = account.provider?.provider_id || connectionProvider;
+      const accountType = account.account_type === 'SAVINGS' ? 'savings' : 'current';
+      const accountName = account.display_name || account.account_number?.number || 'Bank Account';
+
+      // Check if account already exists using (provider, external_id) composite key
       const { data: existingAccount } = await supabase
         .from('bank_accounts')
-        .select('id')
+        .select('id, display_name')
         .eq('external_id', account.account_id)
         .eq('user_id', userId)
         .maybeSingle();
 
       if (existingAccount) {
-        // Update existing account
+        // Update existing account - preserve display_name if set
         const { error: updateError } = await supabase
           .from('bank_accounts')
           .update({
             balance,
+            name: accountName, // Update synced name
+            provider: accountProvider, // Ensure provider is set
             last_synced_at: new Date().toISOString(),
+            // Note: display_name is NOT updated here to preserve user customization
           })
           .eq('id', existingAccount.id);
 
@@ -211,17 +220,17 @@ serve(async (req) => {
           syncedAccounts.push({ ...account, balance, action: 'updated' });
         }
       } else {
-        // Create new account
-        const accountType = account.account_type === 'SAVINGS' ? 'savings' : 'current';
+        // Create new account with provider field
         const { error: insertError } = await supabase
           .from('bank_accounts')
           .insert({
             user_id: userId,
-            name: account.display_name || account.account_number?.number || 'Bank Account',
+            name: accountName,
             account_type: accountType,
             balance,
             external_id: account.account_id,
             connection_id: connectionId,
+            provider: accountProvider,
             last_synced_at: new Date().toISOString(),
           });
 

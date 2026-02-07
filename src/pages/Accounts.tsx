@@ -4,7 +4,9 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CreditCard, Plus, Wallet, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { CreditCard, Plus, Wallet, Loader2, Eye, EyeOff } from "lucide-react";
 import { useAccounts, BankAccount, CreateAccountInput, UpdateAccountInput } from "@/hooks/useAccounts";
 import { useBankConnections } from "@/hooks/useBankConnections";
 import { AccountCard } from "@/components/accounts/AccountCard";
@@ -14,12 +16,22 @@ import { BankConnectionCard } from "@/components/accounts/BankConnectionCard";
 
 export default function Accounts() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { accounts, isLoading, totalBalance, createAccount, updateAccount, deleteAccount } = useAccounts();
+  const { 
+    accounts, 
+    allAccounts, 
+    isLoading, 
+    totalBalance, 
+    createAccount, 
+    updateAccount, 
+    deleteAccount,
+    toggleHidden 
+  } = useAccounts();
   const { completeConnection } = useBankConnections();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
+  const [showHiddenAccounts, setShowHiddenAccounts] = useState(false);
 
   // Handle TrueLayer OAuth callback
   useEffect(() => {
@@ -60,6 +72,10 @@ export default function Accounts() {
     setDeleteOpen(true);
   };
 
+  const handleToggleHidden = (account: BankAccount) => {
+    toggleHidden.mutate({ id: account.id, is_hidden: !account.is_hidden });
+  };
+
   const handleFormSubmit = async (data: CreateAccountInput | UpdateAccountInput) => {
     if ('id' in data) {
       await updateAccount.mutateAsync(data);
@@ -75,6 +91,10 @@ export default function Accounts() {
       setDeleteOpen(false);
     }
   };
+
+  // Filter accounts based on visibility toggle
+  const displayedAccounts = showHiddenAccounts ? allAccounts : accounts;
+  const hiddenCount = allAccounts.length - accounts.length;
 
   // Show loading state while processing OAuth callback
   if (isProcessingCallback || completeConnection.isPending) {
@@ -128,10 +148,32 @@ export default function Accounts() {
               </p>
             )}
             <p className="text-sm opacity-80 mt-1">
-              Across {accounts.length} account{accounts.length !== 1 ? 's' : ''}
+              Across {accounts.length} visible account{accounts.length !== 1 ? 's' : ''}
+              {hiddenCount > 0 && (
+                <span className="ml-1">({hiddenCount} hidden)</span>
+              )}
             </p>
           </CardContent>
         </Card>
+
+        {/* Show Hidden Toggle */}
+        {hiddenCount > 0 && (
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-hidden"
+              checked={showHiddenAccounts}
+              onCheckedChange={setShowHiddenAccounts}
+            />
+            <Label htmlFor="show-hidden" className="text-sm text-muted-foreground cursor-pointer flex items-center gap-2">
+              {showHiddenAccounts ? (
+                <Eye className="h-4 w-4" />
+              ) : (
+                <EyeOff className="h-4 w-4" />
+              )}
+              Show hidden accounts ({hiddenCount})
+            </Label>
+          </div>
+        )}
 
         {/* Accounts Grid */}
         {isLoading ? (
@@ -148,7 +190,7 @@ export default function Accounts() {
               </Card>
             ))}
           </div>
-        ) : accounts.length === 0 ? (
+        ) : displayedAccounts.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <CreditCard className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -164,12 +206,13 @@ export default function Accounts() {
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {accounts.map((account) => (
+            {displayedAccounts.map((account) => (
               <AccountCard
                 key={account.id}
                 account={account}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onToggleHidden={handleToggleHidden}
               />
             ))}
           </div>
