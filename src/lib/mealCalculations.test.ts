@@ -53,14 +53,16 @@ describe("getTargetsForDate", () => {
       fat: 60,
     };
 
-    it("should return weekly override calories for Monday", () => {
+    it("should return weekly override calories for Monday with DERIVED fat", () => {
       const monday = new Date(2026, 1, 9); // Feb 9, 2026 (Monday)
       const targets = getTargetsForDate(monday, mockGlobalSettings, weeklyOverride);
       
       expect(targets.calories).toBe(1717);
       expect(targets.protein).toBe(160);
       expect(targets.carbs).toBe(180);
-      expect(targets.fat).toBe(60);
+      // Fat is now DERIVED from remaining calories: (1717 - 160*4 - 180*4) / 9
+      // = (1717 - 640 - 720) / 9 = 357 / 9 = 39.67 → 40
+      expect(targets.fat).toBe(40);
     });
 
     it("should return weekly override calories for Saturday", () => {
@@ -143,7 +145,7 @@ describe("getTargetsForDate", () => {
       expect(targets.calories).toBe(2200); // Global weekend target
     });
 
-    it("should use global macro defaults when override has null macros", () => {
+    it("should derive fat from remaining calories even when override has null macros", () => {
       const weeklyOverride: WeeklyTargetsOverride = {
         weekStartDate: "2026-02-09",
         schedule: {
@@ -157,7 +159,7 @@ describe("getTargetsForDate", () => {
         },
         protein: null,
         carbs: null,
-        fat: null,
+        fat: null, // This is ignored - fat is always derived
       };
 
       const monday = new Date(2026, 1, 9);
@@ -166,7 +168,8 @@ describe("getTargetsForDate", () => {
       expect(targets.calories).toBe(1717); // From override
       expect(targets.protein).toBe(150); // Falls back to global
       expect(targets.carbs).toBe(200); // Falls back to global
-      expect(targets.fat).toBe(65); // Falls back to global
+      // Fat is DERIVED: (1717 - 150*4 - 200*4) / 9 = (1717 - 600 - 800) / 9 = 317/9 = 35.2 → 35
+      expect(targets.fat).toBe(35);
     });
   });
 });

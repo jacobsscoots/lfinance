@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+import { format, parse } from "date-fns";
 import { AlertTriangle, Settings2 } from "lucide-react";
 import {
   Dialog,
@@ -14,12 +14,10 @@ import { MealPlan, MealType } from "@/hooks/useMealPlanItems";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { 
   DayMacros, 
-  MacroTotals, 
-  getTargetsForDate, 
   getBalanceWarnings,
   BalanceWarning,
-  WeeklyTargetsOverride 
 } from "@/lib/mealCalculations";
+import { getDailyTargets, computeTotals, MacroTotals, WeeklyTargetsOverride } from "@/lib/dailyTargets";
 import { MealBreakdownList } from "./MealBreakdownList";
 import { DayMacroSummary } from "./DayMacroSummary";
 import { cn } from "@/lib/utils";
@@ -59,16 +57,18 @@ export function DayDetailModal({
   onEdit,
   weeklyOverride 
 }: DayDetailModalProps) {
-  const date = parseISO(plan.meal_date);
+  // Parse as local date to avoid UTC-shift issues
+  const date = parse(plan.meal_date, "yyyy-MM-dd", new Date());
   const isTargetMode = settings?.mode === "target_based";
-  const targets = settings ? getTargetsForDate(date, settings, weeklyOverride) : {
-    calories: 2000,
-    protein: 150,
-    carbs: 200,
-    fat: 65,
-  };
+  
+  // Use unified getDailyTargets for single source of truth
+  const targets = getDailyTargets(date, settings, weeklyOverride);
+  
   const warnings = getBalanceWarnings(dayMacros, settings);
   const items = plan.items || [];
+  
+  // Use unified computeTotals for consistent totals calculation
+  const uiTotals = computeTotals(items);
 
   // Check if there are items with zero grams (uncalculated)
   const hasUncalculatedItems = items.some(item => 
@@ -82,22 +82,22 @@ export function DayDetailModal({
     (item.product.calories_per_100g === 0 || item.product.protein_per_100g === 0)
   );
 
-  // Calculate actual success based on macro differences (NOT hardcoded)
-  const calDiff = Math.abs(dayMacros.totals.calories - targets.calories);
-  const proDiff = Math.abs(dayMacros.totals.protein - targets.protein);
-  const carbDiff = Math.abs(dayMacros.totals.carbs - targets.carbs);
-  const fatDiff = Math.abs(dayMacros.totals.fat - targets.fat);
+  // Calculate actual success based on macro differences using unified totals
+  const calDiff = Math.abs(uiTotals.calories - targets.calories);
+  const proDiff = Math.abs(uiTotals.protein - targets.protein);
+  const carbDiff = Math.abs(uiTotals.carbs - targets.carbs);
+  const fatDiff = Math.abs(uiTotals.fat - targets.fat);
   
   // Success = all macros within tolerance (±1g for P/C/F, <5 kcal for calories)
-  const isWithinTolerance = calDiff < 5 && proDiff <= 1 && carbDiff <= 1 && fatDiff <= 1;
+  const macrosWithinTolerance = calDiff < 5 && proDiff <= 1 && carbDiff <= 1 && fatDiff <= 1;
   const hasItems = items.length > 0;
   
   // Build specific failure messages for clarity
   const failedMacros: string[] = [];
-  if (proDiff > 1) failedMacros.push(`Protein: ${Math.round(dayMacros.totals.protein - targets.protein) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.protein - targets.protein)}g`);
-  if (carbDiff > 1) failedMacros.push(`Carbs: ${Math.round(dayMacros.totals.carbs - targets.carbs) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.carbs - targets.carbs)}g`);
-  if (fatDiff > 1) failedMacros.push(`Fat: ${Math.round(dayMacros.totals.fat - targets.fat) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.fat - targets.fat)}g`);
-  if (calDiff >= 5) failedMacros.push(`Calories: ${Math.round(dayMacros.totals.calories - targets.calories) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.calories - targets.calories)}`);
+  if (proDiff > 1) failedMacros.push(`Protein: ${Math.round(uiTotals.protein - targets.protein) >= 0 ? '+' : ''}${Math.round(uiTotals.protein - targets.protein)}g`);
+  if (carbDiff > 1) failedMacros.push(`Carbs: ${Math.round(uiTotals.carbs - targets.carbs) >= 0 ? '+' : ''}${Math.round(uiTotals.carbs - targets.carbs)}g`);
+  if (fatDiff > 1) failedMacros.push(`Fat: ${Math.round(uiTotals.fat - targets.fat) >= 0 ? '+' : ''}${Math.round(uiTotals.fat - targets.fat)}g`);
+  if (calDiff >= 5) failedMacros.push(`Calories: ${Math.round(uiTotals.calories - targets.calories) >= 0 ? '+' : ''}${Math.round(uiTotals.calories - targets.calories)}`);
 
   // Portioning settings info (not used in UI but kept for future)
   const portioningSettings = {
@@ -141,7 +141,7 @@ export function DayDetailModal({
     logPortioningUiComparison({
       mealDate: plan.meal_date,
       uiTargets: targets,
-      uiAchieved: dayMacros.totals,
+      uiAchieved: uiTotals,
       uiItems,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,36 +221,36 @@ export function DayDetailModal({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Calories</span>
                 <span>
-                  {Math.round(dayMacros.totals.calories)} / {targets.calories}
-                  <span className={cn("ml-2 text-xs", getDiffClass(dayMacros.totals.calories, targets.calories))}>
-                    ({getDiffText(dayMacros.totals.calories, targets.calories, "")})
+                  {Math.round(uiTotals.calories)} / {targets.calories}
+                  <span className={cn("ml-2 text-xs", getDiffClass(uiTotals.calories, targets.calories))}>
+                    ({getDiffText(uiTotals.calories, targets.calories, "")})
                   </span>
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Protein</span>
                 <span>
-                  {Math.round(dayMacros.totals.protein)}g / {targets.protein}g
-                  <span className={cn("ml-2 text-xs", getDiffClass(dayMacros.totals.protein, targets.protein))}>
-                    ({getDiffText(dayMacros.totals.protein, targets.protein, "g")})
+                  {Math.round(uiTotals.protein)}g / {targets.protein}g
+                  <span className={cn("ml-2 text-xs", getDiffClass(uiTotals.protein, targets.protein))}>
+                    ({getDiffText(uiTotals.protein, targets.protein, "g")})
                   </span>
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Carbs</span>
                 <span>
-                  {Math.round(dayMacros.totals.carbs)}g / {targets.carbs}g
-                  <span className={cn("ml-2 text-xs", getDiffClass(dayMacros.totals.carbs, targets.carbs))}>
-                    ({getDiffText(dayMacros.totals.carbs, targets.carbs, "g")})
+                  {Math.round(uiTotals.carbs)}g / {targets.carbs}g
+                  <span className={cn("ml-2 text-xs", getDiffClass(uiTotals.carbs, targets.carbs))}>
+                    ({getDiffText(uiTotals.carbs, targets.carbs, "g")})
                   </span>
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Fat</span>
                 <span>
-                  {Math.round(dayMacros.totals.fat)}g / {targets.fat}g
-                  <span className={cn("ml-2 text-xs", getDiffClass(dayMacros.totals.fat, targets.fat))}>
-                    ({getDiffText(dayMacros.totals.fat, targets.fat, "g")})
+                  {Math.round(uiTotals.fat)}g / {targets.fat}g
+                  <span className={cn("ml-2 text-xs", getDiffClass(uiTotals.fat, targets.fat))}>
+                    ({getDiffText(uiTotals.fat, targets.fat, "g")})
                   </span>
                 </span>
               </div>
@@ -259,19 +259,19 @@ export function DayDetailModal({
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Calories</span>
-                <span>{Math.round(dayMacros.totals.calories)} kcal</span>
+                <span>{Math.round(uiTotals.calories)} kcal</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Protein</span>
-                <span>{Math.round(dayMacros.totals.protein)}g</span>
+                <span>{Math.round(uiTotals.protein)}g</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Carbs</span>
-                <span>{Math.round(dayMacros.totals.carbs)}g</span>
+                <span>{Math.round(uiTotals.carbs)}g</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Fat</span>
-                <span>{Math.round(dayMacros.totals.fat)}g</span>
+                <span>{Math.round(uiTotals.fat)}g</span>
               </div>
             </div>
           )}
@@ -291,11 +291,11 @@ export function DayDetailModal({
               {hasItems && !hasUncalculatedItems && (
                 <div className={cn(
                   "text-xs px-3 py-2 rounded-md border",
-                  isWithinTolerance 
+                  macrosWithinTolerance 
                     ? "bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400"
                     : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
                 )}>
-                  {isWithinTolerance ? (
+                  {macrosWithinTolerance ? (
                     <span className="flex items-center gap-2">
                       <span className="font-semibold">✓ Targets achieved</span>
                       <span className="text-muted-foreground">— all macros within ±1g tolerance</span>

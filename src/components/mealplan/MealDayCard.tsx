@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, parseISO } from "date-fns";
+import { format, parse } from "date-fns";
 import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { MealPlan, MealType, MealStatus, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { Product } from "@/hooks/useProducts";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
-import { DayMacros, MealMacros, getTargetsForDate, MacroTotals, WeeklyTargetsOverride } from "@/lib/mealCalculations";
+import { DayMacros, MealMacros } from "@/lib/mealCalculations";
+import { getDailyTargets, MacroTotals, WeeklyTargetsOverride } from "@/lib/dailyTargets";
 import { MealItemMultiSelectDialog } from "./MealItemMultiSelectDialog";
 import { EatingOutDialog } from "./EatingOutDialog";
 import { DayDetailModal } from "./DayDetailModal";
@@ -49,7 +50,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   
   const { updateMealStatus, removeItem, updateItem, copyDayToNext, clearDay, recalculateDay } = useMealPlanItems(weekStart);
   
-  const date = parseISO(plan.meal_date);
+  // Parse as local date to avoid UTC-shift issues
+  const date = parse(plan.meal_date, "yyyy-MM-dd", new Date());
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
   const isTargetMode = settings?.mode === "target_based";
@@ -59,10 +61,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
     : date.getDay() === 1; // Fallback to old logic if weekDates not provided
   const hasItems = items.length > 0;
   
-  // Get targets for this specific date (with weekly override if available)
-  const targets: MacroTotals = settings 
-    ? getTargetsForDate(date, settings, weeklyOverride)
-    : { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+  // Use unified getDailyTargets for single source of truth
+  const targets: MacroTotals = getDailyTargets(date, settings, weeklyOverride);
   
   // Check if there are uncalculated items
   const hasUncalculatedItems = items.some(item => 
