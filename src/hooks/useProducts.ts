@@ -43,6 +43,17 @@ export interface Product {
   // Meal planning fields
   meal_eligibility: MealEligibility[];
   food_type: FoodType;
+  // Inventory tracking
+  quantity_on_hand: number | null;
+  quantity_in_use: number | null;
+  reorder_threshold: number | null;
+  target_quantity: number | null;
+  packaging_weight_grams: number | null;
+  gross_pack_size_grams: number | null;
+  // Grocery tracking
+  retailer: string | null;
+  default_discount_type: string | null;
+  // Timestamps
   created_at: string;
   updated_at: string;
 }

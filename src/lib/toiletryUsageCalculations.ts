@@ -1,16 +1,15 @@
 import { differenceInDays } from "date-fns";
 
-// ============= Types =============
+// Re-export discount types and functions from shared module
+export {
+  type DiscountType,
+  type DiscountCalculation,
+  calculateLoyaltyDiscount,
+  calculateTotalSavings,
+  calculateActualMonthlySpend,
+} from "./discounts";
 
-export type DiscountType = "tesco_benefits" | "easysaver" | "clubcard" | "none" | "other";
-
-export interface DiscountCalculation {
-  originalPrice: number;
-  roundedPrice: number;
-  discountPercent: number;
-  discountAmount: number;
-  finalPrice: number;
-}
+// ============= Toiletry-specific Types =============
 
 export interface WeightReading {
   weight: number;
@@ -23,48 +22,6 @@ export interface UsageRateResult {
   remainingGrams: number;
   daysRemaining: number | null;
   source: "weight_based" | "manual";
-}
-
-// ============= Discount Calculations =============
-
-const DISCOUNT_RATES: Record<DiscountType, number> = {
-  tesco_benefits: 0.04, // 4%
-  easysaver: 0.07,      // 7%
-  clubcard: 0,          // Clubcard prices are pre-reduced
-  none: 0,
-  other: 0,
-};
-
-/**
- * Calculate loyalty discount using the "round up then apply" rule.
- * 
- * IMPORTANT: This matches Tesco Benefits on Tap & EasySaver behaviour:
- * - Round the price UP to the nearest £1
- * - Calculate discount on the rounded price
- * - Subtract discount from the ORIGINAL price
- */
-export function calculateLoyaltyDiscount(
-  price: number,
-  discountType: DiscountType
-): DiscountCalculation {
-  const discountPercent = DISCOUNT_RATES[discountType] ?? 0;
-  
-  // Round UP to nearest £1 before applying discount
-  const roundedPrice = Math.ceil(price);
-  
-  // Discount is calculated on the rounded price
-  const discountAmount = roundedPrice * discountPercent;
-  
-  // But subtracted from the original price
-  const finalPrice = Math.max(0, price - discountAmount);
-  
-  return {
-    originalPrice: price,
-    roundedPrice,
-    discountPercent,
-    discountAmount,
-    finalPrice: Math.round(finalPrice * 100) / 100, // Round to 2 decimal places
-  };
 }
 
 // ============= Usage Rate Calculations =============
@@ -207,57 +164,11 @@ export function validateWeightLog(
   return { valid: true };
 }
 
-// ============= Spend Calculations =============
+// ============= Spend Calculations (Toiletry-specific) =============
 
 export interface MonthlySpendSummary {
   actual: number;
   forecasted: number;
   savings: number;
   byCategory: Record<string, { actual: number; forecasted: number }>;
-}
-
-/**
- * Calculate monthly spend from purchase history.
- */
-export function calculateActualMonthlySpend(
-  purchases: Array<{ final_price: number; purchase_date: string }>,
-  monthsToAverage: number = 12
-): number {
-  if (purchases.length === 0) return 0;
-  
-  const now = new Date();
-  const cutoffDate = new Date(now);
-  cutoffDate.setMonth(cutoffDate.getMonth() - monthsToAverage);
-  
-  const recentPurchases = purchases.filter(
-    (p) => new Date(p.purchase_date) >= cutoffDate
-  );
-  
-  if (recentPurchases.length === 0) return 0;
-  
-  const totalSpend = recentPurchases.reduce((sum, p) => sum + p.final_price, 0);
-  
-  // Calculate actual months covered
-  const oldestPurchase = recentPurchases.reduce(
-    (oldest, p) => {
-      const date = new Date(p.purchase_date);
-      return date < oldest ? date : oldest;
-    },
-    new Date()
-  );
-  
-  const monthsCovered = Math.max(1, 
-    (now.getTime() - oldestPurchase.getTime()) / (1000 * 60 * 60 * 24 * 30)
-  );
-  
-  return totalSpend / monthsCovered;
-}
-
-/**
- * Calculate total discount savings from purchases.
- */
-export function calculateTotalSavings(
-  purchases: Array<{ discount_amount: number }>
-): number {
-  return purchases.reduce((sum, p) => sum + (p.discount_amount ?? 0), 0);
 }

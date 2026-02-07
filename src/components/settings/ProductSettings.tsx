@@ -39,6 +39,7 @@ const productSchema = z.object({
   offer_price: z.coerce.number().min(0).optional().nullable(),
   offer_label: z.string().max(50).optional().nullable(),
   pack_size_grams: z.coerce.number().min(0).nullable().optional(),
+  retailer: z.string().optional().nullable(),
   // Serving basis
   serving_basis: z.enum(["per_100g", "per_serving", "as_sold"]),
   serving_size_grams: z.coerce.number().min(0).nullable().optional(),
@@ -84,6 +85,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
     offer_price: null,
     offer_label: "",
     pack_size_grams: null,
+    retailer: "",
     serving_basis: "per_100g" as ServingBasis,
     serving_size_grams: null,
     product_type: "editable" as ProductType,
@@ -120,6 +122,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
         offer_price: product.offer_price || null,
         offer_label: product.offer_label || "",
         pack_size_grams: product.pack_size_grams || null,
+        retailer: product.retailer || "",
         serving_basis: (product.serving_basis as ServingBasis) || "per_100g",
         serving_size_grams: product.serving_size_grams || null,
         product_type: (product.product_type as ProductType) || "editable",
@@ -556,7 +559,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
 
               <Separator />
 
-              {/* Pricing */}
+              {/* Pricing & Retailer */}
               <div className="space-y-4">
                 <h4 className="font-medium text-sm">Pricing</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -627,6 +630,38 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                     )}
                   />
                 </div>
+                <FormField
+                  control={form.control}
+                  name="retailer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Default Retailer</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select retailer..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="Tesco">Tesco</SelectItem>
+                          <SelectItem value="Sainsbury's">Sainsbury's</SelectItem>
+                          <SelectItem value="ASDA">ASDA</SelectItem>
+                          <SelectItem value="Morrisons">Morrisons</SelectItem>
+                          <SelectItem value="Aldi">Aldi</SelectItem>
+                          <SelectItem value="Lidl">Lidl</SelectItem>
+                          <SelectItem value="Iceland">Iceland</SelectItem>
+                          <SelectItem value="MyProtein">MyProtein</SelectItem>
+                          <SelectItem value="Amazon">Amazon</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Used for grouping in grocery shop list
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <Separator />
