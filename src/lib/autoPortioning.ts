@@ -113,20 +113,54 @@ function getFoodType(product: Product): FoodType {
  * Solve for exact grams using weighted least squares optimization.
  * Prioritizes: Calories > Protein > Carbs > Fat
  */
+/**
+ * Check if a product is a high-protein source (yogurt, chicken, fish, eggs, etc.)
+ */
+function isHighProteinSource(product: Product): boolean {
+  const name = product.name.toLowerCase();
+  const proteinKeywords = ["yogurt", "yoghurt", "chicken", "fish", "salmon", "tuna", "cod", "egg", "beef", "turkey", "pork", "prawn", "shrimp", "tofu", "tempeh", "lean"];
+  return proteinKeywords.some(kw => name.includes(kw)) || product.protein_per_100g > 15;
+}
+
+/**
+ * Get breakfast role for a product: "base" (yogurt), "secondary" (fruit), "topper" (granola)
+ */
+function getBreakfastRole(product: Product): "base" | "secondary" | "topper" | "other" {
+  const name = product.name.toLowerCase();
+  
+  // Yogurt is the main base
+  if (name.includes("yogurt") || name.includes("yoghurt")) {
+    return "base";
+  }
+  
+  // Fruit is secondary
+  const fruitKeywords = ["fruit", "berry", "berries", "banana", "apple", "mango", "strawberry", "blueberry", "raspberry"];
+  if (fruitKeywords.some(kw => name.includes(kw)) || product.food_type === "fruit") {
+    return "secondary";
+  }
+  
+  // Granola/cereal is just a topper
+  const topperKeywords = ["granola", "muesli", "cereal", "oat", "crunchy", "topper"];
+  if (topperKeywords.some(kw => name.includes(kw))) {
+    return "topper";
+  }
+  
+  return "other";
+}
+
+/**
+ * Solve for exact grams using weighted least squares optimization.
+ * Prioritizes: PROTEIN FIRST (exact), then Calories, then Carbs/Fat
+ */
 function solveExactPortions(
   items: EditableItem[],
   targetMacros: MacroTotals,
-  settings: PortioningSettings
+  settings: PortioningSettings,
+  mealType?: MealType
 ): Map<string, number> {
   const result = new Map<string, number>();
   
   if (items.length === 0) return result;
-  
-  // Priority weights for optimization
-  const CALORIE_WEIGHT = 10;
-  const PROTEIN_WEIGHT = 5;
-  const CARB_WEIGHT = 2;
-  const FAT_WEIGHT = 1;
 
   // For single item, solve directly for calories
   if (items.length === 1) {
@@ -146,12 +180,10 @@ function solveExactPortions(
     return result;
   }
 
-  // Multi-item optimization using iterative refinement
-  // Start with equal distribution, then refine
   const n = items.length;
-  const grams: number[] = new Array(n).fill(100);
-  
-  // Calculate current totals
+  const grams: number[] = new Array(n).fill(50); // Start with modest portions
+
+  // Calculate current totals helper
   const calcTotals = (): MacroTotals => {
     let cal = 0, pro = 0, carb = 0, fat = 0;
     for (let i = 0; i < n; i++) {
@@ -164,100 +196,204 @@ function solveExactPortions(
     return { calories: cal, protein: pro, carbs: carb, fat: fat };
   };
 
-  // Separate items by primary macro contribution
-  const proteinItems: number[] = [];
-  const carbItems: number[] = [];
-  const fatItems: number[] = [];
-  const otherItems: number[] = [];
-  
-  items.forEach((item, idx) => {
-    if (item.foodType === "protein" || item.proteinPer100g > 15) {
-      proteinItems.push(idx);
-    } else if (item.foodType === "carb" || item.carbsPer100g > 30) {
-      carbItems.push(idx);
-    } else if (item.foodType === "fat" || item.fatPer100g > 15) {
-      fatItems.push(idx);
-    } else {
-      otherItems.push(idx);
-    }
-  });
-
-  // Phase 1: Distribute protein sources to hit protein target
-  if (proteinItems.length > 0 && targetMacros.protein > 0) {
-    const totalProteinPer100g = proteinItems.reduce((sum, idx) => sum + items[idx].proteinPer100g, 0);
-    if (totalProteinPer100g > 0) {
-      const baseGrams = (targetMacros.protein / totalProteinPer100g) * 100;
-      proteinItems.forEach(idx => {
-        grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, baseGrams));
-      });
-    }
-  }
-
-  // Phase 2: Adjust carb sources to help hit calorie target
-  let currentTotals = calcTotals();
-  const remainingCalories = targetMacros.calories - currentTotals.calories;
-  
-  if (carbItems.length > 0 && remainingCalories > 0) {
-    const totalCarbCalsPer100g = carbItems.reduce((sum, idx) => sum + items[idx].caloriesPer100g, 0);
-    if (totalCarbCalsPer100g > 0) {
-      const additionalGrams = (remainingCalories / totalCarbCalsPer100g) * 100;
-      carbItems.forEach(idx => {
-        grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, additionalGrams));
-      });
-    }
-  }
-
-  // Phase 3: Fine-tune remaining items
-  currentTotals = calcTotals();
-  const stillNeeded = targetMacros.calories - currentTotals.calories;
-  
-  const adjustableItems = [...otherItems, ...fatItems];
-  if (adjustableItems.length > 0 && Math.abs(stillNeeded) > 1) {
-    const totalCalsPer100g = adjustableItems.reduce((sum, idx) => sum + items[idx].caloriesPer100g, 0);
-    if (totalCalsPer100g > 0) {
-      const adjustGrams = (stillNeeded / totalCalsPer100g) * 100;
-      adjustableItems.forEach(idx => {
-        const newGrams = grams[idx] + adjustGrams / adjustableItems.length;
-        grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, newGrams));
-      });
-    }
-  }
-
-  // Phase 4: Iterative refinement to hit exact calorie target
-  for (let iter = 0; iter < 10; iter++) {
-    currentTotals = calcTotals();
-    const calDiff = targetMacros.calories - currentTotals.calories;
+  // === BREAKFAST SPECIAL HANDLING ===
+  // Apply composition rules: yogurt = base (large), fruit = secondary (medium), granola = topper (small)
+  if (mealType === "breakfast") {
+    const baseItems: number[] = [];
+    const secondaryItems: number[] = [];
+    const topperItems: number[] = [];
+    const otherItems: number[] = [];
     
-    if (Math.abs(calDiff) < 0.1) break; // Target hit
+    items.forEach((item, idx) => {
+      const role = getBreakfastRole(item.product);
+      switch (role) {
+        case "base": baseItems.push(idx); break;
+        case "secondary": secondaryItems.push(idx); break;
+        case "topper": topperItems.push(idx); break;
+        default: otherItems.push(idx); break;
+      }
+    });
     
-    // Find the item with highest calories/g that can be adjusted
-    let bestIdx = -1;
-    let bestCalPer100g = 0;
+    // Set initial proportions based on role
+    // Base (yogurt): ~50-60% of calories
+    // Secondary (fruit): ~25-35% of calories  
+    // Topper (granola): ~10-15% of calories (small amount)
+    const baseRatio = baseItems.length > 0 ? 0.55 : 0;
+    const secondaryRatio = secondaryItems.length > 0 ? 0.30 : 0;
+    const topperRatio = topperItems.length > 0 ? 0.10 : 0;
+    const otherRatio = 1 - baseRatio - secondaryRatio - topperRatio;
     
-    for (let i = 0; i < n; i++) {
-      if (items[i].caloriesPer100g > bestCalPer100g) {
-        const canAdjust = calDiff > 0 
-          ? grams[i] < settings.maxGrams 
-          : grams[i] > settings.minGrams;
-        if (canAdjust) {
-          bestIdx = i;
-          bestCalPer100g = items[i].caloriesPer100g;
+    // Distribute base items (yogurt - largest portions)
+    if (baseItems.length > 0) {
+      const baseCalTarget = targetMacros.calories * baseRatio / baseItems.length;
+      baseItems.forEach(idx => {
+        if (items[idx].caloriesPer100g > 0) {
+          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, 
+            (baseCalTarget / items[idx].caloriesPer100g) * 100
+          ));
         }
+      });
+    }
+    
+    // Distribute secondary items (fruit - medium portions)
+    if (secondaryItems.length > 0) {
+      const secondaryCalTarget = targetMacros.calories * secondaryRatio / secondaryItems.length;
+      secondaryItems.forEach(idx => {
+        if (items[idx].caloriesPer100g > 0) {
+          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams,
+            (secondaryCalTarget / items[idx].caloriesPer100g) * 100
+          ));
+        }
+      });
+    }
+    
+    // Distribute topper items (granola - SMALL portions, max ~30-40g)
+    if (topperItems.length > 0) {
+      const topperCalTarget = targetMacros.calories * topperRatio / topperItems.length;
+      topperItems.forEach(idx => {
+        if (items[idx].caloriesPer100g > 0) {
+          // Cap granola at 40g regardless of calorie needs
+          grams[idx] = Math.max(settings.minGrams, Math.min(40,
+            (topperCalTarget / items[idx].caloriesPer100g) * 100
+          ));
+        } else {
+          grams[idx] = 30; // Default small topper
+        }
+      });
+    }
+    
+    // Other items get remaining calories
+    if (otherItems.length > 0 && otherRatio > 0) {
+      const otherCalTarget = targetMacros.calories * otherRatio / otherItems.length;
+      otherItems.forEach(idx => {
+        if (items[idx].caloriesPer100g > 0) {
+          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams,
+            (otherCalTarget / items[idx].caloriesPer100g) * 100
+          ));
+        }
+      });
+    }
+  } else {
+    // === NON-BREAKFAST: Standard protein-first approach ===
+    
+    // Separate items by primary macro contribution
+    const proteinItems: number[] = [];
+    const carbItems: number[] = [];
+    const fatItems: number[] = [];
+    const otherItems: number[] = [];
+    
+    items.forEach((item, idx) => {
+      if (isHighProteinSource(item.product) || item.foodType === "protein" || item.proteinPer100g > 15) {
+        proteinItems.push(idx);
+      } else if (item.foodType === "carb" || item.carbsPer100g > 30) {
+        carbItems.push(idx);
+      } else if (item.foodType === "fat" || item.fatPer100g > 15) {
+        fatItems.push(idx);
+      } else {
+        otherItems.push(idx);
+      }
+    });
+
+    // Phase 1: Size protein sources to hit protein target EXACTLY
+    if (proteinItems.length > 0 && targetMacros.protein > 0) {
+      const totalProteinPer100g = proteinItems.reduce((sum, idx) => sum + items[idx].proteinPer100g, 0);
+      if (totalProteinPer100g > 0) {
+        // Calculate exact grams needed to hit protein
+        const baseGrams = (targetMacros.protein / totalProteinPer100g) * 100;
+        proteinItems.forEach(idx => {
+          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, baseGrams));
+        });
       }
     }
+
+    // Phase 2: Adjust carb/other sources to fill remaining calories
+    let currentTotals = calcTotals();
+    const remainingCalories = targetMacros.calories - currentTotals.calories;
     
-    if (bestIdx >= 0 && bestCalPer100g > 0) {
-      const neededGrams = (calDiff / bestCalPer100g) * 100;
-      const newGrams = grams[bestIdx] + neededGrams;
-      grams[bestIdx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, newGrams));
-    } else {
-      break; // Can't adjust further
+    if (carbItems.length > 0 && remainingCalories > 0) {
+      const totalCarbCalsPer100g = carbItems.reduce((sum, idx) => sum + items[idx].caloriesPer100g, 0);
+      if (totalCarbCalsPer100g > 0) {
+        const additionalGrams = (remainingCalories / totalCarbCalsPer100g) * 100;
+        carbItems.forEach(idx => {
+          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, additionalGrams));
+        });
+      }
+    }
+
+    // Phase 3: Fine-tune with other/fat items
+    currentTotals = calcTotals();
+    const stillNeeded = targetMacros.calories - currentTotals.calories;
+    
+    const adjustableItems = [...otherItems, ...fatItems];
+    if (adjustableItems.length > 0 && Math.abs(stillNeeded) > 1) {
+      const totalCalsPer100g = adjustableItems.reduce((sum, idx) => sum + items[idx].caloriesPer100g, 0);
+      if (totalCalsPer100g > 0) {
+        const adjustGrams = (stillNeeded / totalCalsPer100g) * 100;
+        adjustableItems.forEach(idx => {
+          const newGrams = grams[idx] + adjustGrams / adjustableItems.length;
+          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, newGrams));
+        });
+      }
     }
   }
 
-  // Store results (no rounding for exact precision)
+  // === PHASE 4: PROTEIN PRECISION PASS ===
+  // Adjust protein sources to hit EXACT protein target (within 0.5g)
+  let currentTotals = calcTotals();
+  let proteinDiff = targetMacros.protein - currentTotals.protein;
+  
+  if (Math.abs(proteinDiff) > 0.5) {
+    // Find high-protein items to adjust
+    const proteinSourceIndices = items
+      .map((item, idx) => ({ idx, item, isProtein: isHighProteinSource(item.product) }))
+      .filter(x => x.isProtein && x.item.proteinPer100g > 5)
+      .sort((a, b) => b.item.proteinPer100g - a.item.proteinPer100g);
+    
+    for (const { idx, item } of proteinSourceIndices) {
+      if (Math.abs(proteinDiff) < 0.5) break;
+      
+      const proteinPer100g = item.proteinPer100g;
+      if (proteinPer100g <= 0) continue;
+      
+      // Calculate how many grams to add/remove to close the gap
+      const gramsNeeded = (proteinDiff / proteinPer100g) * 100;
+      const newGrams = grams[idx] + gramsNeeded;
+      const clampedGrams = Math.max(settings.minGrams, Math.min(settings.maxGrams, newGrams));
+      const actualChange = clampedGrams - grams[idx];
+      
+      grams[idx] = clampedGrams;
+      proteinDiff -= (actualChange / 100) * proteinPer100g;
+    }
+  }
+
+  // === PHASE 5: FINAL CALORIE ADJUSTMENT ===
+  // After protein is locked in, adjust non-protein items to hit calorie target
+  currentTotals = calcTotals();
+  let calDiff = targetMacros.calories - currentTotals.calories;
+  
+  if (Math.abs(calDiff) > 1) {
+    // Find non-protein items to adjust (prefer carbs)
+    const adjustableIndices = items
+      .map((item, idx) => ({ idx, item, isProtein: isHighProteinSource(item.product) }))
+      .filter(x => !x.isProtein && x.item.caloriesPer100g > 0)
+      .sort((a, b) => b.item.caloriesPer100g - a.item.caloriesPer100g);
+    
+    for (const { idx, item } of adjustableIndices) {
+      if (Math.abs(calDiff) < 1) break;
+      
+      const calsPer100g = item.caloriesPer100g;
+      const gramsNeeded = (calDiff / calsPer100g) * 100;
+      const newGrams = grams[idx] + gramsNeeded;
+      const clampedGrams = Math.max(settings.minGrams, Math.min(settings.maxGrams, newGrams));
+      const actualChange = clampedGrams - grams[idx];
+      
+      grams[idx] = clampedGrams;
+      calDiff -= (actualChange / 100) * calsPer100g;
+    }
+  }
+
+  // Store results (round to 1 decimal for clean display)
   for (let i = 0; i < n; i++) {
-    // Round to 1 decimal place for clean display but exact calculation
     result.set(items[i].itemId, Math.round(grams[i] * 10) / 10);
   }
   
@@ -409,7 +545,7 @@ export function calculateDayPortions(
     const editables = editableByMeal[mealType];
     const targets = mealTargets[mealType];
     
-    const portions = solveExactPortions(editables, targets, settings);
+    const portions = solveExactPortions(editables, targets, settings, mealType);
     
     // Calculate achieved macros for this meal
     let mealAchieved: MacroTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
@@ -464,18 +600,76 @@ export function calculateDayPortions(
     });
   });
 
-  // Final adjustment pass to hit exact daily totals
-  // Find the item that can most efficiently close any remaining gap
+  // === FINAL PROTEIN PRECISION PASS ===
+  // Adjust protein sources across all meals to hit EXACT daily protein target
+  let proteinDiff = dailyTargets.protein - totalAchieved.protein;
+  
+  if (Math.abs(proteinDiff) > 0.5) {
+    // Collect all protein sources across meals
+    const proteinSources: { itemId: string; product: Product; currentGrams: number; proteinPer100g: number }[] = [];
+    
+    activeMeals.forEach(mealType => {
+      editableByMeal[mealType].forEach(item => {
+        if (isHighProteinSource(item.product) && item.proteinPer100g > 5) {
+          proteinSources.push({
+            itemId: item.itemId,
+            product: item.product,
+            currentGrams: allItemGrams.get(item.itemId) || 0,
+            proteinPer100g: item.proteinPer100g,
+          });
+        }
+      });
+    });
+    
+    // Sort by protein density (highest first for efficient adjustment)
+    proteinSources.sort((a, b) => b.proteinPer100g - a.proteinPer100g);
+    
+    for (const source of proteinSources) {
+      if (Math.abs(proteinDiff) < 0.5) break;
+      
+      const gramsNeeded = (proteinDiff / source.proteinPer100g) * 100;
+      const newGrams = source.currentGrams + gramsNeeded;
+      const clampedGrams = Math.max(settings.minGrams, Math.min(settings.maxGrams, newGrams));
+      const actualChange = clampedGrams - source.currentGrams;
+      
+      allItemGrams.set(source.itemId, Math.round(clampedGrams * 10) / 10);
+      proteinDiff -= (actualChange / 100) * source.proteinPer100g;
+      
+      // Update the source's current grams for next iteration
+      source.currentGrams = clampedGrams;
+    }
+    
+    // Recalculate totals after protein adjustment
+    totalAchieved = { ...fixedContribution };
+    allItemGrams.forEach((grams, itemId) => {
+      for (const mealType of activeMeals) {
+        const item = editableByMeal[mealType].find(e => e.itemId === itemId);
+        if (item) {
+          const macros = calculateMacrosForGrams(item.product, grams);
+          totalAchieved.calories += macros.calories;
+          totalAchieved.protein += macros.protein;
+          totalAchieved.carbs += macros.carbs;
+          totalAchieved.fat += macros.fat;
+          break;
+        }
+      }
+    });
+  }
+
+  // === FINAL CALORIE ADJUSTMENT (using non-protein items) ===
   const calDiff = dailyTargets.calories - totalAchieved.calories;
   
   if (Math.abs(calDiff) > 1) {
-    // Find best item to adjust across all meals
+    // Find best NON-PROTEIN item to adjust (to preserve protein target)
     let bestItemId: string | null = null;
     let bestCalPer100g = 0;
     let bestCurrentGrams = 0;
     
     activeMeals.forEach(mealType => {
       editableByMeal[mealType].forEach(item => {
+        // Skip protein sources to preserve protein target
+        if (isHighProteinSource(item.product)) return;
+        
         const currentGrams = allItemGrams.get(item.itemId) || 0;
         const canIncrease = calDiff > 0 && currentGrams < settings.maxGrams;
         const canDecrease = calDiff < 0 && currentGrams > settings.minGrams;
@@ -499,7 +693,6 @@ export function calculateDayPortions(
       // Recalculate totals
       totalAchieved = { ...fixedContribution };
       allItemGrams.forEach((grams, itemId) => {
-        // Find the item across all meals
         for (const mealType of activeMeals) {
           const item = editableByMeal[mealType].find(e => e.itemId === itemId);
           if (item) {
