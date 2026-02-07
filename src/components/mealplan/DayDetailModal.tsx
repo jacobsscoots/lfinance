@@ -102,12 +102,14 @@ export function DayDetailModal({
 
         {/* Warnings */}
         {(warnings.length > 0 || hasUncalculatedItems || itemsMissingNutrition.length > 0) && (
-          <Alert variant="destructive" className="bg-destructive/10">
+          <Alert variant={hasUncalculatedItems ? "default" : "destructive"} className={hasUncalculatedItems ? "bg-amber-500/10 border-amber-500/30" : "bg-destructive/10"}>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="text-xs">
               <ul className="list-disc list-inside space-y-0.5">
                 {hasUncalculatedItems && (
-                  <li>Some items have 0g portions - click Recalculate to update</li>
+                  <li className="text-amber-700 dark:text-amber-400">
+                    Some items have 0g portions — click <strong>Generate Portions</strong> to auto-calculate
+                  </li>
                 )}
                 {itemsMissingNutrition.length > 0 && (
                   <li>
@@ -221,11 +223,10 @@ export function DayDetailModal({
                 Calculation Settings
               </h4>
               <ul className="text-xs text-muted-foreground space-y-1 pl-4 list-disc">
-                <li>Portions rounded to nearest {portioningSettings.rounding}g</li>
-                <li>Min portion: {portioningSettings.min}g | Max: {portioningSettings.max}g</li>
-                <li>Target tolerance: ±{portioningSettings.tolerance}%</li>
+                <li><strong>Precision mode:</strong> Exact targets with zero tolerance</li>
+                <li>Calories split evenly across breakfast/lunch/dinner</li>
                 {items.some(i => i.is_locked) && (
-                  <li>Locked items are not adjusted during recalculation</li>
+                  <li>Locked items are not adjusted during generation</li>
                 )}
                 {items.some(i => i.product?.product_type === "fixed") && (
                   <li>Fixed-portion items use their preset gram amount</li>

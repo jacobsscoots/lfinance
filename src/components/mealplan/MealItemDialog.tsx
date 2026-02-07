@@ -66,7 +66,8 @@ export function MealItemDialog({
     return getTargetsForDate(planDate);
   }, [planDate, getTargetsForDate]);
 
-  // Calculate auto-portion when in target mode
+  // In target mode, items are added with 0g initially
+  // User clicks "Generate Portions" to calculate exact grams for all items
   const autoPortionResult = useMemo(() => {
     if (!selectedProduct || !isTargetMode) return null;
     
@@ -79,12 +80,21 @@ export function MealItemDialog({
     );
   }, [selectedProduct, isTargetMode, mealType, existingItems, dailyTargets, portioningSettings]);
 
-  // Update quantity when auto-portion is calculated
+  // In target mode, default to 0g (will be calculated later via Generate)
+  // In manual mode, default to 100g
   useEffect(() => {
-    if (autoPortionResult && isTargetMode && !manualOverride) {
-      setQuantity(String(autoPortionResult.grams));
+    if (selectedProduct && isTargetMode && !manualOverride) {
+      // For fixed products, use their fixed portion
+      if (selectedProduct.product_type === "fixed" && selectedProduct.fixed_portion_grams) {
+        setQuantity(String(selectedProduct.fixed_portion_grams));
+      } else {
+        // Otherwise default to 0 - will be calculated via Generate button
+        setQuantity("0");
+      }
+    } else if (selectedProduct && !isTargetMode && !manualOverride) {
+      setQuantity("100");
     }
-  }, [autoPortionResult, isTargetMode, manualOverride]);
+  }, [selectedProduct, isTargetMode, manualOverride]);
 
   // Reset state when dialog opens/closes or product changes
   useEffect(() => {
@@ -120,10 +130,14 @@ export function MealItemDialog({
   };
 
   const handleSubmit = async () => {
-    if (!selectedProductId || effectiveQuantity <= 0) return;
+    if (!selectedProductId) return;
     
     // Block if product not allowed for this meal
     if (!isAllowedForMeal) return;
+
+    // In target mode, allow 0g (will be calculated via Generate)
+    // In manual mode, require > 0
+    if (!isTargetMode && effectiveQuantity <= 0) return;
 
     await addItem.mutateAsync({
       meal_plan_id: planId,
@@ -134,7 +148,7 @@ export function MealItemDialog({
 
     // Reset form
     setSelectedProductId("");
-    setQuantity("100");
+    setQuantity(isTargetMode ? "0" : "100");
     setManualOverride(false);
     onOpenChange(false);
   };
@@ -235,23 +249,10 @@ export function MealItemDialog({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Quantity (grams)</Label>
-                  {isTargetMode && autoPortionResult && !selectedProduct.fixed_portion_grams && (
+                  {isTargetMode && !selectedProduct.fixed_portion_grams && (
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Zap className="h-3 w-3 text-primary" />
-                      {manualOverride ? (
-                        <button 
-                          type="button"
-                          className="text-primary hover:underline"
-                          onClick={() => {
-                            setManualOverride(false);
-                            setQuantity(String(autoPortionResult.grams));
-                          }}
-                        >
-                          Reset to auto ({autoPortionResult.grams}g)
-                        </button>
-                      ) : (
-                        <span>Auto-calculated</span>
-                      )}
+                      <span>Auto-calculated on Generate</span>
                     </div>
                   )}
                 </div>
@@ -268,13 +269,27 @@ export function MealItemDialog({
                       Fixed portion
                     </Badge>
                   </div>
+                ) : isTargetMode ? (
+                  <div className="space-y-2">
+                    <Input
+                      type="number"
+                      value={quantity}
+                      onChange={(e) => handleQuantityChange(e.target.value)}
+                      min="0"
+                      step={portioningSettings.rounding || 1}
+                      placeholder="0 (auto-calculated)"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave at 0 and click "Generate Portions" after adding all items to auto-calculate exact grams.
+                    </p>
+                  </div>
                 ) : (
                   <Input
                     type="number"
                     value={quantity}
                     onChange={(e) => handleQuantityChange(e.target.value)}
                     min="1"
-                    step={portioningSettings.rounding}
+                    step={portioningSettings.rounding || 1}
                   />
                 )}
               </div>
@@ -329,9 +344,14 @@ export function MealItemDialog({
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={!selectedProductId || effectiveQuantity <= 0 || addItem.isPending || !isAllowedForMeal}
+              disabled={
+                !selectedProductId || 
+                addItem.isPending || 
+                !isAllowedForMeal ||
+                (!isTargetMode && effectiveQuantity <= 0)
+              }
             >
-              Add Item
+              {isTargetMode && effectiveQuantity === 0 ? "Add (0g)" : "Add Item"}
             </Button>
           </div>
         </div>
