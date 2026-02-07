@@ -49,7 +49,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { method, content } = body;
+    const { method, content, productType = "grocery" } = body;
     
     // Validate method
     if (!method || !VALID_METHODS.includes(method)) {
@@ -98,11 +98,11 @@ serve(async (req) => {
     let result: ExtractedNutrition;
 
     if (method === "image") {
-      result = await extractFromImage(content, LOVABLE_API_KEY);
+      result = await extractFromImage(content, LOVABLE_API_KEY, productType);
     } else if (method === "text") {
-      result = extractFromText(content);
+      result = extractFromText(content, productType);
     } else {
-      result = await extractFromUrl(content, LOVABLE_API_KEY);
+      result = await extractFromUrl(content, LOVABLE_API_KEY, productType);
     }
 
     return new Response(JSON.stringify({ success: true, data: result }), {
@@ -136,8 +136,10 @@ serve(async (req) => {
   }
 });
 
-async function extractFromImage(base64Image: string, apiKey: string): Promise<ExtractedNutrition> {
-  const systemPrompt = `You are a nutrition label extraction assistant. Extract nutrition information from the provided image of a food product label.
+async function extractFromImage(base64Image: string, apiKey: string, productType: string = "grocery"): Promise<ExtractedNutrition> {
+  const isToiletry = productType === "toiletry";
+  
+  const groceryPrompt = `You are a nutrition label extraction assistant. Extract nutrition information from the provided image of a food product label.
 
 Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
 {
@@ -162,6 +164,29 @@ Important:
 - Mark confidence as "low" if values were converted from sodium or estimated
 - Mark confidence as "high" if clearly visible and unambiguous
 - Mark confidence as "medium" if partially visible or slightly unclear`;
+
+  const toiletryPrompt = `You are a product information extraction assistant. Extract product details from the provided image of a toiletry/household product.
+
+Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
+{
+  "name": "product name if visible",
+  "brand": "brand name if visible",
+  "image_url": null,
+  "price": number (standard price in pounds) or null,
+  "offer_price": number (sale/offer price) or null,
+  "offer_label": "offer description (e.g. '3 for £10', 'Save £1.50')" or null,
+  "pack_size": number (size value, e.g. 500 for 500ml),
+  "size_unit": "ml" | "g" | "units" | null,
+  "confidence": { "field_name": "high" | "medium" | "low" for each extracted field }
+}
+
+Important:
+- Extract the size value separately from the unit (e.g. "500ml" → pack_size: 500, size_unit: "ml")
+- For multi-packs, note the total count (e.g. "12 pack" → pack_size: 12, size_unit: "units")
+- Mark confidence as "high" if clearly visible and unambiguous
+- Mark confidence as "medium" if partially visible or slightly unclear`;
+
+  const systemPrompt = isToiletry ? toiletryPrompt : groceryPrompt;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -216,9 +241,53 @@ Important:
   }
 }
 
-function extractFromText(text: string): ExtractedNutrition {
+function extractFromText(text: string, productType: string = "grocery"): ExtractedNutrition {
   const result: ExtractedNutrition = { confidence: {} };
-  
+  const normalizedText = text.replace(/\s+/g, " ");
+
+  if (productType === "toiletry") {
+    // Extract toiletry-specific fields
+    // Price patterns
+    const priceMatch = normalizedText.match(/(?:price|£)\s*:?\s*£?([\d,.]+)/i);
+    if (priceMatch?.[1]) {
+      const price = parseFloat(priceMatch[1].replace(/,/g, ""));
+      if (!isNaN(price)) {
+        (result as any).price = price;
+        result.confidence.price = "medium";
+      }
+    }
+
+    // Offer price patterns
+    const offerMatch = normalizedText.match(/(?:now|sale|offer|was)\s*:?\s*£?([\d,.]+)/i);
+    if (offerMatch?.[1]) {
+      const offerPrice = parseFloat(offerMatch[1].replace(/,/g, ""));
+      if (!isNaN(offerPrice)) {
+        (result as any).offer_price = offerPrice;
+        result.confidence.offer_price = "medium";
+      }
+    }
+
+    // Pack size patterns (e.g., "500ml", "200g", "30 tablets")
+    const sizeMatch = normalizedText.match(/([\d,.]+)\s*(ml|g|tablets?|units?|pack)/i);
+    if (sizeMatch) {
+      const size = parseFloat(sizeMatch[1].replace(/,/g, ""));
+      const unit = sizeMatch[2].toLowerCase();
+      if (!isNaN(size)) {
+        (result as any).pack_size = size;
+        if (unit.includes("tablet") || unit.includes("unit") || unit.includes("pack")) {
+          (result as any).size_unit = "units";
+        } else {
+          (result as any).size_unit = unit;
+        }
+        result.confidence.pack_size = "medium";
+        result.confidence.size_unit = "medium";
+      }
+    }
+
+    return result;
+  }
+
+  // Grocery nutrition extraction (original logic)
   const patterns: Record<string, { patterns: RegExp[]; field: keyof ExtractedNutrition }> = {
     energy_kj: {
       patterns: [
@@ -269,8 +338,6 @@ function extractFromText(text: string): ExtractedNutrition {
     },
   };
 
-  const normalizedText = text.replace(/\s+/g, " ");
-
   for (const [, { patterns: patternList, field }] of Object.entries(patterns)) {
     for (const pattern of patternList) {
       const match = normalizedText.match(pattern);
@@ -299,7 +366,8 @@ function extractFromText(text: string): ExtractedNutrition {
   return result;
 }
 
-async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNutrition> {
+async function extractFromUrl(url: string, apiKey: string, productType: string = "grocery"): Promise<ExtractedNutrition> {
+  const isToiletry = productType === "toiletry";
   const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
 
   let html: string | undefined;
@@ -557,7 +625,8 @@ async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNut
   // Use AI to extract from content (markdown preferred)
   const contentType =
     markdown && markdown.length > 200 ? "markdown" : html ? "HTML" : "raw HTML";
-  const systemPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this ${contentType} content.
+  
+  const groceryPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this ${contentType} content.
 
 Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
 {
@@ -583,6 +652,27 @@ Return ONLY a valid JSON object with these fields (use null for any values you c
 Look for nutrition tables, product details, and pricing information.
 If nutrition is shown per serving, convert to per 100g using the serving size.
 For UK supermarkets (Tesco, Sainsbury's, Asda, etc.), the format is usually consistent.`;
+
+  const toiletryPrompt = `You are a product data extraction assistant. Extract product information from this ${contentType} content for a toiletry/household product.
+
+Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
+{
+  "name": "product name",
+  "brand": "brand name",
+  "image_url": "main product image URL",
+  "price": number (standard price in pounds),
+  "offer_price": number or null (sale/offer price),
+  "offer_label": "offer description (e.g. '3 for £10', 'Clubcard Price', 'Save £1.50')" or null,
+  "pack_size": number (size value, e.g. 500 for 500ml),
+  "size_unit": "ml" | "g" | "units",
+  "confidence": { "field_name": "high" | "medium" | "low" for each extracted field }
+}
+
+Look for product details, pricing information, and pack size.
+For UK retailers (Boots, Superdrug, Savers, Amazon), look for standard and promotional prices.
+Extract the size value separately from the unit.`;
+
+  const systemPrompt = isToiletry ? toiletryPrompt : groceryPrompt;
 
   // Truncate content to avoid token limits (markdown is already cleaner)
   const truncatedContent = contentForAi.substring(0, 60000);

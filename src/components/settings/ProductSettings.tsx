@@ -68,36 +68,73 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const isEditing = !!product;
 
+  const getDefaultValues = useCallback(() => ({
+    name: "",
+    brand: "",
+    energy_kj_per_100g: null,
+    calories_per_100g: 0,
+    fat_per_100g: 0,
+    saturates_per_100g: 0,
+    carbs_per_100g: 0,
+    sugars_per_100g: 0,
+    fibre_per_100g: 0,
+    protein_per_100g: 0,
+    salt_per_100g: 0,
+    price: 0,
+    offer_price: null,
+    offer_label: "",
+    pack_size_grams: null,
+    serving_basis: "per_100g" as ServingBasis,
+    serving_size_grams: null,
+    product_type: "editable" as ProductType,
+    fixed_portion_grams: null,
+    ignore_macros: false,
+    source_url: "",
+    image_url: "",
+    storage_notes: "",
+    meal_eligibility: ["breakfast", "lunch", "dinner", "snack"] as MealEligibility[],
+    food_type: "other" as FoodType,
+  }), []);
+
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: {
-      name: product?.name || "",
-      brand: product?.brand || "",
-      energy_kj_per_100g: product?.energy_kj_per_100g || null,
-      calories_per_100g: product?.calories_per_100g || 0,
-      fat_per_100g: product?.fat_per_100g || 0,
-      saturates_per_100g: product?.saturates_per_100g || 0,
-      carbs_per_100g: product?.carbs_per_100g || 0,
-      sugars_per_100g: product?.sugars_per_100g || 0,
-      fibre_per_100g: product?.fibre_per_100g || 0,
-      protein_per_100g: product?.protein_per_100g || 0,
-      salt_per_100g: product?.salt_per_100g || 0,
-      price: product?.price || 0,
-      offer_price: product?.offer_price || null,
-      offer_label: product?.offer_label || "",
-      pack_size_grams: product?.pack_size_grams || null,
-      serving_basis: (product?.serving_basis as ServingBasis) || "per_100g",
-      serving_size_grams: product?.serving_size_grams || null,
-      product_type: (product?.product_type as ProductType) || "editable",
-      fixed_portion_grams: product?.fixed_portion_grams || null,
-      ignore_macros: product?.ignore_macros || false,
-      source_url: product?.source_url || "",
-      image_url: product?.image_url || "",
-      storage_notes: product?.storage_notes || "",
-      meal_eligibility: product?.meal_eligibility || ["breakfast", "lunch", "dinner", "snack"],
-      food_type: product?.food_type || "other",
-    },
+    defaultValues: getDefaultValues(),
   });
+
+  // Reset form when product changes (fixes edit prefilling)
+  useEffect(() => {
+    if (product) {
+      form.reset({
+        name: product.name,
+        brand: product.brand || "",
+        energy_kj_per_100g: product.energy_kj_per_100g || null,
+        calories_per_100g: product.calories_per_100g || 0,
+        fat_per_100g: product.fat_per_100g || 0,
+        saturates_per_100g: product.saturates_per_100g || 0,
+        carbs_per_100g: product.carbs_per_100g || 0,
+        sugars_per_100g: product.sugars_per_100g || 0,
+        fibre_per_100g: product.fibre_per_100g || 0,
+        protein_per_100g: product.protein_per_100g || 0,
+        salt_per_100g: product.salt_per_100g || 0,
+        price: product.price || 0,
+        offer_price: product.offer_price || null,
+        offer_label: product.offer_label || "",
+        pack_size_grams: product.pack_size_grams || null,
+        serving_basis: (product.serving_basis as ServingBasis) || "per_100g",
+        serving_size_grams: product.serving_size_grams || null,
+        product_type: (product.product_type as ProductType) || "editable",
+        fixed_portion_grams: product.fixed_portion_grams || null,
+        ignore_macros: product.ignore_macros || false,
+        source_url: product.source_url || "",
+        image_url: product.image_url || "",
+        storage_notes: product.storage_notes || "",
+        meal_eligibility: product.meal_eligibility || ["breakfast", "lunch", "dinner", "snack"],
+        food_type: (product.food_type as FoodType) || "other",
+      });
+    } else {
+      form.reset(getDefaultValues());
+    }
+  }, [product, form, getDefaultValues]);
 
   const productType = form.watch("product_type");
   const servingBasis = form.watch("serving_basis");
@@ -237,6 +274,18 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
           </ResponsiveDialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Image Preview (when editing with existing image) */}
+              {isEditing && product?.image_url && (
+                <div className="space-y-2">
+                  <FormLabel>Current Image</FormLabel>
+                  <img 
+                    src={product.image_url} 
+                    alt={product.name}
+                    className="max-h-32 w-full object-contain rounded-lg border bg-muted"
+                  />
+                </div>
+              )}
+
               {/* Basic Info */}
               <div className="space-y-4">
                 <FormField

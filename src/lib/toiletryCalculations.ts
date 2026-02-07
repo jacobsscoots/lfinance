@@ -4,16 +4,30 @@ export interface ToiletryItem {
   id: string;
   user_id: string;
   name: string;
+  brand: string | null;
   category: string;
   total_size: number;
   size_unit: string;
   cost_per_item: number;
+  offer_price: number | null;
+  offer_label: string | null;
   pack_size: number;
   usage_rate_per_day: number;
   current_remaining: number;
   status: string;
   notes: string | null;
+  image_url: string | null;
+  source_url: string | null;
   last_restocked_at: string | null;
+  // Inventory tracking
+  quantity_on_hand: number;
+  quantity_in_use: number;
+  reorder_threshold: number;
+  target_quantity: number;
+  // Packaging
+  gross_size: number | null;
+  packaging_weight: number | null;
+  // Timestamps
   created_at: string;
   updated_at: string;
 }
@@ -208,4 +222,35 @@ export function getStatusDisplayText(
   if (forecast.statusLevel === "empty") return "Empty";
   if (forecast.statusLevel === "low") return "Low";
   return "In Use";
+}
+
+/**
+ * Calculate net usable amount (gross size minus packaging weight)
+ */
+export function calculateNetUsable(
+  grossSize: number | null | undefined,
+  totalSize: number | null | undefined,
+  packagingWeight: number = 0
+): number {
+  const gross = grossSize ?? totalSize ?? 0;
+  return Math.max(0, gross - packagingWeight);
+}
+
+/**
+ * Calculate shopping need based on inventory tracking
+ * Needed to buy = max(0, target_quantity - quantity_on_hand)
+ */
+export function calculateShoppingNeed(item: ToiletryItem): number {
+  const targetQty = item.target_quantity ?? 1;
+  const onHand = item.quantity_on_hand ?? 0;
+  return Math.max(0, targetQty - onHand);
+}
+
+/**
+ * Check if item needs restock based on threshold
+ */
+export function needsRestock(item: ToiletryItem): boolean {
+  const onHand = item.quantity_on_hand ?? 0;
+  const threshold = item.reorder_threshold ?? 0;
+  return onHand <= threshold;
 }
