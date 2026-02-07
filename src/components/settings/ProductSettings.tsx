@@ -636,14 +636,19 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Default Retailer</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <Select
+                        onValueChange={(value) =>
+                          field.onChange(value === "__none__" ? "" : value)
+                        }
+                        value={field.value || "__none__"}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select retailer..." />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="__none__">None</SelectItem>
                           <SelectItem value="Tesco">Tesco</SelectItem>
                           <SelectItem value="Sainsbury's">Sainsbury's</SelectItem>
                           <SelectItem value="ASDA">ASDA</SelectItem>
