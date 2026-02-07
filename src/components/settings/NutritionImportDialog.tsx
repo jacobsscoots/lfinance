@@ -1,7 +1,14 @@
 import { useState, useCallback } from "react";
 import { Upload, Link, FileText, Loader2, AlertCircle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+} from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -159,14 +166,14 @@ export function NutritionImportDialog({ open, onOpenChange, onImport }: Nutritio
   };
 
   return (
-    <Dialog open={open} onOpenChange={(open) => { onOpenChange(open); if (!open) resetState(); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Import Nutrition Data</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={(open) => { onOpenChange(open); if (!open) resetState(); }}>
+      <ResponsiveDialogContent className="max-w-lg">
+        <ResponsiveDialogHeader className="pr-8">
+          <ResponsiveDialogTitle>Import Nutrition Data</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Upload a photo of a nutrition label, paste text, or import from a product URL
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
 
         {!extractedData ? (
           <div className="space-y-4">
@@ -245,7 +252,7 @@ export function NutritionImportDialog({ open, onOpenChange, onImport }: Nutritio
               </Alert>
             )}
 
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
@@ -253,7 +260,7 @@ export function NutritionImportDialog({ open, onOpenChange, onImport }: Nutritio
                 {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Extract Data
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </div>
         ) : (
           <div className="space-y-4">
@@ -287,7 +294,7 @@ export function NutritionImportDialog({ open, onOpenChange, onImport }: Nutritio
                         <Label htmlFor={key} className="cursor-pointer font-medium">
                           {FIELD_LABELS[key] || key}
                         </Label>
-                        <p className="text-sm text-muted-foreground truncate">
+                        <p className="text-sm text-muted-foreground truncate max-w-[250px]" title={String(value)}>
                           {formatValue(key, value)}
                         </p>
                       </div>
@@ -301,7 +308,7 @@ export function NutritionImportDialog({ open, onOpenChange, onImport }: Nutritio
                 })}
             </div>
 
-            <DialogFooter className="flex-col sm:flex-row gap-2">
+            <ResponsiveDialogFooter>
               <Button variant="outline" onClick={() => setExtractedData(null)} className="w-full sm:w-auto">
                 Back
               </Button>
@@ -312,10 +319,10 @@ export function NutritionImportDialog({ open, onOpenChange, onImport }: Nutritio
               >
                 Import {selectedFields.size} field{selectedFields.size !== 1 ? "s" : ""}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

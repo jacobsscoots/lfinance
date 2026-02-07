@@ -1,5 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -172,11 +177,11 @@ export function MealItemDialog({
   }, [products, mealType]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader className="pr-8">
           <div className="flex items-center gap-2">
-            <DialogTitle>Add to {mealLabels[mealType]}</DialogTitle>
+            <ResponsiveDialogTitle>Add to {mealLabels[mealType]}</ResponsiveDialogTitle>
             {isTargetMode && (
               <Badge variant="default" className="ml-2">
                 <Target className="h-3 w-3 mr-1" />
@@ -184,7 +189,7 @@ export function MealItemDialog({
               </Badge>
             )}
           </div>
-        </DialogHeader>
+        </ResponsiveDialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
@@ -355,7 +360,7 @@ export function MealItemDialog({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
