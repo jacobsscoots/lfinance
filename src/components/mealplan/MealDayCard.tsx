@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { MealPlan, MealType, MealStatus, useMealPlanItems } from "@/hooks/useMea
 import { Product } from "@/hooks/useProducts";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { DayMacros, MealMacros, getTargetsForDate, MacroTotals } from "@/lib/mealCalculations";
-import { MealItemDialog } from "./MealItemDialog";
+import { MealItemMultiSelectDialog } from "./MealItemMultiSelectDialog";
 import { EatingOutDialog } from "./EatingOutDialog";
 import { DayDetailModal } from "./DayDetailModal";
 import { DayMacroSummary } from "./DayMacroSummary";
@@ -42,12 +42,13 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
   
-  const { updateMealStatus, removeItem, updateItem } = useMealPlanItems(weekStart);
+  const { updateMealStatus, removeItem, updateItem, copyDayToNext, clearDay } = useMealPlanItems(weekStart);
   
   const date = parseISO(plan.meal_date);
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
   const isTargetMode = settings?.mode === "target_based";
+  const isSaturday = date.getDay() === 6; // Can't copy to next day on Saturday (end of week)
   
   // Get targets for this specific date
   const targets: MacroTotals = settings 
@@ -100,6 +101,14 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
     updateItem.mutate({ id: itemId, is_locked: !currentlyLocked });
   };
 
+  const handleCopyToNextDay = () => {
+    copyDayToNext.mutate({ sourcePlanId: plan.id, sourcePlanDate: plan.meal_date });
+  };
+
+  const handleClearDay = () => {
+    clearDay.mutate(plan.id);
+  };
+
   return (
     <>
       <Card className={cn(
@@ -124,6 +133,31 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
               >
                 <Eye className="h-4 w-4" />
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem 
+                    onClick={handleCopyToNextDay}
+                    disabled={isSaturday || items.length === 0 || copyDayToNext.isPending}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy to Next Day
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={handleClearDay}
+                    disabled={items.length === 0 || clearDay.isPending}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Clear All Items
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardTitle>
           
@@ -274,7 +308,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
         </CardContent>
       </Card>
 
-      <MealItemDialog
+      <MealItemMultiSelectDialog
         open={addItemOpen}
         onOpenChange={setAddItemOpen}
         planId={plan.id}
@@ -282,7 +316,6 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart }: 
         products={products}
         weekStart={weekStart}
         existingItems={items}
-        planDate={date}
       />
 
       <EatingOutDialog
