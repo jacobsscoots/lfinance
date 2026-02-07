@@ -1,13 +1,14 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Target, Scale, Copy } from "lucide-react";
+import { Target, Scale, Copy, Settings2, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNutritionSettings, NutritionMode } from "@/hooks/useNutritionSettings";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
@@ -26,6 +27,11 @@ const settingsSchema = z.object({
   weekend_carbs_target_grams: z.coerce.number().min(0).nullable().optional(),
   weekend_fat_target_grams: z.coerce.number().min(0).nullable().optional(),
   weekend_targets_enabled: z.boolean(),
+  // Portioning settings
+  min_grams_per_item: z.coerce.number().min(1).max(100).nullable().optional(),
+  max_grams_per_item: z.coerce.number().min(50).max(2000).nullable().optional(),
+  portion_rounding: z.coerce.number().min(1).max(50).nullable().optional(),
+  target_tolerance_percent: z.coerce.number().min(0).max(10).nullable().optional(),
 });
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
@@ -47,6 +53,10 @@ export function NutritionTargetSettings() {
       weekend_carbs_target_grams: null,
       weekend_fat_target_grams: null,
       weekend_targets_enabled: false,
+      min_grams_per_item: 10,
+      max_grams_per_item: 500,
+      portion_rounding: 5,
+      target_tolerance_percent: 2,
     },
   });
 
@@ -64,6 +74,10 @@ export function NutritionTargetSettings() {
         weekend_carbs_target_grams: settings.weekend_carbs_target_grams,
         weekend_fat_target_grams: settings.weekend_fat_target_grams,
         weekend_targets_enabled: settings.weekend_targets_enabled,
+        min_grams_per_item: settings.min_grams_per_item ?? 10,
+        max_grams_per_item: settings.max_grams_per_item ?? 500,
+        portion_rounding: settings.portion_rounding ?? 5,
+        target_tolerance_percent: settings.target_tolerance_percent ?? 2,
       });
     }
   }, [settings, form]);
@@ -94,6 +108,10 @@ export function NutritionTargetSettings() {
       weekend_carbs_target_grams: values.weekend_carbs_target_grams,
       weekend_fat_target_grams: values.weekend_fat_target_grams,
       weekend_targets_enabled: values.weekend_targets_enabled,
+      min_grams_per_item: values.min_grams_per_item,
+      max_grams_per_item: values.max_grams_per_item,
+      portion_rounding: values.portion_rounding,
+      target_tolerance_percent: values.target_tolerance_percent,
     });
   }
 
@@ -326,6 +344,103 @@ export function NutritionTargetSettings() {
                     )}
                   </TabsContent>
                 </Tabs>
+
+                {/* Advanced Portioning Settings */}
+                <Collapsible className="mt-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium hover:text-primary w-full py-2">
+                    <Settings2 className="h-4 w-4" />
+                    Advanced Portioning Settings
+                    <ChevronDown className="h-4 w-4 ml-auto transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="min_grams_per_item"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Min portion size</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="5" 
+                                min="1"
+                                max="100"
+                                placeholder="10"
+                                {...field} 
+                                value={field.value ?? ""} 
+                              />
+                            </FormControl>
+                            <FormDescription>Smallest portion (grams)</FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="max_grams_per_item"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Max portion size</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="50" 
+                                min="50"
+                                max="2000"
+                                placeholder="500"
+                                {...field} 
+                                value={field.value ?? ""} 
+                              />
+                            </FormControl>
+                            <FormDescription>Largest portion (grams)</FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="portion_rounding"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Round to nearest</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="1" 
+                                min="1"
+                                max="50"
+                                placeholder="5"
+                                {...field} 
+                                value={field.value ?? ""} 
+                              />
+                            </FormControl>
+                            <FormDescription>Rounding increment (grams)</FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="target_tolerance_percent"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Target tolerance</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="0.5" 
+                                min="0"
+                                max="10"
+                                placeholder="2"
+                                {...field} 
+                                value={field.value ?? ""} 
+                              />
+                            </FormControl>
+                            <FormDescription>Acceptable deviation (%)</FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             )}
 
