@@ -560,51 +560,44 @@ export function useMealPlanItems(weekStart: Date) {
         
         if (items.length === 0) continue;
         
-        // First, reset all unlocked editable items to 0g (re-generate behavior)
-        for (const item of items) {
-          if (item.is_locked) continue;
-          if (item.product?.product_type === "fixed") continue;
-          
-          if (item.quantity_grams > 0) {
-            await supabase
-              .from("meal_plan_items")
-              .update({ quantity_grams: 0 })
-              .eq("id", item.id)
-              .eq("user_id", user.id);
-          }
-        }
+        // Virtualize unlocked editable items as 0g for the solve (regen behavior)
+        // DO NOT write 0g to DB before we know if the solve succeeds
+        const virtualItems = items.map(i => ({
+          ...i,
+          quantity_grams: i.is_locked || i.product?.product_type === "fixed" ? i.quantity_grams : 0,
+        }));
         
         // Recalculate with fresh zeroed values
-        const result = calculateDayPortions(items.map(i => ({
-          ...i,
-          quantity_grams: i.is_locked ? i.quantity_grams : 0,
-        })), targets, {
+        const result = calculateDayPortions(virtualItems, targets, {
           ...portioningSettings,
           rounding: 0,
           tolerancePercent: 0,
         }, plan.meal_date);
         
-        if (result.success) successCount++;
-        
-        // Update each editable, unlocked item with new calculated grams
-        for (const item of items) {
-          if (item.is_locked) continue;
-          if (item.product?.product_type === "fixed") continue;
+        if (result.success) {
+          successCount++;
           
-          const mealResult = result.mealResults.get(item.meal_type);
-          const newGrams = mealResult?.items.get(item.id);
-          
-          if (newGrams !== undefined && newGrams > 0) {
-            const { error } = await supabase
-              .from("meal_plan_items")
-              .update({ quantity_grams: newGrams })
-              .eq("id", item.id)
-              .eq("user_id", user.id);
+          // Only persist if solve succeeded
+          for (const item of items) {
+            if (item.is_locked) continue;
+            if (item.product?.product_type === "fixed") continue;
             
-            if (error) throw error;
-            totalUpdated++;
+            const mealResult = result.mealResults.get(item.meal_type);
+            const newGrams = mealResult?.items.get(item.id);
+            
+            if (newGrams !== undefined && newGrams > 0) {
+              const { error } = await supabase
+                .from("meal_plan_items")
+                .update({ quantity_grams: newGrams })
+                .eq("id", item.id)
+                .eq("user_id", user.id);
+              
+              if (error) throw error;
+              totalUpdated++;
+            }
           }
         }
+        // If solve failed, do NOT write anything to DB - preserve existing grams
       }
       
       return { updated: totalUpdated, daysSucceeded: successCount, totalDays: mealPlans.length };
