@@ -1,42 +1,179 @@
+# Comprehensive Fix Plan: Three Tasks (Edited for Safety + No Regressions)
 
-# Fix Plan: Weekly Calorie Targets Not Applied to Meal Planner
+## Executive Summary
 
-## ✅ COMPLETED
+Fix 3 issues without breaking existing working logic:
+1. **Auto-portioning regression**: calories overshooting while fat under target (example: +234 kcal, fat -21g).
+2. **Meal Planner “Copy to next day”**: incorrectly disabled for Monday due to wrong “last day” logic.
+3. **Bills Add Bill dialog**: date picker instability causes form to reset/close/lose progress.
 
-### Root Causes Fixed
+Hard rules:
+- No refactors outside the touched areas.
+- Keep fixed items fixed, locked items locked.
+- Keep integer grams.
+- Keep `getItemConstraints()` (or equivalent) as single source of truth for min/max.
 
-1. **MealDayCard.tsx** - Added `weeklyOverride` prop and passed it to `getTargetsForDate()` and `recalculateDay.mutate()`
-2. **DayDetailModal.tsx** - Added `weeklyOverride` prop and passed it to `getTargetsForDate()`
-3. **WeeklyMealPlanner.tsx** - Passed `weeklyOverride={weeklyOverride}` to both mobile and desktop `MealDayCard` components
+---
 
-### Changes Made
+## TASK 1 — Fix Auto Portioning / Macro Solver Regression
 
-| File | Change |
-|------|--------|
-| `src/components/mealplan/MealDayCard.tsx` | Added `weeklyOverride` prop, updated imports, updated `getTargetsForDate()` call, updated `handleGenerate()`, passed prop to `DayDetailModal` |
-| `src/components/mealplan/DayDetailModal.tsx` | Added `weeklyOverride` prop to interface and function signature, updated `getTargetsForDate()` call |
-| `src/components/mealplan/WeeklyMealPlanner.tsx` | Added `weeklyOverride={weeklyOverride}` prop to both mobile and desktop MealDayCard renders |
-| `src/lib/mealCalculations.test.ts` | Created new test file with 10 tests for `getTargetsForDate()` function |
+### Observed failure pattern (from user)
+- Day totals show **calories over target** while **fat is materially under target**.
+- This implies the solver is converging incorrectly (or claiming “precision/exact” when not actually within tolerance), and/or it lacks feasibility detection when fixed items dominate.
 
-### Tests Added & Passed
+### Root causes to confirm (audit requirements)
+Audit these before changing logic:
+- `src/lib/autoPortioning.ts`
+  - macro error scoring function (weights)
+  - global precision loop filters for protein/carbs/fat knobs
+  - ordering between: composition enforcement, meal balancing, precision loop, final micro-correction
+  - “success” flag vs “warnings” output and UI messaging
+- Ensure calorie totals and macro totals are derived consistently from the same gram map.
 
-10 new tests in `src/lib/mealCalculations.test.ts`:
-- ✅ Returns weekly override calories for Monday
-- ✅ Returns weekly override calories for Saturday  
-- ✅ Returns weekly override calories for Sunday
-- ✅ Returns weekly override calories for Friday
-- ✅ Returns global weekday targets for Monday (no override)
-- ✅ Returns global weekend targets for Saturday (no override)
-- ✅ Returns global weekend targets for Sunday (no override)
-- ✅ Falls back to global settings when date is outside override week
-- ✅ Uses global settings when weeklyOverride is undefined
-- ✅ Uses global macro defaults when override has null macros
+### Fixes (minimal + targeted)
 
-### Full Test Suite: 177 tests passed
+#### Fix 1 — “Truthful output”: never show precision/exact unless tolerances are met
+**Problem:** the UI can appear “done” while being far off (e.g., fat -21g).
+**Change:**
+- Add an explicit `result.status`:
+  - `success` only if ALL macros within ±1g AND calories within allowed tolerance (if applicable)
+  - otherwise `warning` with specific reasons (e.g., “fat off by -21g”)
+- Do NOT label the run “precision mode exact targets” unless `success === true`.
 
-### No Regressions
-- Database schema unchanged
-- RLS policies unchanged
-- Global settings fallback still works
-- Existing `recalculateAll` works correctly
-- Macro calculation logic unchanged
+#### Fix 2 — Add a real feasibility pre-check (based on available adjustable capacity, not ratios)
+Replace the simplistic ratio check with a bounded feasibility check:
+1. Compute fixed+locked baseline totals (calories, P/C/F).
+2. Compute remaining targets.
+3. Compute remaining *possible* adjustment range from editable items using constraints:
+   - For each editable item, calculate macro ranges using:
+     - `minGrams/maxGrams` from `getItemConstraints(item, mealType, settings)`
+     - per-100g macro values
+   - Sum max achievable fat grams and min achievable fat grams (same for calories).
+4. If remaining fat needed is outside achievable fat range **OR** remaining calories needed is outside achievable calorie range, mark infeasible early and return a warning.
+
+This prevents the solver from “trying forever” and ending in nonsense.
+
+#### Fix 3 — Improve fat adjustability safely (but do NOT blow up calories)
+Instead of only increasing fat weight (which can increase calories), do these in order:
+
+**3A. Expand fat knob candidates**
+- Relax fat-source filter:
+  - `fatPer100g > 3` (was `>5`)
+  - remove/relax `proteinPer100g < 10` constraint (too strict — salmon/yogurt can be valid fat knobs)
+- Keep exclusions:
+  - sauces/seasonings
+  - ignore_macros
+  - fixed/locked
+
+**3B. Add calorie-aware step sizing**
+When increasing fat, ensure the adjustment step accounts for calorie error too:
+- If calories are already high, don’t “solve fat” by adding grams that push calories further away.
+- Use a combined objective: prioritize reducing absolute macro error while not worsening calorie error beyond tolerance.
+
+#### Fix 4 — Final micro-correction must include fat (same as protein/carbs)
+Ensure the last pass includes fat correction using the same tolerance rules (±1g) and respects constraints via `getItemConstraints()`.
+
+### Tests to add / update (`src/lib/autoPortioning.test.ts`)
+Add tests that reproduce the failure and stop regressions:
+
+1. **Solvable case hits all macros**
+- Asserts: |P diff| ≤ 1, |C diff| ≤ 1, |F diff| ≤ 1 (and calories within expected tolerance if enforced)
+
+2. **Infeasible case returns warning + does not claim success**
+- Setup: high fixed calories, low available fat capacity
+- Asserts:
+  - `status === "warning"`
+  - warning includes which macro is infeasible (fat) and why (constraints/fixed items)
+
+3. **No “precision/exact” label unless truly within tolerance**
+- Asserts: UI flag or result field only true on actual success.
+
+---
+
+## TASK 1B — Fix “Copy to next day” Disabled for Monday
+
+### Root cause (confirmed)
+`MealDayCard.tsx` disables copy based on `date.getDay() === 1` which disables **all Mondays**.
+But your shopping range includes **two Mondays** (first Monday should copy, last Monday should not).
+
+### Fix
+- Determine “last day” by comparing the date string to the final entry in `weekDates`.
+- Pass `weekDates` into `MealDayCard` from the parent weekly planner.
+
+**Change**
+- `src/components/mealplan/MealDayCard.tsx`
+  - Replace `date.getDay() === 1` logic with:
+    - `format(date, "yyyy-MM-dd") === weekDates[weekDates.length - 1]`
+- `src/components/mealplan/WeeklyMealPlanner.tsx`
+  - Provide `weekDates` prop
+
+### Tests
+Add a deterministic test:
+- first Monday in the week is NOT last day → copy enabled
+- final Monday in the week IS last day → copy disabled
+
+---
+
+## TASK 2 — Transactions Page Pay-Cycle (19th → 19th)
+
+### Important correction: must match the user’s requirement exactly
+User requirement:
+- Show tabs/ranges as **19 Jan 2026 → 19 Feb 2026** (not 18th).
+Define the range rule explicitly:
+- `start = 19th of the month`
+- `end = 19th of next month` (exclusive OR inclusive must be consistent everywhere)
+
+### Implementation requirements
+- Update the date-range helper to return:
+  - `{ startDateInclusive, endDateExclusive }`
+- UI label shows:
+  - `19 Jan 2026 – 19 Feb 2026`
+- Queries use:
+  - `transaction_date >= startDateInclusive`
+  - `transaction_date < endDateExclusive`
+This avoids off-by-one day errors and prevents future bugs.
+
+### Acceptance tests
+- A test/fixture for Jan 2026 showing it returns the expected boundaries.
+
+---
+
+## TASK 3 — Bills Form Calendar “Jumping / Backing Out”
+
+### Preferred fix (most stable)
+Replace popover calendar with **native date inputs** inside the modal.
+This avoids focus/portal issues and prevents dialog resets.
+
+### Implementation
+- `src/components/bills/BillFormDialog.tsx`
+  - Replace Calendar+Popover blocks with:
+    - `<Input type="date" ... />` for start/end/due fields
+  - Keep validation + parsing consistent
+  - Ensure form state does not reset on month navigation (because there is no popover).
+
+### Validation
+- Manual test:
+  - Open Add Bill → change date values multiple times → dialog stays open, input persists.
+
+---
+
+## Implementation Order (least risky first)
+1. Task 1B (copy button) — isolated + quick win
+2. Task 3 (bills date input) — stability fix, minimal logic
+3. Task 2 (transactions pay-cycle) — define range precisely to avoid off-by-one
+4. Task 1A (macro solver) — requires tests + careful changes
+
+---
+
+## Files to Modify Summary
+
+| File | Task | Change |
+|------|------|--------|
+| `src/lib/autoPortioning.ts` | 1A | feasibility pre-check, fat knob expansion, calorie-aware adjustments, truthful success/warning |
+| `src/lib/autoPortioning.test.ts` | 1A | solvable + infeasible + “no pretend success” tests |
+| `src/components/mealplan/MealDayCard.tsx` | 1B | disable copy only on actual last day via weekDates |
+| `src/components/mealplan/WeeklyMealPlanner.tsx` | 1B | pass weekDates prop |
+| `src/pages/Transactions.tsx` + `useTransactions.ts` + paycycle helper | 2 | enforce 19th→19th using start inclusive / end exclusive |
+| `src/components/bills/BillFormDialog.tsx` | 3 | replace popover calendar with native date inputs |
+
+---
