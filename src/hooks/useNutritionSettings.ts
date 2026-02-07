@@ -9,10 +9,17 @@ export interface NutritionSettings {
   id: string;
   user_id: string;
   mode: NutritionMode;
+  // Weekday targets (Mon-Fri)
   daily_calorie_target: number | null;
   protein_target_grams: number | null;
   carbs_target_grams: number | null;
   fat_target_grams: number | null;
+  // Weekend targets (Sat-Sun)
+  weekend_calorie_target: number | null;
+  weekend_protein_target_grams: number | null;
+  weekend_carbs_target_grams: number | null;
+  weekend_fat_target_grams: number | null;
+  weekend_targets_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +30,18 @@ export interface NutritionSettingsFormData {
   protein_target_grams?: number | null;
   carbs_target_grams?: number | null;
   fat_target_grams?: number | null;
+  weekend_calorie_target?: number | null;
+  weekend_protein_target_grams?: number | null;
+  weekend_carbs_target_grams?: number | null;
+  weekend_fat_target_grams?: number | null;
+  weekend_targets_enabled?: boolean;
+}
+
+export interface DayTargets {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 }
 
 const DEFAULT_SETTINGS: Omit<NutritionSettings, "id" | "user_id" | "created_at" | "updated_at"> = {
@@ -31,6 +50,11 @@ const DEFAULT_SETTINGS: Omit<NutritionSettings, "id" | "user_id" | "created_at" 
   protein_target_grams: 150,
   carbs_target_grams: 200,
   fat_target_grams: 65,
+  weekend_calorie_target: null,
+  weekend_protein_target_grams: null,
+  weekend_carbs_target_grams: null,
+  weekend_fat_target_grams: null,
+  weekend_targets_enabled: false,
 };
 
 export function useNutritionSettings() {
@@ -92,11 +116,43 @@ export function useNutritionSettings() {
     },
   });
 
+  // Get targets for a specific date (weekday vs weekend)
+  const getTargetsForDate = (date: Date): DayTargets => {
+    if (!settings) {
+      return {
+        calories: DEFAULT_SETTINGS.daily_calorie_target || 2000,
+        protein: DEFAULT_SETTINGS.protein_target_grams || 150,
+        carbs: DEFAULT_SETTINGS.carbs_target_grams || 200,
+        fat: DEFAULT_SETTINGS.fat_target_grams || 65,
+      };
+    }
+
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+    if (isWeekend && settings.weekend_targets_enabled) {
+      return {
+        calories: settings.weekend_calorie_target ?? settings.daily_calorie_target ?? 2000,
+        protein: settings.weekend_protein_target_grams ?? settings.protein_target_grams ?? 150,
+        carbs: settings.weekend_carbs_target_grams ?? settings.carbs_target_grams ?? 200,
+        fat: settings.weekend_fat_target_grams ?? settings.fat_target_grams ?? 65,
+      };
+    }
+
+    return {
+      calories: settings.daily_calorie_target ?? 2000,
+      protein: settings.protein_target_grams ?? 150,
+      carbs: settings.carbs_target_grams ?? 200,
+      fat: settings.fat_target_grams ?? 65,
+    };
+  };
+
   return {
     settings,
     isLoading,
     error,
     upsertSettings,
     isTargetMode: settings?.mode === "target_based",
+    getTargetsForDate,
   };
 }
