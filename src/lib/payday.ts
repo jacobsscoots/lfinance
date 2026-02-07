@@ -27,7 +27,7 @@ export interface PaydaySettings {
 }
 
 const DEFAULT_SETTINGS: PaydaySettings = {
-  paydayDate: 20,
+  paydayDate: 19,
   adjustmentRule: "previous_working_day",
 };
 

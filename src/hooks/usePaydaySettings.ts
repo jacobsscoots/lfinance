@@ -24,7 +24,7 @@ export interface PaydaySettingsInput {
 }
 
 const DEFAULT_SETTINGS: Omit<PaydaySettings, "id" | "user_id" | "created_at" | "updated_at"> = {
-  payday_date: 20,
+  payday_date: 19,
   adjustment_rule: "previous_working_day",
 };
 
