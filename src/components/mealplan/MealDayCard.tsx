@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { MealPlan, MealType, MealStatus, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { Product } from "@/hooks/useProducts";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
-import { DayMacros, MealMacros, getTargetsForDate, MacroTotals } from "@/lib/mealCalculations";
+import { DayMacros, MealMacros, getTargetsForDate, MacroTotals, WeeklyTargetsOverride } from "@/lib/mealCalculations";
 import { MealItemMultiSelectDialog } from "./MealItemMultiSelectDialog";
 import { EatingOutDialog } from "./EatingOutDialog";
 import { DayDetailModal } from "./DayDetailModal";
@@ -24,6 +24,7 @@ interface MealDayCardProps {
   weekStart: Date;
   isBlackout?: boolean;
   blackoutReason?: string | null;
+  weeklyOverride?: WeeklyTargetsOverride | null;
 }
 
 const MEAL_LABELS: Record<MealType, string> = {
@@ -39,7 +40,7 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
   eating_out: <ExternalLink className="h-3 w-3 text-primary" />,
 };
 
-export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason }: MealDayCardProps) {
+export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride }: MealDayCardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -54,9 +55,9 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const isLastDayOfWeek = date.getDay() === 1; // Monday is end of shopping week, can't copy to next
   const hasItems = items.length > 0;
   
-  // Get targets for this specific date
+  // Get targets for this specific date (with weekly override if available)
   const targets: MacroTotals = settings 
-    ? getTargetsForDate(date, settings)
+    ? getTargetsForDate(date, settings, weeklyOverride)
     : { calories: 2000, protein: 150, carbs: 200, fat: 65 };
   
   // Check if there are uncalculated items
@@ -155,7 +156,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
       tolerancePercent: settings.target_tolerance_percent || DEFAULT_PORTIONING_SETTINGS.tolerancePercent,
     };
     
-    recalculateDay.mutate({ planId: plan.id, settings, portioningSettings });
+    recalculateDay.mutate({ planId: plan.id, settings, portioningSettings, weeklyOverride });
   };
 
   return (
@@ -396,6 +397,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
         plan={plan}
         dayMacros={dayMacros}
         settings={settings}
+        weeklyOverride={weeklyOverride}
       />
     </>
   );
