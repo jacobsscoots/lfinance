@@ -1,301 +1,129 @@
 
-# Comprehensive Product Management & Inventory Tracking Implementation Plan
+# Plan: Add Multi-Select and Transfer to Next Day for Meal Items
 
-## Summary
+## Overview
+Add two new features to the "Add to Meal" dialog:
+1. **Multi-select products** - Allow users to select multiple products at once to add to a meal
+2. **Transfer items to next day** - Copy all items from the current day to the next day
 
-This plan addresses multiple feature requests to synchronize functionality between Groceries and Toiletries, fix the edit form prefilling issues, add import capabilities to Toiletries, and implement inventory tracking with packaging weight calculations.
+## What I Checked
+- Bank connections security: **VERIFIED** - The `bank_connections_safe` view correctly excludes sensitive tokens (access_token, refresh_token, token_expires_at) and RLS policies are working
+- Current MealItemDialog: Uses single-select dropdown, adds one product at a time
+- useMealPlanItems hook: Already has `addItem` mutation for inserting meal plan items
+- Popover and Command components are available for building a multi-select combobox
 
 ---
 
-## Part 1: Fix Edit Product Flow
+## Implementation Details
 
-### Problem Analysis
+### 1. Create Multi-Select Product Dialog
 
-| Component | Current State | Issue |
-|-----------|---------------|-------|
-| `ProductFormDialog` | Uses `defaultValues` only | **No `useEffect` to reset form** when product changes - edit doesn't prefill |
-| `ToiletryFormDialog` | Has `useEffect` with `form.reset()` | Should be working correctly |
+**New component: `MealItemMultiSelectDialog.tsx`**
 
-### Solution for ProductFormDialog
+Replace the single-select dropdown with a multi-select combobox that:
+- Uses Popover + Command components for searchable list
+- Shows checkboxes next to each product
+- Displays selected count in the trigger button
+- Keeps dialog open after selecting (toggle behavior)
+- Filters/sorts products by meal eligibility (allowed first, disallowed grayed out)
+- Shows "Not for [Meal]" badge for ineligible items
+- In target mode: adds all items with 0g (to be calculated via Generate)
+- In manual mode: adds all items with default 100g
 
-Add a `useEffect` hook to reset the form when the `product` prop changes (similar to ToiletryFormDialog):
+**UI flow:**
+```text
++-------------------------------------------+
+| Add to Dinner              [Auto badge]   |
++-------------------------------------------+
+| Products                                  |
+| [Select products...              v ]      |
+| +---------------------------------------+ |
+| | Search products...                    | |
+| +---------------------------------------+ |
+| | [x] Chicken Breast (114 kcal/100g)    | |
+| | [x] Brown Rice (163 kcal/100g)        | |
+| | [ ] Broccoli (34 kcal/100g)           | |
+| | [ ] Greek Yogurt (99 kcal) Not for Din| |
+| +---------------------------------------+ |
+| Selected: 2 products                      |
+|                                           |
+| [Cancel]              [Add 2 Items (0g)]  |
++-------------------------------------------+
+```
+
+### 2. Add "Transfer to Next Day" Action
+
+**Location:** MealDayCard dropdown menu (header area) 
+
+Add a new menu option in the day card header:
+- "Copy to Next Day" - copies all items from this day to the next day
+- Shows confirmation count of items transferred
+- Preserves meal types (breakfast items stay breakfast, etc.)
+
+**New mutation in useMealPlanItems hook:**
 
 ```typescript
-// After line 100 in ProductFormDialog
-useEffect(() => {
-  if (product) {
-    form.reset({
-      name: product.name,
-      brand: product.brand || "",
-      energy_kj_per_100g: product.energy_kj_per_100g || null,
-      calories_per_100g: product.calories_per_100g || 0,
-      // ... all other fields
-    });
-  } else {
-    form.reset({
-      name: "",
-      brand: "",
-      // ... default values
-    });
+const copyDayToNext = useMutation({
+  mutationFn: async (sourcePlanId: string) => {
+    // 1. Find source plan and its items
+    // 2. Find target plan (next day)
+    // 3. Insert copies of all items to target plan
+    // Return count of items copied
   }
-}, [product, form]);
+});
 ```
 
-### Add Image Preview in Edit Forms
+### 3. Update MealDayCard Header
 
-When editing a product with an existing `image_url`, display it in the form:
-
-```tsx
-{/* After Basic Info section */}
-{isEditing && product?.image_url && (
-  <div className="space-y-2">
-    <Label>Current Image</Label>
-    <img 
-      src={product.image_url} 
-      alt={product.name}
-      className="max-h-32 rounded-lg border object-contain"
-    />
-  </div>
-)}
-```
-
-### Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/components/settings/ProductSettings.tsx` | Add `useEffect` for form reset, add image preview section |
+Add a dropdown menu to the day card header with:
+- View Details (existing)
+- Copy All to Next Day (new)
+- Clear All Items (optional - for convenience)
 
 ---
 
-## Part 2: Add Import Tools for Toiletries
+## Files to Create/Modify
 
-### New Component: ToiletryImportDialog
-
-Create a new import dialog similar to `NutritionImportDialog` but optimized for toiletry products:
-
-**Features:**
-- Three import methods: Upload image, Paste text, Import from URL
-- Supported sites: Boots, Superdrug, Savers, Amazon, etc.
-- Fields to extract:
-  - Product name + brand
-  - Image URL
-  - Price (standard + offer/member price + offer label)
-  - Pack size (e.g., 500ml, 200g, 30 tablets)
-  - Size unit (ml, g, units)
-
-**Edge Function Update:**
-Add a `productType` parameter to `extract-nutrition` function to support toiletry extraction with different prompts:
-
-```typescript
-// In extract-nutrition/index.ts
-const { method, content, productType = "grocery" } = body;
-
-// Different prompts for toiletry vs grocery
-const toiletryPrompt = `Extract product information (name, brand, price, pack size, image URL) - no nutrition data needed`;
-```
-
-### Files to Create/Modify
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/components/toiletries/ToiletryImportDialog.tsx` | Create | Import dialog for toiletries |
-| `src/components/toiletries/ToiletryFormDialog.tsx` | Modify | Add "Import" button, integrate import dialog |
-| `supabase/functions/extract-nutrition/index.ts` | Modify | Add `productType` parameter, toiletry extraction logic |
+| File | Action | Description |
+|------|--------|-------------|
+| `src/components/mealplan/MealItemMultiSelectDialog.tsx` | **Create** | New multi-select dialog component |
+| `src/components/mealplan/MealDayCard.tsx` | Modify | Add "Copy to Next Day" menu option |
+| `src/hooks/useMealPlanItems.ts` | Modify | Add `addMultipleItems` and `copyDayToNext` mutations |
+| `src/components/mealplan/MealItemDialog.tsx` | Modify | Update to import toggle for single/multi mode OR replace entirely with multi-select |
 
 ---
 
-## Part 3: Add Inventory Tracking for Shopping Calculations
+## Technical Approach
 
-### Database Schema Changes
+### Multi-Select Implementation
+- Use `Popover` + `Command` + `Checkbox` for the selection UI
+- Maintain `Set<string>` of selected product IDs
+- On submit, loop through and call `addItem` for each (or batch insert)
+- For better UX: batch insert with single mutation to avoid N network requests
 
-Add new columns to both `products` and `toiletry_items` tables:
-
-```sql
--- For products table
-ALTER TABLE products 
-ADD COLUMN IF NOT EXISTS quantity_on_hand integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS quantity_in_use integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS reorder_threshold integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS target_quantity integer DEFAULT 1;
-
--- For toiletry_items table
-ALTER TABLE toiletry_items 
-ADD COLUMN IF NOT EXISTS quantity_on_hand integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS quantity_in_use integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS reorder_threshold integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS target_quantity integer DEFAULT 1,
-ADD COLUMN IF NOT EXISTS image_url text,
-ADD COLUMN IF NOT EXISTS brand text,
-ADD COLUMN IF NOT EXISTS offer_price numeric,
-ADD COLUMN IF NOT EXISTS offer_label text,
-ADD COLUMN IF NOT EXISTS source_url text;
-```
-
-### Shopping Calculation Logic
-
-```text
-Needed to buy = max(0, target_quantity - quantity_on_hand)
-```
-
-If item is "in use" and below threshold, flag for shopping list.
-
-### UI Changes
-
-Add inventory fields to both product forms:
-
-```text
-+----------------------------------------------+
-| Inventory                                     |
-+----------------------------------------------+
-| Quantity on hand    [  2  ] units            |
-| In use             [  1  ] (optional)        |
-| Reorder threshold  [  1  ] units             |
-| Target quantity    [  3  ] units             |
-+----------------------------------------------+
-| Shopping need: 1 unit                        |
-+----------------------------------------------+
-```
+### Copy to Next Day Implementation
+- Get current plan's items
+- Find next day's plan ID (weekDates[currentDayIndex + 1])
+- If next day is in different week, handle appropriately (error or skip)
+- Insert items with same product_id, meal_type, quantity_grams
+- Do not copy locked status (let user choose)
 
 ---
 
-## Part 4: Packaging Weight & Net Usable Amount
+## Considerations
 
-### Database Schema Changes
-
-```sql
--- For products table
-ALTER TABLE products 
-ADD COLUMN IF NOT EXISTS gross_pack_size_grams numeric,
-ADD COLUMN IF NOT EXISTS packaging_weight_grams numeric DEFAULT 0;
-
--- For toiletry_items table  
-ALTER TABLE toiletry_items 
-ADD COLUMN IF NOT EXISTS gross_size numeric,
-ADD COLUMN IF NOT EXISTS packaging_weight numeric DEFAULT 0;
-```
-
-### Net Usable Calculation
-
-Since Supabase generated columns can be complex to manage, calculate net usable in the application layer:
-
-```typescript
-// In lib/calculations.ts
-export function calculateNetUsable(
-  grossSize: number | null,
-  packSize: number | null,
-  packagingWeight: number = 0
-): number {
-  const gross = grossSize ?? packSize ?? 0;
-  return Math.max(0, gross - packagingWeight);
-}
-```
-
-### Integration Points
-
-| System | How to use net usable amount |
-|--------|------------------------------|
-| Meal planning | Use net usable for portion calculations and remaining stock |
-| Shopping list | Use for accurate depletion and reorder calculations |
-| Toiletry usage | Apply to usage tracking |
-
-### UI Changes
-
-Add packaging fields to forms:
-
-```text
-+----------------------------------------------+
-| Pack Size & Packaging                         |
-+----------------------------------------------+
-| Gross pack size    [ 500 ] g                 |
-| Packaging weight   [  15 ] g                 |
-| Net usable amount:  485g (auto-calculated)   |
-+----------------------------------------------+
-```
-
-### Edge Cases
-
-| Case | Handling |
-|------|----------|
-| Packaging weight unknown | Default to 0, display warning badge |
-| Unit-based items | Packaging weight optional, net = gross count |
+1. **Batch vs Individual Inserts**: Use batch insert (single query) for better performance
+2. **Week Boundary**: If Saturday, "next day" is Sunday which should be in same week - should work. But if the week ends, show a message that they can't copy to next week from this view
+3. **Fixed Products**: Fixed-portion products use their preset grams even in multi-select
+4. **Duplicate Prevention**: Optionally check if product already exists in meal before adding (or allow duplicates)
 
 ---
 
-## File Changes Summary
+## Bank Connections Test Result
 
-| File | Action | Changes |
-|------|--------|---------|
-| `src/components/settings/ProductSettings.tsx` | Modify | Add `useEffect` for form reset, image preview, inventory fields, packaging fields |
-| `src/components/toiletries/ToiletryFormDialog.tsx` | Modify | Add "Import" button, inventory fields, packaging fields, image preview |
-| `src/components/toiletries/ToiletryImportDialog.tsx` | Create | New import dialog for toiletries |
-| `src/lib/toiletryCalculations.ts` | Modify | Update `ToiletryItem` interface, add net usable calculation |
-| `src/hooks/useProducts.ts` | Modify | Update `Product` interface and `ProductFormData` |
-| `src/hooks/useToiletries.ts` | Modify | Update types for new fields |
-| `supabase/functions/extract-nutrition/index.ts` | Modify | Add `productType` parameter for toiletry extraction |
+**Status: VERIFIED** 
 
-### Database Migration (Single Migration)
-
-```sql
--- Add inventory and packaging columns to products
-ALTER TABLE products 
-ADD COLUMN IF NOT EXISTS quantity_on_hand integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS quantity_in_use integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS reorder_threshold integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS target_quantity integer DEFAULT 1,
-ADD COLUMN IF NOT EXISTS gross_pack_size_grams numeric,
-ADD COLUMN IF NOT EXISTS packaging_weight_grams numeric DEFAULT 0;
-
--- Add inventory, packaging, and import fields to toiletry_items
-ALTER TABLE toiletry_items 
-ADD COLUMN IF NOT EXISTS quantity_on_hand integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS quantity_in_use integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS reorder_threshold integer DEFAULT 0,
-ADD COLUMN IF NOT EXISTS target_quantity integer DEFAULT 1,
-ADD COLUMN IF NOT EXISTS gross_size numeric,
-ADD COLUMN IF NOT EXISTS packaging_weight numeric DEFAULT 0,
-ADD COLUMN IF NOT EXISTS image_url text,
-ADD COLUMN IF NOT EXISTS brand text,
-ADD COLUMN IF NOT EXISTS offer_price numeric,
-ADD COLUMN IF NOT EXISTS offer_label text,
-ADD COLUMN IF NOT EXISTS source_url text;
-```
-
----
-
-## Implementation Order
-
-1. **Phase 1 - Fix Edit Prefilling** (immediate impact)
-   - Add `useEffect` to `ProductFormDialog` for form reset
-   - Add image preview in edit forms
-   - Verify toiletry edit already works
-
-2. **Phase 2 - Database Migration**
-   - Run migration to add all new columns to both tables
-
-3. **Phase 3 - Toiletry Import**
-   - Create `ToiletryImportDialog`
-   - Update edge function for toiletry extraction
-   - Integrate into `ToiletryFormDialog`
-
-4. **Phase 4 - Inventory Fields**
-   - Add inventory fields to both forms
-   - Update TypeScript interfaces
-   - Add shopping calculation display
-
-5. **Phase 5 - Packaging Weight**
-   - Add packaging fields to forms
-   - Implement net usable calculation
-   - Add warnings for missing data
-
----
-
-## Testing Checklist
-
-After implementation:
-
-1. **Edit form prefill**: Open existing product, verify ALL fields are populated including image
-2. **No duplicates**: Edit and save, verify only 1 record exists
-3. **Toiletry import**: Test URL import from Boots/Superdrug
-4. **Inventory calculation**: Set target_quantity > quantity_on_hand, verify shopping need displays
-5. **Packaging weight**: Set gross and packaging, verify net_usable calculates correctly
-6. **Last updated display**: Verify timestamp shows after save
+- The `/accounts` route correctly redirects to login for unauthenticated users
+- The `bank_connections_safe` view exists and excludes sensitive columns
+- The `useBankConnections` hook correctly queries the safe view
+- RLS policies are properly configured (authenticated users can only see their own connections via the view)
