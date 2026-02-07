@@ -323,6 +323,150 @@ export type Database = {
         }
         Relationships: []
       }
+      grocery_orders: {
+        Row: {
+          actual_delivery: string | null
+          created_at: string
+          delivery_cost: number | null
+          dispatch_date: string | null
+          estimated_delivery: string | null
+          id: string
+          notes: string | null
+          order_date: string
+          order_reference: string | null
+          retailer: string
+          subtotal: number
+          total_amount: number
+          transaction_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_delivery?: string | null
+          created_at?: string
+          delivery_cost?: number | null
+          dispatch_date?: string | null
+          estimated_delivery?: string | null
+          id?: string
+          notes?: string | null
+          order_date: string
+          order_reference?: string | null
+          retailer: string
+          subtotal: number
+          total_amount: number
+          transaction_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_delivery?: string | null
+          created_at?: string
+          delivery_cost?: number | null
+          dispatch_date?: string | null
+          estimated_delivery?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string
+          order_reference?: string | null
+          retailer?: string
+          subtotal?: number
+          total_amount?: number
+          transaction_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grocery_orders_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grocery_purchases: {
+        Row: {
+          created_at: string
+          discount_amount: number | null
+          discount_type: string | null
+          final_cost: number | null
+          grams_purchased: number | null
+          gross_cost: number | null
+          id: string
+          notes: string | null
+          order_id: string | null
+          product_id: string
+          purchase_date: string
+          quantity: number
+          retailer: string | null
+          transaction_id: string | null
+          unit_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_type?: string | null
+          final_cost?: number | null
+          grams_purchased?: number | null
+          gross_cost?: number | null
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          product_id: string
+          purchase_date: string
+          quantity?: number
+          retailer?: string | null
+          transaction_id?: string | null
+          unit_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_type?: string | null
+          final_cost?: number | null
+          grams_purchased?: number | null
+          gross_cost?: number | null
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          product_id?: string
+          purchase_date?: string
+          quantity?: number
+          retailer?: string | null
+          transaction_id?: string | null
+          unit_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grocery_purchases_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "grocery_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grocery_purchases_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grocery_purchases_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meal_plan_items: {
         Row: {
           created_at: string
@@ -528,6 +672,7 @@ export type Database = {
           calories_per_100g: number
           carbs_per_100g: number
           created_at: string
+          default_discount_type: string | null
           energy_kj_per_100g: number | null
           fat_per_100g: number
           fibre_per_100g: number | null
@@ -549,6 +694,7 @@ export type Database = {
           quantity_in_use: number | null
           quantity_on_hand: number | null
           reorder_threshold: number | null
+          retailer: string | null
           salt_per_100g: number | null
           saturates_per_100g: number | null
           serving_basis: string
@@ -565,6 +711,7 @@ export type Database = {
           calories_per_100g?: number
           carbs_per_100g?: number
           created_at?: string
+          default_discount_type?: string | null
           energy_kj_per_100g?: number | null
           fat_per_100g?: number
           fibre_per_100g?: number | null
@@ -586,6 +733,7 @@ export type Database = {
           quantity_in_use?: number | null
           quantity_on_hand?: number | null
           reorder_threshold?: number | null
+          retailer?: string | null
           salt_per_100g?: number | null
           saturates_per_100g?: number | null
           serving_basis?: string
@@ -602,6 +750,7 @@ export type Database = {
           calories_per_100g?: number
           carbs_per_100g?: number
           created_at?: string
+          default_discount_type?: string | null
           energy_kj_per_100g?: number | null
           fat_per_100g?: number
           fibre_per_100g?: number | null
@@ -623,6 +772,7 @@ export type Database = {
           quantity_in_use?: number | null
           quantity_on_hand?: number | null
           reorder_threshold?: number | null
+          retailer?: string | null
           salt_per_100g?: number | null
           saturates_per_100g?: number | null
           serving_basis?: string
