@@ -551,77 +551,96 @@ export function useMealPlanItems(weekStart: Date) {
       
       let totalUpdated = 0;
       let successCount = 0;
-      
+      let attemptedDays = 0;
+      const dayWarnings: Array<{ date: string; warnings: string[] }> = [];
+
       for (const plan of mealPlans) {
+        const items = plan.items || [];
+        if (items.length === 0) continue;
+        attemptedDays++;
+
         const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
         // Use unified getDailyTargets for single source of truth
         const targets = getDailyTargets(dayDate, settings, weeklyOverride);
-        const items = plan.items || [];
-        
-        if (items.length === 0) continue;
-        
+
         // Virtualize unlocked editable items as 0g for the solve (regen behavior)
         // DO NOT write 0g to DB before we know if the solve succeeds
         const virtualItems = items.map(i => ({
           ...i,
           quantity_grams: i.is_locked || i.product?.product_type === "fixed" ? i.quantity_grams : 0,
         }));
-        
+
         // Recalculate with fresh zeroed values
-        const result = calculateDayPortions(virtualItems, targets, {
-          ...portioningSettings,
-          rounding: 0,
-          tolerancePercent: 0,
-        }, plan.meal_date);
-        
+        const result = calculateDayPortions(
+          virtualItems,
+          targets,
+          {
+            ...portioningSettings,
+            rounding: 0,
+            tolerancePercent: 0,
+          },
+          plan.meal_date
+        );
+
         if (result.success) {
           successCount++;
-          
+
           // Only persist if solve succeeded
           for (const item of items) {
             if (item.is_locked) continue;
             if (item.product?.product_type === "fixed") continue;
-            
+
             const mealResult = result.mealResults.get(item.meal_type);
             const newGrams = mealResult?.items.get(item.id);
-            
-            if (newGrams !== undefined && newGrams > 0) {
+
+            if (newGrams !== undefined) {
               const { error } = await supabase
                 .from("meal_plan_items")
                 .update({ quantity_grams: newGrams })
                 .eq("id", item.id)
                 .eq("user_id", user.id);
-              
+
               if (error) throw error;
               totalUpdated++;
             }
           }
+        } else {
+          dayWarnings.push({
+            date: plan.meal_date,
+            warnings:
+              result.warnings && result.warnings.length > 0
+                ? result.warnings
+                : ["Targets not solvable with current fixed/locked items and constraints."],
+          });
+          // If solve failed, do NOT write anything to DB - preserve existing grams
         }
-        // If solve failed, do NOT write anything to DB - preserve existing grams
       }
-      
-      return { updated: totalUpdated, daysSucceeded: successCount, totalDays: mealPlans.length };
+
+      return { updated: totalUpdated, daysSucceeded: successCount, totalDays: attemptedDays, dayWarnings };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       setLastCalculated(new Date());
-      
+
+      const firstFail = result.dayWarnings?.[0];
+      const failureHint = firstFail ? ` First failure (${firstFail.date}): ${firstFail.warnings[0]}` : "";
+
       // Provide clear feedback based on success rate
-      if (result.daysSucceeded === result.totalDays && result.totalDays > 0) {
+      if (result.totalDays === 0) {
+        toast.info("No meal plans with items to generate.");
+      } else if (result.daysSucceeded === result.totalDays) {
         toast.success(`Generated portions for all ${result.daysSucceeded} days (${result.updated} items)`);
       } else if (result.daysSucceeded > 0) {
         toast.warning(
           `Generated portions for ${result.daysSucceeded}/${result.totalDays} days. ` +
-          `${result.totalDays - result.daysSucceeded} day(s) could not be solved within ±1g tolerance. ` +
-          `Check that your macro targets are mathematically achievable with the selected items.`
-        );
-      } else if (result.totalDays > 0) {
-        toast.error(
-          `No days could be solved. Your macro targets may not be achievable with the selected items and constraints. ` +
-          `Try adjusting targets or adding more variety of foods.`
+            `${result.totalDays - result.daysSucceeded} day(s) could not be solved within ±1g tolerance.` +
+            failureHint
         );
       } else {
-        toast.info("No meal plans with items to generate.");
+        toast.error(
+          `No days could be solved. Your macro targets may not be achievable with the selected items and constraints.` +
+            failureHint
+        );
       }
     },
     onError: (error) => {

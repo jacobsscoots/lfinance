@@ -65,18 +65,27 @@ export function getDailyTargets(
   if (weeklyOverride) {
     const dateWeekStart = getWeekStartMonday(date);
     const dateWeekStartStr = format(dateWeekStart, "yyyy-MM-dd");
-    
+
     if (dateWeekStartStr === weeklyOverride.weekStartDate) {
       // Use weekly override schedule for calories
       targetCalories = getCaloriesForDate(date, weeklyOverride.schedule);
-      
-      // Protein and carbs from weekly override, fall back to global
-      targetProtein = weeklyOverride.protein ?? globalSettings.protein_target_grams ?? 150;
-      targetCarbs = weeklyOverride.carbs ?? globalSettings.carbs_target_grams ?? 200;
-      
+
+      // Protein and carbs come from weekly override (or global), BUT:
+      // if the schedule varies by day, we scale protein+carbs in proportion to calories
+      // (keeping the same macro % split), then DERIVE fat from remaining calories.
+      const baseProtein = weeklyOverride.protein ?? globalSettings.protein_target_grams ?? 150;
+      const baseCarbs = weeklyOverride.carbs ?? globalSettings.carbs_target_grams ?? 200;
+
+      // Use Monday as the baseline day for the macro split.
+      const baseCalories = weeklyOverride.schedule.monday;
+      const ratio = baseCalories > 0 ? targetCalories / baseCalories : 1;
+
+      targetProtein = Math.max(0, Math.round(baseProtein * ratio));
+      targetCarbs = Math.max(0, Math.round(baseCarbs * ratio));
+
       // DERIVE fat from remaining calories (ignore stored fat value)
       const derivedFat = deriveFatFromCalories(targetCalories, targetProtein, targetCarbs);
-      
+
       return {
         calories: targetCalories,
         protein: targetProtein,
