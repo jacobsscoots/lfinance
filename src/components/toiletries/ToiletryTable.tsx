@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link, Search } from "lucide-react";
 import {
   calculateForecast,
   formatCurrency,
@@ -35,6 +35,7 @@ interface ToiletryTableProps {
   onRestock: (item: ToiletryItem) => void;
   onLogWeight?: (item: ToiletryItem) => void;
   onLinkPurchase?: (item: ToiletryItem) => void;
+  onFindPrices?: (item: ToiletryItem) => void;
 }
 
 export function ToiletryTable({
@@ -44,6 +45,7 @@ export function ToiletryTable({
   onRestock,
   onLogWeight,
   onLinkPurchase,
+  onFindPrices,
 }: ToiletryTableProps) {
   const isMobile = useIsMobile();
 
@@ -170,6 +172,12 @@ export function ToiletryTable({
                           <DropdownMenuItem onClick={() => onLinkPurchase(item)}>
                             <Link className="mr-2 h-4 w-4" />
                             Link Purchase
+                          </DropdownMenuItem>
+                        )}
+                        {onFindPrices && (
+                          <DropdownMenuItem onClick={() => onFindPrices(item)}>
+                            <Search className="mr-2 h-4 w-4" />
+                            Find Best Price
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onClick={() => onRestock(item)}>

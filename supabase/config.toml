@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.extract-payslip]
 verify_jwt = false
+
+[functions.search-toiletry-prices]
+verify_jwt = false

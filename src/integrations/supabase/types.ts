@@ -995,6 +995,68 @@ export type Database = {
           },
         ]
       }
+      toiletry_price_checks: {
+        Row: {
+          checked_at: string | null
+          created_at: string | null
+          delivery_days: number | null
+          dispatch_days: number | null
+          id: string
+          in_stock: boolean | null
+          offer_label: string | null
+          offer_price: number | null
+          price: number
+          product_name: string | null
+          product_url: string | null
+          retailer: string
+          toiletry_item_id: string
+          total_lead_time: number | null
+          user_id: string
+        }
+        Insert: {
+          checked_at?: string | null
+          created_at?: string | null
+          delivery_days?: number | null
+          dispatch_days?: number | null
+          id?: string
+          in_stock?: boolean | null
+          offer_label?: string | null
+          offer_price?: number | null
+          price: number
+          product_name?: string | null
+          product_url?: string | null
+          retailer: string
+          toiletry_item_id: string
+          total_lead_time?: number | null
+          user_id: string
+        }
+        Update: {
+          checked_at?: string | null
+          created_at?: string | null
+          delivery_days?: number | null
+          dispatch_days?: number | null
+          id?: string
+          in_stock?: boolean | null
+          offer_label?: string | null
+          offer_price?: number | null
+          price?: number
+          product_name?: string | null
+          product_url?: string | null
+          retailer?: string
+          toiletry_item_id?: string
+          total_lead_time?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "toiletry_price_checks_toiletry_item_id_fkey"
+            columns: ["toiletry_item_id"]
+            isOneToOne: false
+            referencedRelation: "toiletry_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       toiletry_purchases: {
         Row: {
           created_at: string

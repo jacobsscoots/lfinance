@@ -12,6 +12,7 @@ import { ToiletryFormDialog } from "@/components/toiletries/ToiletryFormDialog";
 import { DeleteToiletryDialog } from "@/components/toiletries/DeleteToiletryDialog";
 import { LogWeightDialog } from "@/components/toiletries/LogWeightDialog";
 import { LinkPurchaseDialog } from "@/components/toiletries/LinkPurchaseDialog";
+import { PriceComparisonDialog } from "@/components/toiletries/PriceComparisonDialog";
 import { OrdersTab } from "@/components/toiletries/OrdersTab";
 import { ToiletrySummaryTab } from "@/components/toiletries/ToiletrySummaryTab";
 import type { ToiletryItem } from "@/lib/toiletryCalculations";
@@ -39,6 +40,8 @@ export default function Toiletries() {
   const [weighingItem, setWeighingItem] = useState<ToiletryItem | null>(null);
   const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
   const [linkingItem, setLinkingItem] = useState<ToiletryItem | null>(null);
+  const [priceDialogOpen, setPriceDialogOpen] = useState(false);
+  const [pricingItem, setPricingItem] = useState<ToiletryItem | null>(null);
   
   const filteredItems = useMemo(() => {
     if (!selectedCategory) return toiletries;
@@ -72,6 +75,11 @@ export default function Toiletries() {
   const handleLinkPurchase = (item: ToiletryItem) => {
     setLinkingItem(item);
     setPurchaseDialogOpen(true);
+  };
+  
+  const handleFindPrices = (item: ToiletryItem) => {
+    setPricingItem(item);
+    setPriceDialogOpen(true);
   };
   
   const handleFormSubmit = (values: any) => {
@@ -159,6 +167,7 @@ export default function Toiletries() {
                 onRestock={handleRestock}
                 onLogWeight={handleLogWeight}
                 onLinkPurchase={handleLinkPurchase}
+                onFindPrices={handleFindPrices}
               />
             )}
           </TabsContent>
@@ -206,6 +215,13 @@ export default function Toiletries() {
           item={linkingItem}
           onSubmit={handlePurchaseSubmit}
           isLoading={createPurchase.isPending}
+        />
+        
+        {/* Price Comparison Dialog */}
+        <PriceComparisonDialog
+          open={priceDialogOpen}
+          onOpenChange={setPriceDialogOpen}
+          item={pricingItem}
         />
       </div>
     </AppLayout>
