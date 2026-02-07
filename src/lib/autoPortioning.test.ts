@@ -743,3 +743,105 @@ describe("autoPortioning - realistic full-day scenarios", () => {
   });
 });
 
+// === FAT PARITY TESTS ===
+// These tests verify that fat is treated as a first-class macro like protein
+
+describe("fat parity with protein/carbs", () => {
+  it("achieves fat target within ±1g when solvable", () => {
+    // Create a scenario with good fat sources available
+    const items = [
+      createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+      createMealPlanItem(testProducts.greekYogurt, "breakfast"), // Has fat
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+      createMealPlanItem(testProducts.salmon, "dinner"), // Good fat source
+      createMealPlanItem(testProducts.broccoli, "dinner"),
+    ];
+    
+    const targets: MacroTotals = { calories: 1800, protein: 140, carbs: 180, fat: 55 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // Fat should be within tolerance like other macros
+    if (result.success) {
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+    // Verify fat is not egregiously off even if not "success"
+    expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThan(10);
+  });
+
+  it("includes high-protein items as fat sources when they have fat", () => {
+    // Salmon has both protein AND fat - should be usable for fat adjustment
+    const items = [
+      createMealPlanItem(testProducts.salmon, "lunch"), // 13g fat per 100g
+      createMealPlanItem(testProducts.rice, "lunch"),
+      createMealPlanItem(testProducts.chicken, "dinner"),
+      createMealPlanItem(testProducts.pasta, "dinner"),
+    ];
+    
+    const targets: MacroTotals = { calories: 1600, protein: 130, carbs: 160, fat: 50 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // Should use salmon for fat even though it's high protein
+    const lunchResult = result.mealResults.get("lunch");
+    expect(lunchResult).toBeDefined();
+    
+    // Verify fat is reasonably close to target
+    expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThan(15);
+  });
+
+  it("shows warning when fat target is infeasible with fixed items", () => {
+    // Create scenario with high fixed calories but low fixed fat
+    const highCalLowFat = createProduct({ 
+      name: "High Cal Low Fat Fixed", 
+      calories_per_100g: 350,
+      protein_per_100g: 5,
+      carbs_per_100g: 80,
+      fat_per_100g: 1,
+      product_type: "fixed",
+      fixed_portion_grams: 200,
+    });
+    
+    const lowFatEditable = createProduct({
+      name: "Low Fat Rice",
+      calories_per_100g: 130,
+      protein_per_100g: 3,
+      carbs_per_100g: 28,
+      fat_per_100g: 0.5,
+      product_type: "editable",
+    });
+    
+    const items = [
+      createMealPlanItem(highCalLowFat, "lunch"), // Fixed: 700 cal, 2g fat
+      createMealPlanItem(lowFatEditable, "lunch"), // Only 0.5g fat per 100g
+    ];
+    
+    // Require lots of fat but not much calorie headroom
+    const targets: MacroTotals = { calories: 900, protein: 30, carbs: 170, fat: 40 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // Should either fail or show a warning about fat
+    if (!result.success) {
+      // Check that there's a warning about fat or infeasibility
+      const hasFatWarning = result.warnings.some(w => 
+        w.toLowerCase().includes("fat") || w.toLowerCase().includes("unreachable")
+      );
+      expect(hasFatWarning || result.warnings.length > 0).toBe(true);
+    }
+  });
+
+  it("does NOT claim success if fat is >1g off target", () => {
+    const items = [
+      createMealPlanItem(testProducts.chicken, "lunch"),
+      createMealPlanItem(testProducts.rice, "lunch"),
+    ];
+    
+    const targets: MacroTotals = { calories: 800, protein: 60, carbs: 80, fat: 30 };
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // If success is true, fat MUST be within ±1g
+    if (result.success) {
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+

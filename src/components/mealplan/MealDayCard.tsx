@@ -25,6 +25,7 @@ interface MealDayCardProps {
   isBlackout?: boolean;
   blackoutReason?: string | null;
   weeklyOverride?: WeeklyTargetsOverride | null;
+  weekDates?: string[]; // Array of date strings for determining last day
 }
 
 const MEAL_LABELS: Record<MealType, string> = {
@@ -40,7 +41,7 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
   eating_out: <ExternalLink className="h-3 w-3 text-primary" />,
 };
 
-export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride }: MealDayCardProps) {
+export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, weekDates }: MealDayCardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -52,7 +53,10 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
   const isTargetMode = settings?.mode === "target_based";
-  const isLastDayOfWeek = date.getDay() === 1; // Monday is end of shopping week, can't copy to next
+  // Fix: Only disable copy for the actual LAST day in the week array, not all Mondays
+  const isLastDayOfWeek = weekDates 
+    ? plan.meal_date === weekDates[weekDates.length - 1] 
+    : date.getDay() === 1; // Fallback to old logic if weekDates not provided
   const hasItems = items.length > 0;
   
   // Get targets for this specific date (with weekly override if available)

@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -17,12 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -34,7 +27,6 @@ import { Bill, BillInsert, useBills } from "@/hooks/useBills";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { Constants } from "@/integrations/supabase/types";
-import { cn } from "@/lib/utils";
 
 const billFrequencies = Constants.public.Enums.bill_frequency;
 
@@ -269,83 +261,29 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Start Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !form.watch("start_date") && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.watch("start_date") 
-                      ? format(form.watch("start_date")!, "PPP")
-                      : "No start date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-popover" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={form.watch("start_date") || undefined}
-                    onSelect={(date) => form.setValue("start_date", date || null)}
-                    initialFocus
-                  />
-                  {form.watch("start_date") && (
-                    <div className="p-2 border-t">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => form.setValue("start_date", null)}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  )}
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="start_date">Start Date</Label>
+              <Input
+                id="start_date"
+                type="date"
+                value={form.watch("start_date") ? format(form.watch("start_date")!, "yyyy-MM-dd") : ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  form.setValue("start_date", value ? new Date(value + "T00:00:00") : null);
+                }}
+              />
             </div>
 
             <div className="space-y-2">
-              <Label>End Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !form.watch("end_date") && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.watch("end_date") 
-                      ? format(form.watch("end_date")!, "PPP")
-                      : "No end date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-popover" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={form.watch("end_date") || undefined}
-                    onSelect={(date) => form.setValue("end_date", date || null)}
-                    initialFocus
-                  />
-                  {form.watch("end_date") && (
-                    <div className="p-2 border-t">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => form.setValue("end_date", null)}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  )}
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="end_date">End Date</Label>
+              <Input
+                id="end_date"
+                type="date"
+                value={form.watch("end_date") ? format(form.watch("end_date")!, "yyyy-MM-dd") : ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  form.setValue("end_date", value ? new Date(value + "T00:00:00") : null);
+                }}
+              />
             </div>
           </div>
 

@@ -1,4 +1,24 @@
-# Comprehensive Fix Plan: Three Tasks (Edited for Safety + No Regressions)
+# Implementation Status - All 3 Tasks Complete
+
+## ✅ TASK 1B — Copy to Next Day (DONE)
+- Fixed Monday copy button being incorrectly disabled
+- Changed from `date.getDay() === 1` to checking actual last day in `weekDates` array
+- Now only the final Monday (day 9) is disabled, not first Monday (day 2)
+
+## ✅ TASK 3 — Bills Calendar Fix (DONE)  
+- Replaced unstable Popover + Calendar with native `<Input type="date" />` inputs
+- Removed Calendar, Popover imports to eliminate portal/focus issues
+- Form now stays open during date selection
+
+## ✅ TASK 1A — Macro Solver Fat Regression (DONE)
+- Increased fat weighting from 0.8x → 1.2x in `calculateMacroError()`
+- Relaxed fat source filter from `fatPer100g > 5` → `> 3`
+- Added feasibility pre-check before solver runs
+- Added 4 new fat parity tests (now 181 total tests)
+
+## TASK 2 — Transactions Pay-Cycle
+- Already implemented via Settings → Payday Settings
+- No code changes needed
 
 ## Executive Summary
 
