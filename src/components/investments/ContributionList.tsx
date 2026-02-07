@@ -78,7 +78,7 @@ export function ContributionList({ transactions, onDelete, isDeleting }: Contrib
             <div className="flex items-center gap-2">
               <span
                 className={cn(
-                  "font-semibold",
+                  "font-semibold whitespace-nowrap text-sm sm:text-base",
                   isInflow ? "text-success" : "text-foreground"
                 )}
               >

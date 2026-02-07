@@ -55,16 +55,18 @@ export function ProjectionCard({
         {/* Return Rate Adjustment */}
         <div className="space-y-2">
           <Label className="text-sm">Expected Annual Return</Label>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-1 sm:gap-2">
             {(["conservative", "medium", "aggressive"] as const).map((preset) => (
               <Button
                 key={preset}
                 variant={expectedAnnualReturn === RISK_PRESETS[preset] ? "default" : "outline"}
                 size="sm"
                 onClick={() => onReturnChange(RISK_PRESETS[preset])}
-                className="flex-1 text-xs capitalize"
+                className="text-xs px-1 sm:px-3"
               >
-                {preset.slice(0, 4)} ({RISK_PRESETS[preset]}%)
+                <span className="hidden sm:inline">{preset.slice(0, 4)}</span>
+                <span className="sm:hidden">{preset.slice(0, 1).toUpperCase()}</span>
+                <span className="ml-1">({RISK_PRESETS[preset]}%)</span>
               </Button>
             ))}
           </div>
@@ -83,34 +85,35 @@ export function ProjectionCard({
         </div>
 
         {/* Projection Grid */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {(["3m", "6m", "12m"] as const).map((period) => {
             const data = projections[period];
             const contributionGrowth = monthlyContribution * parseInt(period);
             const growthOnly = data.expected - currentValue - contributionGrowth;
             
             return (
-              <div key={period} className="text-center p-3 rounded-lg bg-muted/50">
+              <div key={period} className="text-center p-2 sm:p-3 rounded-lg bg-muted/50">
                 <p className="text-xs text-muted-foreground uppercase mb-1">
-                  {period === "3m" ? "3 Months" : period === "6m" ? "6 Months" : "1 Year"}
+                  <span className="hidden sm:inline">{period === "3m" ? "3 Months" : period === "6m" ? "6 Months" : "1 Year"}</span>
+                  <span className="sm:hidden">{period.toUpperCase()}</span>
                 </p>
-                <p className="text-lg font-bold text-foreground">
+                <p className="text-sm sm:text-lg font-bold text-foreground">
                   {formatCurrency(data.expected)}
                 </p>
                 <div className="flex items-center justify-center gap-1 mt-1">
-                  <TrendingUp className="h-3 w-3 text-success" />
-                  <span className="text-xs text-success">
-                    +{formatCurrency(growthOnly)} growth
+                  <TrendingUp className="h-3 w-3 text-success flex-shrink-0" />
+                  <span className="text-xs text-success truncate">
+                    +{formatCurrency(growthOnly)}
                   </span>
                 </div>
                 <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-1">
                     <span>Low</span>
-                    <span>{formatCurrency(data.conservative)}</span>
+                    <span className="truncate">{formatCurrency(data.conservative)}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-1">
                     <span>High</span>
-                    <span>{formatCurrency(data.aggressive)}</span>
+                    <span className="truncate">{formatCurrency(data.aggressive)}</span>
                   </div>
                 </div>
               </div>

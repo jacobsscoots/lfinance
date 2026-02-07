@@ -70,7 +70,7 @@ export function EnergyUsageChart({ readings, days = 30 }: EnergyUsageChartProps)
         <CardTitle className="text-base font-medium">Usage (Last {days} Days)</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[200px]">
+        <ChartContainer config={chartConfig} className="h-[150px] sm:h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -102,13 +102,13 @@ export function EnergyUsageChart({ readings, days = 30 }: EnergyUsageChartProps)
           </ResponsiveContainer>
         </ChartContainer>
 
-        <div className="flex justify-between mt-4 pt-4 border-t text-sm">
+        <div className="flex flex-col sm:flex-row justify-between gap-2 mt-4 pt-4 border-t text-xs sm:text-sm">
           <div>
-            <span className="text-muted-foreground">Total Electricity:</span>{" "}
+            <span className="text-muted-foreground">Electricity:</span>{" "}
             <span className="font-medium">{totalElectricity.toFixed(1)} kWh</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Total Gas:</span>{" "}
+            <span className="text-muted-foreground">Gas:</span>{" "}
             <span className="font-medium">{totalGas.toFixed(1)} kWh</span>
           </div>
         </div>

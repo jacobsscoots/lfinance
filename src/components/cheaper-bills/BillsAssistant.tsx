@@ -80,7 +80,7 @@ export function BillsAssistant() {
             <p className="text-sm text-muted-foreground">
               Ask me anything about your energy usage:
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {quickQuestions.map((q) => (
                 <Button
                   key={q}
@@ -88,10 +88,10 @@ export function BillsAssistant() {
                   size="sm"
                   onClick={() => sendMessage(q)}
                   disabled={isLoading}
-                  className="text-xs"
+                  className="text-xs justify-start h-auto py-2 px-3"
                 >
-                  <Lightbulb className="h-3 w-3 mr-1" />
-                  {q}
+                  <Lightbulb className="h-3 w-3 mr-1.5 flex-shrink-0" />
+                  <span className="text-left">{q}</span>
                 </Button>
               ))}
             </div>

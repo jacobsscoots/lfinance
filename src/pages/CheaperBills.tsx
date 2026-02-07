@@ -120,22 +120,22 @@ export default function CheaperBills() {
 
         {/* Tabs */}
         <Tabs defaultValue="energy" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="energy" className="gap-2">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="energy" className="gap-1 sm:gap-2 px-2 sm:px-4">
               <Zap className="h-4 w-4" />
-              Energy
+              <span className="hidden sm:inline">Energy</span>
             </TabsTrigger>
-            <TabsTrigger value="broadband" className="gap-2">
+            <TabsTrigger value="broadband" className="gap-1 sm:gap-2 px-2 sm:px-4">
               <Wifi className="h-4 w-4" />
-              Broadband
+              <span className="hidden sm:inline">Broadband</span>
             </TabsTrigger>
-            <TabsTrigger value="mobile" className="gap-2">
+            <TabsTrigger value="mobile" className="gap-1 sm:gap-2 px-2 sm:px-4">
               <Smartphone className="h-4 w-4" />
-              Mobile
+              <span className="hidden sm:inline">Mobile</span>
             </TabsTrigger>
-            <TabsTrigger value="other" className="gap-2">
+            <TabsTrigger value="other" className="gap-1 sm:gap-2 px-2 sm:px-4">
               <Settings className="h-4 w-4" />
-              Other
+              <span className="hidden sm:inline">Other</span>
             </TabsTrigger>
           </TabsList>
 
@@ -151,7 +151,7 @@ export default function CheaperBills() {
               </CardHeader>
               <CardContent>
                 {electricityTariff ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4 text-sm">
                     <div>
                       <p className="text-muted-foreground">Provider</p>
                       <p className="font-medium">{electricityTariff.provider}</p>
