@@ -28,11 +28,11 @@ import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { Constants } from "@/integrations/supabase/types";
 
-const billFrequencies = Constants.public.Enums.bill_frequency;
+const billFrequencies = [...Constants.public.Enums.bill_frequency, "biannual"] as const;
 
 const billSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
-  amount: z.coerce.number().positive("Amount must be positive"),
+  amount: z.coerce.number().min(0, "Amount must be 0 or positive"),
   due_day: z.coerce.number().int().min(1, "Day must be 1-31").max(31, "Day must be 1-31"),
   frequency: z.enum(billFrequencies as unknown as [string, ...string[]]),
   provider: z.string().trim().max(100, "Provider must be less than 100 characters").optional(),
@@ -42,6 +42,8 @@ const billSchema = z.object({
   is_active: z.boolean(),
   start_date: z.date().optional().nullable(),
   end_date: z.date().optional().nullable(),
+  bill_type: z.enum(["fixed", "variable"]),
+  is_subscription: z.boolean(),
 });
 
 type BillFormData = z.infer<typeof billSchema>;
@@ -72,10 +74,14 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
       is_active: true,
       start_date: null,
       end_date: null,
+      bill_type: "fixed",
+      is_subscription: false,
     },
   });
 
   useEffect(() => {
+    if (!open) return;
+    
     if (bill) {
       form.reset({
         name: bill.name,
@@ -89,6 +95,8 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
         is_active: bill.is_active ?? true,
         start_date: bill.start_date ? new Date(bill.start_date) : null,
         end_date: bill.end_date ? new Date(bill.end_date) : null,
+        bill_type: (bill as any).bill_type || "fixed",
+        is_subscription: (bill as any).is_subscription ?? false,
       });
     } else {
       form.reset({
@@ -103,16 +111,19 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
         is_active: true,
         start_date: null,
         end_date: null,
+        bill_type: "fixed",
+        is_subscription: false,
       });
     }
-  }, [bill, form, open]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bill, open]);
 
   const onSubmit = async (data: BillFormData) => {
-    const billData: BillInsert = {
+    const billData: BillInsert & { bill_type?: string; is_subscription?: boolean; is_variable?: boolean } = {
       name: data.name,
       amount: data.amount,
       due_day: data.due_day,
-      frequency: data.frequency as typeof billFrequencies[number],
+      frequency: data.frequency as any,
       provider: data.provider || null,
       category_id: data.category_id || null,
       account_id: data.account_id || null,
@@ -120,6 +131,9 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
       is_active: data.is_active,
       start_date: data.start_date ? format(data.start_date, "yyyy-MM-dd") : null,
       end_date: data.end_date ? format(data.end_date, "yyyy-MM-dd") : null,
+      bill_type: data.bill_type,
+      is_subscription: data.is_subscription,
+      is_variable: data.bill_type === "variable",
     };
 
     if (isEditing && bill) {
@@ -202,6 +216,7 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
                   <SelectItem value="fortnightly">Fortnightly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
                   <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="biannual">Bi-annual (6 months)</SelectItem>
                   <SelectItem value="yearly">Yearly</SelectItem>
                 </SelectContent>
               </Select>
@@ -284,6 +299,44 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
                   form.setValue("end_date", value ? new Date(value + "T00:00:00") : null);
                 }}
               />
+            </div>
+          </div>
+
+          {/* Bill Type */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="bill_type">Bill Type</Label>
+              <Select
+                value={form.watch("bill_type")}
+                onValueChange={(value: "fixed" | "variable") => form.setValue("bill_type", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="fixed">Fixed amount</SelectItem>
+                  <SelectItem value="variable">Variable amount</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {form.watch("bill_type") === "variable" 
+                  ? "Amount varies each cycle (e.g., water, electricity)"
+                  : "Same amount each cycle (e.g., Netflix, rent)"}
+              </p>
+            </div>
+
+            <div className="space-y-2 flex flex-col justify-between">
+              <Label htmlFor="is_subscription">Is Subscription?</Label>
+              <div className="flex items-center gap-2 h-10">
+                <Switch
+                  id="is_subscription"
+                  checked={form.watch("is_subscription")}
+                  onCheckedChange={(checked) => form.setValue("is_subscription", checked)}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {form.watch("is_subscription") ? "Yes" : "No"}
+                </span>
+              </div>
             </div>
           </div>
 

@@ -75,6 +75,8 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
   });
 
   useEffect(() => {
+    if (!open) return; // Only reset when dialog opens
+    
     if (transaction) {
       const txDate = new Date(transaction.transaction_date);
       setDate(txDate);
@@ -91,18 +93,20 @@ export function TransactionFormDialog({ open, onOpenChange, transaction }: Trans
     } else {
       const today = new Date();
       setDate(today);
+      const defaultAccountId = accounts.length > 0 ? accounts[0].id : "";
       form.reset({
         description: "",
         amount: 0,
         type: "expense",
         transaction_date: today,
-        account_id: accounts[0]?.id || "",
+        account_id: defaultAccountId,
         category_id: "",
         merchant: "",
         bill_id: "",
       });
     }
-  }, [transaction, form, open, accounts]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transaction, open]);
 
   // Auto-fill amount and description when a bill is selected
   const handleBillSelect = (billId: string) => {

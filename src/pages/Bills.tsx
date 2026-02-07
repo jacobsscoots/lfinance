@@ -4,9 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Receipt } from "lucide-react";
+import { Plus, Receipt, CreditCard, Tv } from "lucide-react";
 import { useBills, Bill } from "@/hooks/useBills";
-import { BillCard } from "@/components/bills/BillCard";
+import { BillListItem } from "@/components/bills/BillListItem";
 import { BillFormDialog } from "@/components/bills/BillFormDialog";
 import { DeleteBillDialog } from "@/components/bills/DeleteBillDialog";
 
@@ -15,17 +15,28 @@ export default function Bills() {
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+  const [activeTab, setActiveTab] = useState<"bills" | "subscriptions">("bills");
 
-  const activeBills = bills.filter((b) => b.is_active);
-  const inactiveBills = bills.filter((b) => !b.is_active);
+  // Separate bills from subscriptions
+  const allActiveBills = bills.filter((b) => b.is_active);
+  const allInactiveBills = bills.filter((b) => !b.is_active);
+  
+  const subscriptions = allActiveBills.filter((b) => (b as any).is_subscription === true);
+  const regularBills = allActiveBills.filter((b) => (b as any).is_subscription !== true);
+  const inactiveSubscriptions = allInactiveBills.filter((b) => (b as any).is_subscription === true);
+  const inactiveRegularBills = allInactiveBills.filter((b) => (b as any).is_subscription !== true);
 
-  const totalMonthly = activeBills.reduce((sum, bill) => {
+  const displayedActive = activeTab === "subscriptions" ? subscriptions : regularBills;
+  const displayedInactive = activeTab === "subscriptions" ? inactiveSubscriptions : inactiveRegularBills;
+
+  const totalMonthly = allActiveBills.reduce((sum, bill) => {
     const amount = Number(bill.amount);
     switch (bill.frequency) {
       case "weekly": return sum + amount * 4.33;
       case "fortnightly": return sum + amount * 2.17;
       case "monthly": return sum + amount;
       case "quarterly": return sum + amount / 3;
+      case "biannual": return sum + amount / 6;
       case "yearly": return sum + amount / 12;
       default: return sum + amount;
     }
@@ -66,32 +77,43 @@ export default function Bills() {
         {/* Summary Card */}
         <Card>
           <CardContent className="py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Monthly Bills Total</p>
                 <p className="text-3xl font-bold">
                   £{totalMonthly.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Active Bills</p>
-                <p className="text-2xl font-semibold">{activeBills.length}</p>
+              <div className="flex gap-6">
+                <div className="text-center">
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <CreditCard className="h-4 w-4" />
+                    <span className="text-sm">Bills</span>
+                  </div>
+                  <p className="text-xl font-semibold">{regularBills.length}</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Tv className="h-4 w-4" />
+                    <span className="text-sm">Subscriptions</span>
+                  </div>
+                  <p className="text-xl font-semibold">{subscriptions.length}</p>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Bills List */}
+        {/* Bills / Subscriptions Tabs */}
         {isLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="p-6">
-                  <Skeleton className="h-6 w-32 mb-2" />
-                  <Skeleton className="h-4 w-24 mb-4" />
-                  <Skeleton className="h-8 w-20" />
-                </CardContent>
-              </Card>
+              <div key={i} className="flex items-center gap-4 p-4 rounded-lg border">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-4 w-24" />
+                <div className="flex-1" />
+                <Skeleton className="h-6 w-20" />
+              </div>
             ))}
           </div>
         ) : bills.length === 0 ? (
@@ -109,43 +131,59 @@ export default function Bills() {
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="active" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="active">Active ({activeBills.length})</TabsTrigger>
-              <TabsTrigger value="inactive">Inactive ({inactiveBills.length})</TabsTrigger>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "bills" | "subscriptions")}>
+            <TabsList className="mb-4">
+              <TabsTrigger value="bills" className="gap-2">
+                <CreditCard className="h-4 w-4" />
+                Bills ({regularBills.length})
+              </TabsTrigger>
+              <TabsTrigger value="subscriptions" className="gap-2">
+                <Tv className="h-4 w-4" />
+                Subscriptions ({subscriptions.length})
+              </TabsTrigger>
             </TabsList>
-            <TabsContent value="active">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {activeBills.map((bill) => (
-                  <BillCard
-                    key={bill.id}
-                    bill={bill}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                ))}
+
+            <TabsContent value={activeTab} className="space-y-4">
+              {/* Active Section */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-muted-foreground px-1">
+                  Active ({displayedActive.length})
+                </h3>
+                {displayedActive.length > 0 ? (
+                  <div className="space-y-2">
+                    {displayedActive.map((bill) => (
+                      <BillListItem
+                        key={bill.id}
+                        bill={bill}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">
+                    No active {activeTab === "subscriptions" ? "subscriptions" : "bills"}.
+                  </p>
+                )}
               </div>
-              {activeBills.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                  No active bills. Click "Add Bill" to create one.
-                </p>
-              )}
-            </TabsContent>
-            <TabsContent value="inactive">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {inactiveBills.map((bill) => (
-                  <BillCard
-                    key={bill.id}
-                    bill={bill}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                ))}
-              </div>
-              {inactiveBills.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                  No inactive bills.
-                </p>
+
+              {/* Inactive Section */}
+              {displayedInactive.length > 0 && (
+                <div className="space-y-2 pt-4 border-t">
+                  <h3 className="text-sm font-medium text-muted-foreground px-1">
+                    Inactive ({displayedInactive.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {displayedInactive.map((bill) => (
+                      <BillListItem
+                        key={bill.id}
+                        bill={bill}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
             </TabsContent>
           </Tabs>
