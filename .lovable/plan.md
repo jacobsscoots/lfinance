@@ -1,103 +1,110 @@
 
-# Fix URL Import for Nutrition Data
+# Fix Nutrition URL Import - Not Extracting Data
 
-## Problem
+## Problem Identified
 
-The "From URL" import feature is failing with the error "Could not access this URL. The website may be blocking automated access." This happens because UK supermarket websites like Tesco actively block server-side requests from bots.
+The URL import appears to succeed (Firecrawl successfully fetches the page), but the AI returns `null` for almost all fields. Testing revealed that **Tesco's anti-bot protection is still blocking the content** - Firecrawl is returning a "security check failed" error page instead of the actual product data.
 
-The current edge function uses a simple `fetch()` with a basic User-Agent, which Tesco's anti-bot protection detects and blocks.
-
----
-
-## Solution: Integrate Firecrawl
-
-Firecrawl is an AI-powered web scraper specifically designed to handle websites with anti-bot protection. It's available as a connector in Lovable and is the recommended solution for this type of scraping.
-
-### What Changes
-
-1. **Connect Firecrawl** - You'll be prompted to set up a Firecrawl connection which provides an API key
-2. **Update the edge function** - Use Firecrawl's API to fetch and parse web pages instead of direct `fetch()`
-3. **Better error handling** - Provide clearer error messages when scraping fails
+The edge function doesn't detect this blocked page and passes it to the AI, which then correctly cannot extract any product information.
 
 ---
 
-## How Firecrawl Works
+## Solution
 
-Instead of:
-```typescript
-// Current approach - blocked by Tesco
-const response = await fetch(url, { headers: { "User-Agent": "..." } });
-```
+### 1. Enhanced Firecrawl Configuration
 
-We'll use:
-```typescript
-// Firecrawl approach - handles anti-bot protection
-const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
-  method: "POST",
-  headers: { Authorization: `Bearer ${FIRECRAWL_API_KEY}` },
-  body: JSON.stringify({ url, formats: ["markdown", "html"] })
-});
-```
+Add parameters to better handle JavaScript-rendered pages:
+- **waitFor**: Wait for dynamic content to load (5000ms for supermarket sites)
+- **timeout**: Increase timeout for slow-loading pages
+- These settings help Firecrawl fully render the page before capturing content
 
-Firecrawl handles:
-- Browser-like rendering
-- JavaScript execution
-- Anti-bot bypass
-- Clean content extraction
+### 2. Detect Blocked/Error Pages
 
----
+Add validation to detect when the fetched content is actually a block page:
+- Check for common error indicators: "security check", "blocked", "captcha"
+- Verify the HTML contains expected product data elements
+- Return a helpful error message when blocked
 
-## Implementation Steps
+### 3. Use Markdown for AI Extraction
 
-### Step 1: Connect Firecrawl
-You'll be prompted to connect Firecrawl to your project. This makes the `FIRECRAWL_API_KEY` available to the edge function.
+Firecrawl's markdown output is cleaner and more token-efficient than raw HTML:
+- Prefer markdown when available
+- Fall back to HTML if markdown is empty
+- Reduces noise and improves extraction accuracy
 
-### Step 2: Update Edge Function
+### 4. Add Debug Logging
 
-**File: `supabase/functions/extract-nutrition/index.ts`**
+Log the first portion of received content to help diagnose issues:
+- Shows what Firecrawl actually returned
+- Makes future debugging easier
 
-Changes to the `extractFromUrl` function:
-- Check for Firecrawl API key
-- Call Firecrawl API to fetch the page content
-- Handle Firecrawl-specific response format
-- Fall back to direct fetch for non-blocked sites
-- Provide helpful error messages
+### 5. Improved Error Messages
 
-### Step 3: Improve Error Messages
-
-When URL import fails, show specific guidance:
-- "This website blocked automated access. Try the Upload or Paste Text options instead."
-- Link to alternative import methods
+When a block is detected:
+- Tell users the site has strong anti-bot protection
+- Suggest using "Upload Photo" or "Paste Text" as alternatives
 
 ---
 
-## Fallback Strategy
-
-If Firecrawl isn't connected or credits run out:
-1. Attempt direct fetch first (works for many sites)
-2. If blocked (403/429), show clear error with alternatives
-3. Guide users to Upload Photo or Paste Text options
-
-This ensures the feature degrades gracefully even without Firecrawl.
-
----
-
-## Files to Modify
+## File Changes
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/extract-nutrition/index.ts` | Add Firecrawl integration with fallback |
+| `supabase/functions/extract-nutrition/index.ts` | Enhanced Firecrawl config, block detection, better logging |
 
 ---
 
-## After Implementation
+## Technical Details
 
-Once connected, the URL import will work with:
-- Tesco
-- Sainsbury's  
-- Asda
-- Morrisons
-- Waitrose
-- Most other retail websites
+### Firecrawl Configuration Update
 
-The feature will reliably extract product name, brand, price, pack size, and full nutrition information from product pages.
+```typescript
+body: JSON.stringify({
+  url,
+  formats: ["markdown", "html"],
+  onlyMainContent: false,
+  waitFor: 5000, // Wait for JS content
+  timeout: 30000,
+})
+```
+
+### Block Detection Logic
+
+```typescript
+// Detect if page is a block/error page
+const blockIndicators = [
+  "security check",
+  "something is not right",
+  "access denied",
+  "captcha",
+  "please verify"
+];
+
+const contentLower = (markdown || html).toLowerCase();
+const isBlocked = blockIndicators.some(indicator => 
+  contentLower.includes(indicator)
+);
+
+if (isBlocked) {
+  throw new Error("This website's anti-bot protection blocked the request...");
+}
+```
+
+### Content Priority
+
+```typescript
+// Prefer markdown (cleaner), fall back to HTML
+const contentForAi = markdown && markdown.length > 200 
+  ? markdown 
+  : html;
+```
+
+---
+
+## Expected Outcome
+
+After these changes:
+- Blocked pages are detected and users get clear feedback
+- Working pages have better extraction due to markdown usage
+- Debug logging helps diagnose future issues
+- Clear guidance is provided when a site cannot be scraped
