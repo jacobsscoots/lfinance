@@ -18,9 +18,17 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
     // Prevent duplicate React instances that cause useMutation/useQuery errors
-    dedupe: ["react", "react-dom", "react/jsx-runtime", "@tanstack/react-query"],
+    dedupe: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@tanstack/react-query",
+      "@tanstack/query-core",
+    ],
   },
   optimizeDeps: {
-    include: ["@tanstack/react-query"],
+    include: ["@tanstack/react-query", "@tanstack/query-core"],
+    force: true, // Force re-optimization to clear stale cache
   },
 }));
