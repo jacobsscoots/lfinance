@@ -1,0 +1,367 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { usePaydaySettings } from "@/hooks/usePaydaySettings";
+import { useAccounts } from "@/hooks/useAccounts";
+import { 
+  format, 
+  differenceInDays, 
+  isBefore, 
+  isAfter, 
+  isSameDay,
+  addDays,
+  subDays,
+} from "date-fns";
+import { getPayCycleForDate, toPaydaySettings, type PayCycle } from "@/lib/payCycle";
+import {
+  calculateSafeToSpend,
+  calculateProjectedEndBalance,
+  checkRunwayRisk,
+  buildDailySpendingData,
+  generateAlerts,
+  type PayCycleMetrics,
+  type Alert,
+} from "@/lib/dashboardCalculations";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Transaction = Tables<"transactions">;
+type Bill = Tables<"bills">;
+
+interface BillWithDueDate extends Bill {
+  dueDate: Date;
+  category?: {
+    name: string;
+    color: string | null;
+    icon: string | null;
+  } | null;
+}
+
+interface AccountWithChange {
+  id: string;
+  name: string;
+  displayName: string | null;
+  balance: number;
+  changeFromStart: number;
+  isHidden: boolean;
+  lastSyncedAt: string | null;
+}
+
+export interface PayCycleDataResult {
+  // Cycle info
+  cycle: PayCycle;
+  cycleLabel: string;
+  
+  // Core metrics
+  metrics: PayCycleMetrics;
+  
+  // Bills
+  upcomingBills: BillWithDueDate[];
+  billsNext7Days: BillWithDueDate[];
+  billsRestOfCycle: BillWithDueDate[];
+  totalNext7Days: number;
+  totalRestOfCycle: number;
+  
+  // Alerts
+  alerts: Alert[];
+  
+  // Accounts
+  accounts: AccountWithChange[];
+  
+  // Loading state
+  isLoading: boolean;
+}
+
+// Helper to get next occurrence of a bill within a date range
+function getBillOccurrenceInRange(
+  bill: Bill,
+  rangeStart: Date,
+  rangeEnd: Date
+): Date | null {
+  const today = new Date();
+  
+  // Start from the range start date
+  let checkDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), bill.due_day);
+  
+  // If that date is before range start, move to next month
+  if (isBefore(checkDate, rangeStart)) {
+    checkDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, bill.due_day);
+  }
+  
+  // Check if within range and respects bill's start/end dates
+  if (isAfter(checkDate, rangeEnd)) return null;
+  
+  if (bill.start_date && isBefore(checkDate, new Date(bill.start_date))) return null;
+  if (bill.end_date && isAfter(checkDate, new Date(bill.end_date))) return null;
+  
+  return checkDate;
+}
+
+export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataResult {
+  const { user } = useAuth();
+  const { effectiveSettings, isLoading: settingsLoading } = usePaydaySettings();
+  const { allAccounts, totalBalance, isLoading: accountsLoading } = useAccounts();
+  
+  // Get current pay cycle
+  const paydayConfig = toPaydaySettings(effectiveSettings);
+  const cycle = getPayCycleForDate(referenceDate, paydayConfig);
+  
+  const today = new Date();
+  const daysTotal = differenceInDays(cycle.end, cycle.start) + 1;
+  const daysPassed = Math.max(0, differenceInDays(today, cycle.start) + 1);
+  const daysRemaining = Math.max(0, differenceInDays(cycle.end, today) + 1);
+  
+  // Fetch transactions for this cycle
+  const transactionsQuery = useQuery({
+    queryKey: ["pay-cycle-transactions", user?.id, format(cycle.start, "yyyy-MM-dd")],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      // Get all visible account IDs
+      const visibleAccounts = allAccounts.filter(a => !a.is_hidden);
+      if (visibleAccounts.length === 0) return [];
+      
+      const accountIds = visibleAccounts.map(a => a.id);
+      
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .in("account_id", accountIds)
+        .gte("transaction_date", format(cycle.start, "yyyy-MM-dd"))
+        .lte("transaction_date", format(cycle.end, "yyyy-MM-dd"))
+        .order("transaction_date", { ascending: true });
+      
+      if (error) throw error;
+      return data as Transaction[];
+    },
+    enabled: !!user && !accountsLoading && allAccounts.length > 0,
+  });
+  
+  // Fetch bills
+  const billsQuery = useQuery({
+    queryKey: ["pay-cycle-bills", user?.id, format(cycle.start, "yyyy-MM-dd")],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from("bills")
+        .select(`
+          *,
+          category:categories(name, color, icon)
+        `)
+        .eq("user_id", user.id)
+        .eq("is_active", true);
+      
+      if (error) throw error;
+      return data as (Bill & { category?: { name: string; color: string | null; icon: string | null } | null })[];
+    },
+    enabled: !!user,
+  });
+  
+  // Calculate derived values
+  const transactions = transactionsQuery.data || [];
+  const bills = billsQuery.data || [];
+  
+  // Income and expenses
+  const totalIncome = transactions
+    .filter(t => t.type === "income")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  
+  const totalSpent = transactions
+    .filter(t => t.type === "expense")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  
+  // Calculate start balance (current + expenses - income since cycle start)
+  const startBalance = totalBalance + totalSpent - totalIncome;
+  
+  // Get bills due in remaining cycle
+  const upcomingBills: BillWithDueDate[] = bills
+    .map(bill => {
+      const dueDate = getBillOccurrenceInRange(bill, today, cycle.end);
+      if (!dueDate) return null;
+      return { ...bill, dueDate };
+    })
+    .filter((b): b is BillWithDueDate => b !== null)
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+  
+  // Split bills by timeframe
+  const sevenDaysFromNow = addDays(today, 7);
+  const billsNext7Days = upcomingBills.filter(b => 
+    isBefore(b.dueDate, sevenDaysFromNow) || isSameDay(b.dueDate, sevenDaysFromNow)
+  );
+  const billsRestOfCycle = upcomingBills.filter(b => 
+    isAfter(b.dueDate, sevenDaysFromNow)
+  );
+  
+  const totalNext7Days = billsNext7Days.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalRestOfCycle = billsRestOfCycle.reduce((sum, b) => sum + Number(b.amount), 0);
+  const committedRemaining = totalNext7Days + totalRestOfCycle;
+  
+  // Calculate metrics
+  const discretionaryRemaining = Math.max(0, totalBalance - committedRemaining);
+  const safeToSpendPerDay = calculateSafeToSpend(totalBalance, committedRemaining, daysRemaining);
+  const projectedEndBalance = calculateProjectedEndBalance(
+    totalBalance,
+    totalSpent,
+    daysPassed,
+    daysRemaining,
+    committedRemaining
+  );
+  
+  // Budget for pace calculation (income if available, otherwise start balance)
+  const effectiveBudget = totalIncome > 0 ? totalIncome : startBalance;
+  const expectedSpentByNow = daysTotal > 0 ? (effectiveBudget / daysTotal) * daysPassed : 0;
+  
+  const isOverPace = totalSpent > expectedSpentByNow + 50;
+  const runwayRisk = checkRunwayRisk(discretionaryRemaining, daysRemaining);
+  
+  // Build daily spending data for charts
+  const dailySpending = buildDailySpendingData(cycle, transactions, effectiveBudget);
+  
+  // Buffer = projected end balance in best case
+  const bufferAmount = projectedEndBalance.best;
+  
+  const hasData = allAccounts.length > 0;
+  
+  const metrics: PayCycleMetrics = {
+    cycleStart: cycle.start,
+    cycleEnd: cycle.end,
+    daysTotal,
+    daysRemaining,
+    daysPassed,
+    startBalance,
+    currentBalance: totalBalance,
+    projectedEndBalance,
+    totalSpent,
+    totalIncome,
+    expectedSpentByNow,
+    safeToSpendPerDay,
+    committedRemaining,
+    discretionaryRemaining,
+    bufferAmount,
+    isOverPace,
+    runwayRisk,
+    hasData,
+    dailySpending,
+  };
+  
+  // Generate alerts
+  const alertBills = upcomingBills.map(b => ({
+    name: b.name,
+    amount: Number(b.amount),
+    dueDate: b.dueDate,
+  }));
+  const alerts = generateAlerts(metrics, alertBills);
+  
+  // Build account list with changes
+  const accounts: AccountWithChange[] = allAccounts.map(account => {
+    // Get transactions for this account in cycle
+    const accountTransactions = transactions.filter(t => t.account_id === account.id);
+    const accountIncome = accountTransactions
+      .filter(t => t.type === "income")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const accountExpenses = accountTransactions
+      .filter(t => t.type === "expense")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    
+    const changeFromStart = accountIncome - accountExpenses;
+    
+    return {
+      id: account.id,
+      name: account.name,
+      displayName: account.display_name,
+      balance: Number(account.balance),
+      changeFromStart,
+      isHidden: account.is_hidden,
+      lastSyncedAt: account.last_synced_at,
+    };
+  });
+  
+  // Cycle label
+  const cycleLabel = `${format(cycle.start, "d MMM")} → ${format(cycle.end, "d MMM yyyy")}`;
+  
+  const isLoading = settingsLoading || accountsLoading || transactionsQuery.isLoading || billsQuery.isLoading;
+  
+  return {
+    cycle,
+    cycleLabel,
+    metrics,
+    upcomingBills,
+    billsNext7Days,
+    billsRestOfCycle,
+    totalNext7Days,
+    totalRestOfCycle,
+    alerts,
+    accounts,
+    isLoading,
+  };
+}
+
+// Hook for historical pay cycles (for net trend chart)
+export function useHistoricalPayCycles(numberOfCycles: number = 6) {
+  const { user } = useAuth();
+  const { effectiveSettings, isLoading: settingsLoading } = usePaydaySettings();
+  const { allAccounts, isLoading: accountsLoading } = useAccounts();
+  
+  const paydayConfig = toPaydaySettings(effectiveSettings);
+  
+  // Generate past cycle dates
+  const cycles: PayCycle[] = [];
+  let currentDate = new Date();
+  
+  for (let i = 0; i < numberOfCycles; i++) {
+    const cycle = getPayCycleForDate(currentDate, paydayConfig);
+    cycles.push(cycle);
+    currentDate = subDays(cycle.start, 1); // Move to previous cycle
+  }
+  
+  return useQuery({
+    queryKey: ["historical-pay-cycles", user?.id, numberOfCycles, effectiveSettings.payday_date],
+    queryFn: async () => {
+      if (!user || allAccounts.length === 0) return [];
+      
+      const visibleAccounts = allAccounts.filter(a => !a.is_hidden);
+      const accountIds = visibleAccounts.map(a => a.id);
+      
+      // Get the earliest and latest dates we need
+      const earliest = cycles[cycles.length - 1].start;
+      const latest = cycles[0].end;
+      
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("amount, type, transaction_date")
+        .in("account_id", accountIds)
+        .gte("transaction_date", format(earliest, "yyyy-MM-dd"))
+        .lte("transaction_date", format(latest, "yyyy-MM-dd"));
+      
+      if (error) throw error;
+      
+      // Group by cycle
+      return cycles.map(cycle => {
+        const cycleTransactions = (data || []).filter(t => {
+          const date = new Date(t.transaction_date);
+          return (isAfter(date, cycle.start) || isSameDay(date, cycle.start)) &&
+                 (isBefore(date, cycle.end) || isSameDay(date, cycle.end));
+        });
+        
+        const income = cycleTransactions
+          .filter(t => t.type === "income")
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+        
+        const expenses = cycleTransactions
+          .filter(t => t.type === "expense")
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+        
+        return {
+          cycleStart: cycle.start,
+          cycleEnd: cycle.end,
+          label: format(cycle.start, "MMM"),
+          income,
+          expenses,
+          net: income - expenses,
+          hasData: cycleTransactions.length > 0,
+        };
+      }).reverse(); // Oldest first for chart
+    },
+    enabled: !!user && !settingsLoading && !accountsLoading && allAccounts.length > 0,
+  });
+}
