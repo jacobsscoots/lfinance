@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { format, addDays } from "date-fns";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -106,15 +106,15 @@ export function PriceComparisonDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Find Best Price</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-3xl">
+        <ResponsiveDialogHeader className="pr-8">
+          <ResponsiveDialogTitle>Find Best Price</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             {item?.brand ? `${item.brand} ` : ""}{item?.name}
             {item?.total_size && item?.size_unit && ` (${item.total_size}${item.size_unit})`}
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
 
         <div className="space-y-4">
           {/* Forecast info */}
@@ -263,7 +263,7 @@ export function PriceComparisonDialog({
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
