@@ -605,10 +605,24 @@ export function useMealPlanItems(weekStart: Date) {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       setLastCalculated(new Date());
-      toast.success(
-        `Generated exact portions for ${result.daysSucceeded}/${result.totalDays} days` +
-        (result.updated > 0 ? ` (${result.updated} items updated)` : "")
-      );
+      
+      // Provide clear feedback based on success rate
+      if (result.daysSucceeded === result.totalDays && result.totalDays > 0) {
+        toast.success(`Generated portions for all ${result.daysSucceeded} days (${result.updated} items)`);
+      } else if (result.daysSucceeded > 0) {
+        toast.warning(
+          `Generated portions for ${result.daysSucceeded}/${result.totalDays} days. ` +
+          `${result.totalDays - result.daysSucceeded} day(s) could not be solved within ±1g tolerance. ` +
+          `Check that your macro targets are mathematically achievable with the selected items.`
+        );
+      } else if (result.totalDays > 0) {
+        toast.error(
+          `No days could be solved. Your macro targets may not be achievable with the selected items and constraints. ` +
+          `Try adjusting targets or adding more variety of foods.`
+        );
+      } else {
+        toast.info("No meal plans with items to generate.");
+      }
     },
     onError: (error) => {
       toast.error("Failed to generate: " + error.message);
