@@ -437,15 +437,23 @@ function solveSimultaneous(
     const remainingFat = Math.max(0, targets.fat - proteinContrib.fat);
     const remainingCals = Math.max(0, targets.calories - proteinContrib.calories);
     
-    // Step 3: Size carb items to hit carb target
+    // Step 3: Size carb items to hit carb target with sensible minimums
+    // Rice/pasta/grains should have minimum 80g to be a realistic serving
+    const CARB_MIN_GRAMS = 80;
     if (carbItems.length > 0 && remainingCarbs > 0) {
       const totalCarbsPer100g = carbItems.reduce((sum, idx) => sum + items[idx].carbsPer100g, 0);
       if (totalCarbsPer100g > 0) {
         const gramsNeeded = (remainingCarbs / totalCarbsPer100g) * 100;
         carbItems.forEach(idx => {
-          grams[idx] = Math.max(settings.minGrams, Math.min(settings.maxGrams, gramsNeeded));
+          // Enforce minimum 80g for staple carbs (rice, pasta, etc.)
+          grams[idx] = Math.max(CARB_MIN_GRAMS, Math.min(settings.maxGrams, gramsNeeded));
         });
       }
+    } else if (carbItems.length > 0) {
+      // Even with no remaining carb target, give carb items a sensible minimum
+      carbItems.forEach(idx => {
+        grams[idx] = CARB_MIN_GRAMS;
+      });
     }
     
     // Step 4: Calculate remaining after carbs
@@ -499,6 +507,21 @@ function fineTuneToExact(
   const MICRO_TOLERANCE = 0.1;
   const MAX_PASSES = 20;
   
+  // Identify items that should NOT be adjusted (sauces/seasonings)
+  const lockedIndices = new Set<number>();
+  items.forEach((item, idx) => {
+    if (isSauceOrSeasoning(item.product)) {
+      lockedIndices.add(idx);
+    }
+  });
+  
+  // Helper to check if an index is adjustable
+  const isAdjustable = (idx: number): boolean => {
+    if (lockedIndices.has(idx)) return false;
+    if (mealType === "breakfast" && getBreakfastRole(items[idx].product) === "topper") return false;
+    return true;
+  };
+  
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const current = sumMacros(items, grams);
     const error = calculateMacroError(current, targets);
@@ -517,7 +540,7 @@ function fineTuneToExact(
       let bestProteinPer100g = 0;
       
       for (let i = 0; i < items.length; i++) {
-        if (mealType === "breakfast" && getBreakfastRole(items[i].product) === "topper") continue;
+        if (!isAdjustable(i)) continue;
         if (items[i].proteinPer100g > bestProteinPer100g) {
           bestIdx = i;
           bestProteinPer100g = items[i].proteinPer100g;
@@ -541,7 +564,7 @@ function fineTuneToExact(
       let lowestProteinImpact = Infinity;
       
       for (let i = 0; i < items.length; i++) {
-        if (mealType === "breakfast" && getBreakfastRole(items[i].product) === "topper") continue;
+        if (!isAdjustable(i)) continue;
         // Prefer items with high carbs but low protein to avoid disrupting protein
         const proteinRatio = items[i].proteinPer100g / (items[i].carbsPer100g || 1);
         if (items[i].carbsPer100g > 10 && proteinRatio < lowestProteinImpact) {
@@ -567,7 +590,7 @@ function fineTuneToExact(
       let bestFatPer100g = 0;
       
       for (let i = 0; i < items.length; i++) {
-        if (mealType === "breakfast" && getBreakfastRole(items[i].product) === "topper") continue;
+        if (!isAdjustable(i)) continue;
         if (items[i].fatPer100g > bestFatPer100g && items[i].fatPer100g > 5) {
           bestIdx = i;
           bestFatPer100g = items[i].fatPer100g;
@@ -590,7 +613,7 @@ function fineTuneToExact(
       let bestCalPer100g = 0;
       
       for (let i = 0; i < items.length; i++) {
-        if (mealType === "breakfast" && getBreakfastRole(items[i].product) === "topper") continue;
+        if (!isAdjustable(i)) continue;
         // Prefer non-protein-heavy items for calorie adjustment
         if (items[i].caloriesPer100g > bestCalPer100g && items[i].proteinPer100g < 15) {
           bestIdx = i;
@@ -598,10 +621,10 @@ function fineTuneToExact(
         }
       }
       
-      // Fallback to any item if no low-protein option
+      // Fallback to any adjustable item if no low-protein option
       if (bestIdx < 0) {
         for (let i = 0; i < items.length; i++) {
-          if (mealType === "breakfast" && getBreakfastRole(items[i].product) === "topper") continue;
+          if (!isAdjustable(i)) continue;
           if (items[i].caloriesPer100g > bestCalPer100g) {
             bestIdx = i;
             bestCalPer100g = items[i].caloriesPer100g;
