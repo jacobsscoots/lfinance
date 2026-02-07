@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { startOfMonth, endOfMonth } from "date-fns";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,8 @@ import { TransactionFilters } from "@/components/transactions/TransactionFilters
 import { TransactionFormDialog } from "@/components/transactions/TransactionFormDialog";
 import { DeleteTransactionDialog } from "@/components/transactions/DeleteTransactionDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePaydaySettings } from "@/hooks/usePaydaySettings";
+import { getPayCycleForDate, toPaydaySettings } from "@/lib/payCycle";
 import {
   Collapsible,
   CollapsibleContent,
@@ -18,10 +19,18 @@ import {
 } from "@/components/ui/collapsible";
 
 export default function Transactions() {
-  const [filters, setFilters] = useState<FilterType>({
-    dateFrom: startOfMonth(new Date()),
-    dateTo: endOfMonth(new Date()),
+  const { effectiveSettings } = usePaydaySettings();
+  
+  // Initialize with pay cycle dates
+  const [filters, setFilters] = useState<FilterType>(() => {
+    const paydaySettings = toPaydaySettings(effectiveSettings);
+    const cycle = getPayCycleForDate(new Date(), paydaySettings);
+    return {
+      dateFrom: cycle.start,
+      dateTo: cycle.end,
+    };
   });
+  
   const { transactions, isLoading } = useTransactions(filters);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
