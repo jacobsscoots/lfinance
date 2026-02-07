@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { startOfMonth, endOfMonth, addDays, isBefore, isAfter, format } from "date-fns";
-import { getCurrentPayCycle } from "@/lib/payday";
+import { getCurrentPayCycle, PaydaySettings } from "@/lib/payday";
+import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Transaction = Tables<"transactions">;
@@ -84,10 +85,17 @@ export function useMonthSummary(date: Date = new Date()) {
 // Hook for pay cycle spending summary
 export function usePayCycleSummary(date: Date = new Date()) {
   const { user } = useAuth();
-  const { start, end } = getCurrentPayCycle(date);
+  const { effectiveSettings } = usePaydaySettings();
+  
+  const paydayConfig: PaydaySettings = {
+    paydayDate: effectiveSettings.payday_date,
+    adjustmentRule: effectiveSettings.adjustment_rule,
+  };
+  
+  const { start, end } = getCurrentPayCycle(date, paydayConfig);
   
   return useQuery({
-    queryKey: ["pay-cycle-summary", user?.id, format(start, "yyyy-MM-dd")],
+    queryKey: ["pay-cycle-summary", user?.id, format(start, "yyyy-MM-dd"), effectiveSettings.payday_date, effectiveSettings.adjustment_rule],
     queryFn: async () => {
       if (!user) return { spent: 0, budget: 0, percentUsed: 0 };
       
