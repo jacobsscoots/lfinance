@@ -17,7 +17,8 @@ import {
   MacroTotals, 
   getTargetsForDate, 
   getBalanceWarnings,
-  BalanceWarning 
+  BalanceWarning,
+  WeeklyTargetsOverride 
 } from "@/lib/mealCalculations";
 import { MealBreakdownList } from "./MealBreakdownList";
 import { DayMacroSummary } from "./DayMacroSummary";
@@ -30,6 +31,7 @@ interface DayDetailModalProps {
   dayMacros: DayMacros;
   settings: NutritionSettings | null | undefined;
   onEdit?: () => void;
+  weeklyOverride?: WeeklyTargetsOverride | null;
 }
 
 function getDiffText(actual: number, target: number, unit: string): string {
@@ -51,11 +53,12 @@ export function DayDetailModal({
   plan, 
   dayMacros, 
   settings,
-  onEdit 
+  onEdit,
+  weeklyOverride 
 }: DayDetailModalProps) {
   const date = parseISO(plan.meal_date);
   const isTargetMode = settings?.mode === "target_based";
-  const targets = settings ? getTargetsForDate(date, settings) : {
+  const targets = settings ? getTargetsForDate(date, settings, weeklyOverride) : {
     calories: 2000,
     protein: 150,
     carbs: 200,

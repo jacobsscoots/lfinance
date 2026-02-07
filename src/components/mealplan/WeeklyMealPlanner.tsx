@@ -341,6 +341,7 @@ export function WeeklyMealPlanner() {
                   weekStart={weekRange.start}
                   isBlackout={isDateBlackout(mealPlans[selectedDayIndex].meal_date, blackouts)}
                   blackoutReason={getBlackoutReason(mealPlans[selectedDayIndex].meal_date, blackouts)}
+                  weeklyOverride={weeklyOverride}
                 />
               )}
             </div>
@@ -357,6 +358,7 @@ export function WeeklyMealPlanner() {
                   weekStart={weekRange.start}
                   isBlackout={isDateBlackout(plan.meal_date, blackouts)}
                   blackoutReason={getBlackoutReason(plan.meal_date, blackouts)}
+                  weeklyOverride={weeklyOverride}
                 />
               ))}
             </div>
