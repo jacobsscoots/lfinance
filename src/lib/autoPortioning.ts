@@ -1655,8 +1655,18 @@ export function calculateDayPortions(
   const proDiff = Math.abs(totalAchieved.protein - dailyTargets.protein);
   const carbDiff = Math.abs(totalAchieved.carbs - dailyTargets.carbs);
   const fatDiff = Math.abs(totalAchieved.fat - dailyTargets.fat);
-  
-  const success = calDiff < 2 && proDiff < 1 && carbDiff < 1 && fatDiff < 1;
+
+  // Tolerances: macros within ±1g (inclusive), calories within ±5 kcal.
+  // Calories can be a few kcal off due to integer-gram rounding + derived fat.
+  const CAL_TOLERANCE = 5;
+  const MACRO_TOLERANCE = 1;
+
+  const success =
+    calDiff <= CAL_TOLERANCE &&
+    proDiff <= MACRO_TOLERANCE &&
+    carbDiff <= MACRO_TOLERANCE &&
+    fatDiff <= MACRO_TOLERANCE;
+
   
   if (!success) {
     if (proDiff >= 1) warnings.push(`Protein: ${Math.round(totalAchieved.protein)}g (target: ${dailyTargets.protein}g)`);
