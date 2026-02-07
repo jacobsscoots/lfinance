@@ -91,6 +91,28 @@ export function calculateMealMacros(
   return { mealType, status, ...totals };
 }
 
+// Get targets for a specific date (weekday vs weekend)
+export function getTargetsForDate(date: Date, settings: NutritionSettings): MacroTotals {
+  const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+  if (isWeekend && settings.weekend_targets_enabled) {
+    return {
+      calories: settings.weekend_calorie_target ?? settings.daily_calorie_target ?? 2000,
+      protein: settings.weekend_protein_target_grams ?? settings.protein_target_grams ?? 150,
+      carbs: settings.weekend_carbs_target_grams ?? settings.carbs_target_grams ?? 200,
+      fat: settings.weekend_fat_target_grams ?? settings.fat_target_grams ?? 65,
+    };
+  }
+
+  return {
+    calories: settings.daily_calorie_target ?? 2000,
+    protein: settings.protein_target_grams ?? 150,
+    carbs: settings.carbs_target_grams ?? 200,
+    fat: settings.fat_target_grams ?? 65,
+  };
+}
+
 // Calculate macros for a day
 export function calculateDayMacros(
   plan: MealPlan,
@@ -117,11 +139,15 @@ export function calculateDayMacros(
 
   let targetDiff: MacroTotals | undefined;
   if (settings && settings.mode === "target_based") {
+    // Use day-specific targets (weekday vs weekend)
+    const planDate = new Date(plan.meal_date);
+    const targets = getTargetsForDate(planDate, settings);
+    
     targetDiff = {
-      calories: totals.calories - (settings.daily_calorie_target || 0),
-      protein: totals.protein - (settings.protein_target_grams || 0),
-      carbs: totals.carbs - (settings.carbs_target_grams || 0),
-      fat: totals.fat - (settings.fat_target_grams || 0),
+      calories: totals.calories - targets.calories,
+      protein: totals.protein - targets.protein,
+      carbs: totals.carbs - targets.carbs,
+      fat: totals.fat - targets.fat,
     };
   }
 

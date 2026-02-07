@@ -1,0 +1,342 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+interface ExtractedNutrition {
+  name?: string;
+  brand?: string;
+  image_url?: string;
+  price?: number;
+  offer_price?: number;
+  offer_label?: string;
+  pack_size_grams?: number;
+  energy_kj?: number;
+  energy_kcal?: number;
+  fat?: number;
+  saturates?: number;
+  carbohydrate?: number;
+  sugars?: number;
+  fibre?: number;
+  protein?: number;
+  salt?: number;
+  source_url?: string;
+  confidence: Record<string, "high" | "medium" | "low">;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { method, content } = await req.json();
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
+    }
+
+    let result: ExtractedNutrition;
+
+    if (method === "image") {
+      result = await extractFromImage(content, LOVABLE_API_KEY);
+    } else if (method === "text") {
+      result = extractFromText(content);
+    } else if (method === "url") {
+      result = await extractFromUrl(content, LOVABLE_API_KEY);
+    } else {
+      throw new Error("Invalid method. Use 'image', 'text', or 'url'");
+    }
+
+    return new Response(JSON.stringify({ success: true, data: result }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("extract-nutrition error:", e);
+    return new Response(
+      JSON.stringify({ success: false, error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
+
+async function extractFromImage(base64Image: string, apiKey: string): Promise<ExtractedNutrition> {
+  const systemPrompt = `You are a nutrition label extraction assistant. Extract nutrition information from the provided image of a food product label.
+
+Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
+{
+  "name": "product name if visible",
+  "brand": "brand name if visible",
+  "pack_size_grams": number or null,
+  "energy_kj": number per 100g,
+  "energy_kcal": number per 100g,
+  "fat": number per 100g,
+  "saturates": number per 100g (of which saturates),
+  "carbohydrate": number per 100g,
+  "sugars": number per 100g (of which sugars),
+  "fibre": number per 100g,
+  "protein": number per 100g,
+  "salt": number per 100g (convert from sodium if needed: salt = sodium × 2.5),
+  "confidence": { "field_name": "high" | "medium" | "low" for each extracted field }
+}
+
+Important:
+- All nutrition values should be per 100g
+- If the label shows per serving, note the serving size and convert to per 100g
+- Mark confidence as "low" if values were converted from sodium or estimated
+- Mark confidence as "high" if clearly visible and unambiguous
+- Mark confidence as "medium" if partially visible or slightly unclear`;
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extract the nutrition information from this food label image:" },
+            { type: "image_url", image_url: { url: base64Image } },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("AI API error:", response.status, errorText);
+    if (response.status === 429) {
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required. Please add credits to your workspace.");
+    }
+    throw new Error("Failed to process image");
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "";
+  
+  // Extract JSON from response
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Could not parse nutrition data from image");
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      ...parsed,
+      confidence: parsed.confidence || {},
+    };
+  } catch {
+    throw new Error("Could not parse nutrition data from image");
+  }
+}
+
+function extractFromText(text: string): ExtractedNutrition {
+  const result: ExtractedNutrition = { confidence: {} };
+  
+  const patterns: Record<string, { patterns: RegExp[]; field: keyof ExtractedNutrition }> = {
+    energy_kj: {
+      patterns: [
+        /energy\s*[\(\[]?\s*kj\s*[\)\]]?\s*:?\s*([\d,.]+)/i,
+        /kilojoules?\s*:?\s*([\d,.]+)/i,
+        /([\d,.]+)\s*kj/i,
+      ],
+      field: "energy_kj",
+    },
+    energy_kcal: {
+      patterns: [
+        /energy\s*[\(\[]?\s*kcal\s*[\)\]]?\s*:?\s*([\d,.]+)/i,
+        /calories?\s*:?\s*([\d,.]+)/i,
+        /([\d,.]+)\s*kcal/i,
+      ],
+      field: "energy_kcal",
+    },
+    fat: {
+      patterns: [/(?:total\s+)?fat\s*:?\s*([\d,.]+)\s*g/i],
+      field: "fat",
+    },
+    saturates: {
+      patterns: [
+        /(?:of which\s+)?saturates?\s*:?\s*([\d,.]+)\s*g/i,
+        /saturated\s+fat\s*:?\s*([\d,.]+)\s*g/i,
+      ],
+      field: "saturates",
+    },
+    carbohydrate: {
+      patterns: [/carbohydrates?\s*:?\s*([\d,.]+)\s*g/i],
+      field: "carbohydrate",
+    },
+    sugars: {
+      patterns: [/(?:of which\s+)?sugars?\s*:?\s*([\d,.]+)\s*g/i],
+      field: "sugars",
+    },
+    fibre: {
+      patterns: [/(?:dietary\s+)?fibr?e\s*:?\s*([\d,.]+)\s*g/i],
+      field: "fibre",
+    },
+    protein: {
+      patterns: [/proteins?\s*:?\s*([\d,.]+)\s*g/i],
+      field: "protein",
+    },
+    salt: {
+      patterns: [/salt\s*:?\s*([\d,.]+)\s*g/i],
+      field: "salt",
+    },
+  };
+
+  const normalizedText = text.replace(/\s+/g, " ");
+
+  for (const [, { patterns: patternList, field }] of Object.entries(patterns)) {
+    for (const pattern of patternList) {
+      const match = normalizedText.match(pattern);
+      if (match?.[1]) {
+        const value = parseFloat(match[1].replace(/,/g, ""));
+        if (!isNaN(value)) {
+          (result as any)[field] = value;
+          result.confidence[field] = "medium";
+          break;
+        }
+      }
+    }
+  }
+
+  // Check for sodium and convert to salt
+  const sodiumMatch = normalizedText.match(/sodium\s*:?\s*([\d,.]+)\s*(?:m?g)?/i);
+  if (sodiumMatch?.[1] && !result.salt) {
+    const sodium = parseFloat(sodiumMatch[1].replace(/,/g, ""));
+    if (!isNaN(sodium)) {
+      // Sodium is usually in mg, salt in g
+      result.salt = (sodium / 1000) * 2.5;
+      result.confidence.salt = "low";
+    }
+  }
+
+  return result;
+}
+
+async function extractFromUrl(url: string, apiKey: string): Promise<ExtractedNutrition> {
+  // Fetch the webpage
+  let html: string;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; NutritionBot/1.0)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch URL: ${response.status}`);
+    }
+    
+    html = await response.text();
+  } catch (e) {
+    throw new Error("Could not access this URL. The website may be blocking automated access.");
+  }
+
+  // Try to find JSON-LD first
+  const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  let structuredData: any = null;
+
+  if (jsonLdMatch) {
+    for (const match of jsonLdMatch) {
+      const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, "").trim();
+      try {
+        const parsed = JSON.parse(jsonContent);
+        if (parsed["@type"] === "Product" || parsed["@type"]?.includes?.("Product")) {
+          structuredData = parsed;
+          break;
+        }
+      } catch {
+        // Continue to next script
+      }
+    }
+  }
+
+  // Use AI to extract from HTML if no structured data
+  const systemPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this HTML content.
+
+Return ONLY a valid JSON object with these fields (use null for any values you cannot determine):
+{
+  "name": "product name",
+  "brand": "brand name",
+  "image_url": "main product image URL",
+  "price": number (standard price in pounds),
+  "offer_price": number or null (sale/offer price),
+  "offer_label": "offer description" or null,
+  "pack_size_grams": number or null,
+  "energy_kj": number per 100g,
+  "energy_kcal": number per 100g,
+  "fat": number per 100g,
+  "saturates": number per 100g,
+  "carbohydrate": number per 100g,
+  "sugars": number per 100g,
+  "fibre": number per 100g,
+  "protein": number per 100g,
+  "salt": number per 100g,
+  "confidence": { "field_name": "high" | "medium" | "low" for each extracted field }
+}
+
+Look for nutrition tables, product details, and pricing information.
+If nutrition is shown per serving, convert to per 100g using the serving size.
+For UK supermarkets (Tesco, Sainsbury's, Asda, etc.), the format is usually consistent.`;
+
+  // Truncate HTML to avoid token limits
+  const truncatedHtml = html.substring(0, 50000);
+
+  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Extract product information from this webpage HTML:\n\n${truncatedHtml}` },
+      ],
+    }),
+  });
+
+  if (!aiResponse.ok) {
+    if (aiResponse.status === 429) {
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (aiResponse.status === 402) {
+      throw new Error("Payment required. Please add credits to your workspace.");
+    }
+    throw new Error("Failed to extract data from URL");
+  }
+
+  const aiData = await aiResponse.json();
+  const content = aiData.choices?.[0]?.message?.content || "";
+
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Could not extract product data from this URL");
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      ...parsed,
+      source_url: url,
+      confidence: parsed.confidence || {},
+    };
+  } catch {
+    throw new Error("Could not parse product data from URL");
+  }
+}

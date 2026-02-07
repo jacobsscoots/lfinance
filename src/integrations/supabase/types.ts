@@ -361,50 +361,89 @@ export type Database = {
       }
       products: {
         Row: {
+          brand: string | null
           calories_per_100g: number
           carbs_per_100g: number
           created_at: string
+          energy_kj_per_100g: number | null
           fat_per_100g: number
+          fibre_per_100g: number | null
           fixed_portion_grams: number | null
           id: string
           ignore_macros: boolean
+          image_url: string | null
           name: string
+          offer_label: string | null
+          offer_price: number | null
           pack_size_grams: number | null
           price: number
           product_type: string
           protein_per_100g: number
+          salt_per_100g: number | null
+          saturates_per_100g: number | null
+          serving_basis: string
+          serving_size_grams: number | null
+          source_url: string | null
+          storage_notes: string | null
+          sugars_per_100g: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          brand?: string | null
           calories_per_100g?: number
           carbs_per_100g?: number
           created_at?: string
+          energy_kj_per_100g?: number | null
           fat_per_100g?: number
+          fibre_per_100g?: number | null
           fixed_portion_grams?: number | null
           id?: string
           ignore_macros?: boolean
+          image_url?: string | null
           name: string
+          offer_label?: string | null
+          offer_price?: number | null
           pack_size_grams?: number | null
           price?: number
           product_type?: string
           protein_per_100g?: number
+          salt_per_100g?: number | null
+          saturates_per_100g?: number | null
+          serving_basis?: string
+          serving_size_grams?: number | null
+          source_url?: string | null
+          storage_notes?: string | null
+          sugars_per_100g?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          brand?: string | null
           calories_per_100g?: number
           carbs_per_100g?: number
           created_at?: string
+          energy_kj_per_100g?: number | null
           fat_per_100g?: number
+          fibre_per_100g?: number | null
           fixed_portion_grams?: number | null
           id?: string
           ignore_macros?: boolean
+          image_url?: string | null
           name?: string
+          offer_label?: string | null
+          offer_price?: number | null
           pack_size_grams?: number | null
           price?: number
           product_type?: string
           protein_per_100g?: number
+          salt_per_100g?: number | null
+          saturates_per_100g?: number | null
+          serving_basis?: string
+          serving_size_grams?: number | null
+          source_url?: string | null
+          storage_notes?: string | null
+          sugars_per_100g?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -545,6 +584,11 @@ export type Database = {
           protein_target_grams: number | null
           updated_at: string
           user_id: string
+          weekend_calorie_target: number | null
+          weekend_carbs_target_grams: number | null
+          weekend_fat_target_grams: number | null
+          weekend_protein_target_grams: number | null
+          weekend_targets_enabled: boolean
         }
         Insert: {
           carbs_target_grams?: number | null
@@ -556,6 +600,11 @@ export type Database = {
           protein_target_grams?: number | null
           updated_at?: string
           user_id: string
+          weekend_calorie_target?: number | null
+          weekend_carbs_target_grams?: number | null
+          weekend_fat_target_grams?: number | null
+          weekend_protein_target_grams?: number | null
+          weekend_targets_enabled?: boolean
         }
         Update: {
           carbs_target_grams?: number | null
@@ -567,6 +616,11 @@ export type Database = {
           protein_target_grams?: number | null
           updated_at?: string
           user_id?: string
+          weekend_calorie_target?: number | null
+          weekend_carbs_target_grams?: number | null
+          weekend_fat_target_grams?: number | null
+          weekend_protein_target_grams?: number | null
+          weekend_targets_enabled?: boolean
         }
         Relationships: []
       }
