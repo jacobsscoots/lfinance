@@ -1049,8 +1049,15 @@ export function calculateDayPortions(
       });
     });
     
-    // Step 2: Rebalance using macro-appropriate items to compensate for drift
-    // Only adjust items that weren't in the rounding pass (main meal items, not constrained ones)
+    // Step 2: ITERATIVE PRECISION LOOP - run until ALL macros within ±1g
+    // This replaces the single-pass ±1g adjustment with calculated exact corrections
+    
+    const MAX_PRECISION_ITERATIONS = 50;
+    const MACRO_TOLERANCE = 1.0;  // ±1g for protein, carbs, fat
+    const CAL_TOLERANCE = 5.0;    // ±5 kcal for calories
+    const MAX_STEP_SIZE = 25;     // Max gram adjustment per iteration to avoid oscillation
+    
+    // Filter items available for rebalancing (exclude sauces, toppers, etc.)
     const rebalanceItems = allEditables.filter(e => {
       if (isSauceOrSeasoning(e.item.product)) return false;
       const role = e.mealType === "breakfast" ? getBreakfastRole(e.item.product) : null;
@@ -1058,96 +1065,230 @@ export function calculateDayPortions(
       return true;
     });
     
-    // Rebalance protein (if drift >= 0.5g)
-    if (Math.abs(roundingDrift.protein) >= 0.5 && rebalanceItems.length > 0) {
-      const proteinSources = rebalanceItems
-        .filter(e => isHighProteinSource(e.item.product))
-        .sort((a, b) => b.item.proteinPer100g - a.item.proteinPer100g);
-      
-      if (proteinSources.length > 0) {
-        const best = proteinSources[0];
-        const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-        // Adjust by 1g in opposite direction of drift
-        const adjustment = roundingDrift.protein > 0 ? -1 : 1;
-        const role = best.mealType === "breakfast" ? getBreakfastRole(best.item.product) : null;
-        const minG = role === "base" && getYoghurtType(best.item.product) === "primary" ? 200 : settings.minGrams;
-        const maxG = role === "base" && getYoghurtType(best.item.product) === "primary" ? 300 : getMaxPortion(best.item.product, settings);
-        const newGrams = Math.max(minG, Math.min(maxG, currentGrams + adjustment));
-        allItemGrams.set(best.item.itemId, newGrams);
-      }
-    }
+    // Categorize items by their best macro contribution
+    const proteinSources = rebalanceItems
+      .filter(e => isHighProteinSource(e.item.product) && e.item.proteinPer100g > 5)
+      .sort((a, b) => {
+        // Prefer items with highest protein density and lowest carb/fat impact
+        const aRatio = a.item.proteinPer100g / (a.item.carbsPer100g + a.item.fatPer100g + 1);
+        const bRatio = b.item.proteinPer100g / (b.item.carbsPer100g + b.item.fatPer100g + 1);
+        return bRatio - aRatio;
+      });
     
-    // Rebalance carbs (if drift >= 0.5g)
-    if (Math.abs(roundingDrift.carbs) >= 0.5 && rebalanceItems.length > 0) {
-      const carbSources = rebalanceItems
-        .filter(e => e.item.carbsPer100g > 15 && e.item.proteinPer100g < 10)
-        .sort((a, b) => b.item.carbsPer100g - a.item.carbsPer100g);
-      
-      if (carbSources.length > 0) {
-        const best = carbSources[0];
-        const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-        const adjustment = roundingDrift.carbs > 0 ? -1 : 1;
-        const maxG = getMaxPortion(best.item.product, settings);
-        const newGrams = Math.max(settings.minGrams, Math.min(maxG, currentGrams + adjustment));
-        allItemGrams.set(best.item.itemId, newGrams);
-      }
-    }
+    const carbSources = rebalanceItems
+      .filter(e => e.item.carbsPer100g > 15 && e.item.proteinPer100g < 10)
+      .sort((a, b) => {
+        // Prefer items with highest carb density and lowest fat impact
+        const aRatio = a.item.carbsPer100g / (a.item.fatPer100g + 1);
+        const bRatio = b.item.carbsPer100g / (b.item.fatPer100g + 1);
+        return bRatio - aRatio;
+      });
     
-    // Rebalance fat (if drift >= 0.5g)
-    if (Math.abs(roundingDrift.fat) >= 0.5 && rebalanceItems.length > 0) {
-      const fatSources = rebalanceItems
-        .filter(e => e.item.fatPer100g > 5)
-        .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
+    const fatSources = rebalanceItems
+      .filter(e => e.item.fatPer100g > 5)
+      .sort((a, b) => {
+        // Prefer items with highest fat density and lowest protein/carb impact
+        const aRatio = a.item.fatPer100g / (a.item.proteinPer100g + a.item.carbsPer100g + 1);
+        const bRatio = b.item.fatPer100g / (b.item.proteinPer100g + b.item.carbsPer100g + 1);
+        return bRatio - aRatio;
+      });
+    
+    // Helper to get min/max constraints for an item
+    const getItemConstraints = (item: EditableItem, mealType: MealType) => {
+      const role = mealType === "breakfast" ? getBreakfastRole(item.product) : null;
+      let minGrams = settings.minGrams;
+      let maxGrams = getMaxPortion(item.product, settings);
       
-      if (fatSources.length > 0) {
-        const best = fatSources[0];
-        const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-        const adjustment = roundingDrift.fat > 0 ? -1 : 1;
-        const maxG = getMaxPortion(best.item.product, settings);
-        const newGrams = Math.max(settings.minGrams, Math.min(maxG, currentGrams + adjustment));
-        allItemGrams.set(best.item.itemId, newGrams);
+      if (role === "base") {
+        const yogType = getYoghurtType(item.product);
+        if (yogType === "primary") {
+          minGrams = 200;
+          maxGrams = 300;
+        } else if (yogType === "secondary") {
+          minGrams = 50;
+          maxGrams = 150;
+        }
+      }
+      
+      // Staple carbs (rice/pasta) have 80g minimum
+      if (item.carbsPer100g > 25 && item.proteinPer100g < 10) {
+        minGrams = Math.max(minGrams, 80);
+      }
+      
+      return { minGrams, maxGrams };
+    };
+    
+    let noProgressCount = 0;
+    let lastTotalError = Infinity;
+    
+    for (let iteration = 0; iteration < MAX_PRECISION_ITERATIONS; iteration++) {
+      // Calculate current totals
+      const current = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
+      
+      const proErr = dailyTargets.protein - current.protein;
+      const carbErr = dailyTargets.carbs - current.carbs;
+      const fatErr = dailyTargets.fat - current.fat;
+      const calErr = dailyTargets.calories - current.calories;
+      
+      // Check if all macros are within tolerance
+      if (Math.abs(proErr) <= MACRO_TOLERANCE && 
+          Math.abs(carbErr) <= MACRO_TOLERANCE && 
+          Math.abs(fatErr) <= MACRO_TOLERANCE && 
+          Math.abs(calErr) <= CAL_TOLERANCE) {
+        break; // Success! All targets hit
+      }
+      
+      // Track progress to detect oscillation
+      const totalError = Math.abs(proErr) + Math.abs(carbErr) + Math.abs(fatErr);
+      if (totalError >= lastTotalError - 0.1) {
+        noProgressCount++;
+        if (noProgressCount > 5) {
+          // No progress for 5 iterations - break to avoid infinite loop
+          break;
+        }
+      } else {
+        noProgressCount = 0;
+      }
+      lastTotalError = totalError;
+      
+      // Prioritize adjustments by error magnitude
+      const errors = [
+        { type: "protein", err: proErr, sources: proteinSources, macroPer100g: (s: EditableItem) => s.proteinPer100g },
+        { type: "carbs", err: carbErr, sources: carbSources, macroPer100g: (s: EditableItem) => s.carbsPer100g },
+        { type: "fat", err: fatErr, sources: fatSources, macroPer100g: (s: EditableItem) => s.fatPer100g },
+      ].sort((a, b) => Math.abs(b.err) - Math.abs(a.err));
+      
+      // Adjust the macro with the largest error first
+      for (const { err, sources, macroPer100g } of errors) {
+        if (Math.abs(err) <= MACRO_TOLERANCE || sources.length === 0) continue;
+        
+        // Try each source in order until one can be adjusted
+        for (const source of sources) {
+          const currentGrams = allItemGrams.get(source.item.itemId) || 0;
+          const { minGrams, maxGrams } = getItemConstraints(source.item, source.mealType);
+          
+          // Calculate exact grams needed to fix this error
+          const macroDensity = macroPer100g(source.item);
+          if (macroDensity <= 0) continue;
+          
+          let gramsNeeded = (err / macroDensity) * 100;
+          
+          // Cap step size to avoid oscillation
+          gramsNeeded = Math.max(-MAX_STEP_SIZE, Math.min(MAX_STEP_SIZE, gramsNeeded));
+          
+          // Calculate new grams and clamp to constraints
+          let newGrams = currentGrams + gramsNeeded;
+          newGrams = Math.max(minGrams, Math.min(maxGrams, newGrams));
+          
+          // Only apply if it would make meaningful progress
+          const actualAdjustment = newGrams - currentGrams;
+          if (Math.abs(actualAdjustment) >= 0.5) {
+            // Round to integer
+            allItemGrams.set(source.item.itemId, Math.round(newGrams));
+            break; // Made an adjustment, move to next iteration
+          }
+        }
+        
+        // Only adjust one macro per iteration to maintain stability
+        break;
       }
     }
   };
   
   integerRoundingPass();
 
-  // === CARB REDUCTION PRIORITY PASS ===
-  // If carbs are still over target after rounding, reduce high-carb items first
+  // === FINAL CARB REDUCTION PASS ===
+  // If carbs are still over target after precision loop, do final reduction
   totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
   let carbOverage = totalAchieved.carbs - dailyTargets.carbs;
   
-  if (carbOverage > 0.5) {
-    // Find high-carb items (rice, pasta, granola) to reduce
+  if (carbOverage > 1) {
     const carbSources = allEditables
       .filter(e => e.item.carbsPer100g > 20)
       .sort((a, b) => b.item.carbsPer100g - a.item.carbsPer100g);
     
     for (const source of carbSources) {
-      if (carbOverage <= 0.5) break;
+      if (carbOverage <= 1) break;
       
       const currentGrams = allItemGrams.get(source.item.itemId) || 0;
       const role = source.mealType === "breakfast" ? getBreakfastRole(source.item.product) : null;
       
-      // Determine min based on role
       let minForItem = settings.minGrams;
       if (role === "topper") minForItem = 25;
       else if (role === "secondary") minForItem = 80;
-      else if (source.item.carbsPer100g > 25 && source.item.proteinPer100g < 10) minForItem = 80; // Rice/pasta min
+      else if (source.item.carbsPer100g > 25 && source.item.proteinPer100g < 10) minForItem = 80;
       
-      // Calculate how much to reduce (max 5g per pass to avoid overshooting)
       const maxReduction = currentGrams - minForItem;
       if (maxReduction > 0) {
-        const reduction = Math.min(5, maxReduction);
-        const newGrams = currentGrams - reduction;
+        // Calculate exact reduction needed
+        const gramsToRemove = Math.min(maxReduction, (carbOverage / source.item.carbsPer100g) * 100);
+        const reduction = Math.max(1, Math.round(gramsToRemove));
+        const newGrams = Math.round(currentGrams - reduction);
         allItemGrams.set(source.item.itemId, newGrams);
         
-        // Update carb overage
-        const carbReduction = (reduction / 100) * source.item.carbsPer100g;
-        carbOverage -= carbReduction;
+        carbOverage -= (reduction / 100) * source.item.carbsPer100g;
       }
     }
   }
+  
+  // === FINAL PRECISION VERIFICATION PASS ===
+  // One last check to ensure we're within tolerance, with small corrections if needed
+  totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
+  
+  const finalProErr = dailyTargets.protein - totalAchieved.protein;
+  const finalCarbErr = dailyTargets.carbs - totalAchieved.carbs;
+  const finalFatErr = dailyTargets.fat - totalAchieved.fat;
+  
+  // Make micro-corrections if still outside tolerance (adjust by 1-2g)
+  const microCorrect = (
+    sources: { item: EditableItem; mealType: MealType }[], 
+    err: number, 
+    macroPer100g: (item: EditableItem) => number
+  ) => {
+    if (Math.abs(err) <= 1 || sources.length === 0) return;
+    
+    for (const source of sources) {
+      const currentGrams = allItemGrams.get(source.item.itemId) || 0;
+      const role = source.mealType === "breakfast" ? getBreakfastRole(source.item.product) : null;
+      
+      let minGrams = settings.minGrams;
+      let maxGrams = getMaxPortion(source.item.product, settings);
+      if (role === "base") {
+        const yogType = getYoghurtType(source.item.product);
+        if (yogType === "primary") { minGrams = 200; maxGrams = 300; }
+        else if (yogType === "secondary") { minGrams = 50; maxGrams = 150; }
+      }
+      
+      const density = macroPer100g(source.item);
+      if (density <= 0) continue;
+      
+      const gramsNeeded = Math.round((err / density) * 100);
+      if (Math.abs(gramsNeeded) >= 1) {
+        const newGrams = Math.max(minGrams, Math.min(maxGrams, currentGrams + gramsNeeded));
+        if (newGrams !== currentGrams) {
+          allItemGrams.set(source.item.itemId, newGrams);
+          break;
+        }
+      }
+    }
+  };
+  
+  // Build source lists for micro-corrections
+  const finalProteinSources = allEditables
+    .filter(e => !isSauceOrSeasoning(e.item.product) && isHighProteinSource(e.item.product))
+    .sort((a, b) => b.item.proteinPer100g - a.item.proteinPer100g);
+  
+  const finalCarbSources = allEditables
+    .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.carbsPer100g > 15)
+    .sort((a, b) => b.item.carbsPer100g - a.item.carbsPer100g);
+  
+  const finalFatSources = allEditables
+    .filter(e => !isSauceOrSeasoning(e.item.product) && e.item.fatPer100g > 5)
+    .sort((a, b) => b.item.fatPer100g - a.item.fatPer100g);
+  
+  microCorrect(finalProteinSources, finalProErr, i => i.proteinPer100g);
+  microCorrect(finalCarbSources, finalCarbErr, i => i.carbsPer100g);
+  microCorrect(finalFatSources, finalFatErr, i => i.fatPer100g);
 
   // Final calculation
   totalAchieved = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
