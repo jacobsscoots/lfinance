@@ -10,7 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet, Mail } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
@@ -26,6 +31,7 @@ import {
 } from "@/lib/payCycle";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "sonner";
 
 interface TransactionFiltersProps {
   filters: FilterType;
@@ -294,6 +300,29 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Gmail Integration Placeholder */}
+        <div className="pt-2 border-t">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="w-full gap-2" 
+                disabled
+                onClick={() => toast.info("Gmail integration coming soon!")}
+              >
+                <Mail className="h-4 w-4" />
+                Connect Gmail (Coming Soon)
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="text-sm">
+                Auto-import receipts from your email. Requires Gmail OAuth access 
+                (gmail.readonly scope) to scan for order confirmations and receipt attachments.
+              </p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </CardContent>
     </Card>

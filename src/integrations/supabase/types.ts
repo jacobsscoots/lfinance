@@ -183,6 +183,7 @@ export type Database = {
         Row: {
           account_id: string | null
           amount: number
+          bill_type: string | null
           category_id: string | null
           created_at: string
           due_date_rule: string
@@ -191,6 +192,8 @@ export type Database = {
           frequency: Database["public"]["Enums"]["bill_frequency"]
           id: string
           is_active: boolean | null
+          is_subscription: boolean | null
+          is_variable: boolean | null
           name: string
           next_review_date: string | null
           notes: string | null
@@ -202,6 +205,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           amount: number
+          bill_type?: string | null
           category_id?: string | null
           created_at?: string
           due_date_rule?: string
@@ -210,6 +214,8 @@ export type Database = {
           frequency?: Database["public"]["Enums"]["bill_frequency"]
           id?: string
           is_active?: boolean | null
+          is_subscription?: boolean | null
+          is_variable?: boolean | null
           name: string
           next_review_date?: string | null
           notes?: string | null
@@ -221,6 +227,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           amount?: number
+          bill_type?: string | null
           category_id?: string | null
           created_at?: string
           due_date_rule?: string
@@ -229,6 +236,8 @@ export type Database = {
           frequency?: Database["public"]["Enums"]["bill_frequency"]
           id?: string
           is_active?: boolean | null
+          is_subscription?: boolean | null
+          is_variable?: boolean | null
           name?: string
           next_review_date?: string | null
           notes?: string | null
@@ -1388,6 +1397,7 @@ export type Database = {
         | "monthly"
         | "quarterly"
         | "yearly"
+        | "biannual"
       transaction_type: "income" | "expense"
     }
     CompositeTypes: {
@@ -1522,6 +1532,7 @@ export const Constants = {
         "monthly",
         "quarterly",
         "yearly",
+        "biannual",
       ],
       transaction_type: ["income", "expense"],
     },

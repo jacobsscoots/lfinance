@@ -149,6 +149,27 @@ describe("Bill Occurrence Generation - Yearly", () => {
   });
 });
 
+describe("Bill Occurrence Generation - Biannual", () => {
+  it("generates occurrences every 6 months", () => {
+    const bill = createMockBill({ 
+      frequency: "biannual" as any,
+      due_day: 15,
+      start_date: "2025-01-15" // Started Jan 15, 2025
+    });
+    
+    // Check full year range
+    const rangeStart = new Date(2025, 0, 1); // Jan 1, 2025
+    const rangeEnd = new Date(2025, 11, 31); // Dec 31, 2025
+    
+    const occurrences = getBillOccurrencesInRange([bill], rangeStart, rangeEnd);
+    
+    // Should have 2 occurrences: Jan 15 and Jul 15
+    expect(occurrences).toHaveLength(2);
+    expect(occurrences[0].dueDate.getMonth()).toBe(0); // January
+    expect(occurrences[1].dueDate.getMonth()).toBe(6); // July
+  });
+});
+
 describe("Bill Occurrence - Range Queries", () => {
   it("generates occurrences across multiple months", () => {
     const bill = createMockBill({ frequency: "monthly", due_day: 15 });

@@ -127,28 +127,34 @@ export function ReceiptPreviewDialog({
           {!isUploading && (
             <div
               className={cn(
-                "relative flex items-center justify-center rounded-lg border-2 border-dashed bg-muted/50 min-h-[200px]",
+                "relative flex items-center justify-center rounded-lg border-2 border-dashed bg-muted/50",
+                hasReceipt && signedUrl && !isPdf ? "min-h-[300px] max-h-[60vh]" : "min-h-[200px]",
                 !hasReceipt && "cursor-pointer hover:border-primary/50 hover:bg-muted"
               )}
               onClick={!hasReceipt ? handleUploadClick : undefined}
             >
               {isLoadingUrl ? (
-                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <div className="flex flex-col items-center gap-2 text-muted-foreground p-6">
                   <Loader2 className="h-8 w-8 animate-spin" />
                   <span className="text-sm">Loading receipt...</span>
                 </div>
               ) : hasReceipt && signedUrl ? (
                 isPdf ? (
-                  <div className="flex flex-col items-center gap-3 p-6">
-                    <FileText className="h-16 w-16 text-destructive" />
-                    <span className="text-sm text-muted-foreground">PDF Receipt</span>
-                    <Button variant="outline" size="sm" onClick={handleDownload}>
+                  <div className="flex flex-col items-center gap-4 p-8">
+                    <div className="w-20 h-24 bg-destructive/10 rounded-lg flex items-center justify-center">
+                      <FileText className="h-12 w-12 text-destructive" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-medium">PDF Receipt</p>
+                      <p className="text-sm text-muted-foreground mt-1">Click to open in new tab</p>
+                    </div>
+                    <Button variant="outline" onClick={handleDownload}>
                       <Download className="h-4 w-4 mr-2" />
                       Open PDF
                     </Button>
                   </div>
                 ) : imageError ? (
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground p-6">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground p-6">
                     <ImageIcon className="h-12 w-12" />
                     <span className="text-sm">Unable to load image</span>
                     <Button variant="outline" size="sm" onClick={handleDownload}>
@@ -157,18 +163,24 @@ export function ReceiptPreviewDialog({
                     </Button>
                   </div>
                 ) : (
-                  <img
-                    src={signedUrl}
-                    alt="Receipt"
-                    className="max-h-[400px] max-w-full object-contain rounded"
-                    onError={() => setImageError(true)}
-                  />
+                  <div className="w-full h-full flex items-center justify-center p-4 overflow-hidden">
+                    <img
+                      src={signedUrl}
+                      alt="Receipt"
+                      className="max-h-[50vh] max-w-full object-contain rounded shadow-sm"
+                      onError={() => setImageError(true)}
+                    />
+                  </div>
                 )
               ) : (
-                <div className="flex flex-col items-center gap-2 text-muted-foreground p-6">
-                  <Upload className="h-12 w-12" />
-                  <span className="text-sm">Click to upload a receipt</span>
-                  <span className="text-xs">JPG, PNG, WebP, or PDF (max 10MB)</span>
+                <div className="flex flex-col items-center gap-3 text-muted-foreground p-8">
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                    <Upload className="h-8 w-8" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium">Click to upload a receipt</p>
+                    <p className="text-xs mt-1">JPG, PNG, WebP, or PDF (max 10MB)</p>
+                  </div>
                 </div>
               )}
             </div>
