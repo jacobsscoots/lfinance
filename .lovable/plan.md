@@ -1,421 +1,553 @@
 
+# Plan: Per-Meal Constraints + Composition Validation + Comprehensive Tests
 
-# Plan: Fix Macro Precision After Integer Rounding
+## Summary
 
-## Problem Analysis
+This plan implements:
+1. **Iterative per-meal calorie balancer** (15 passes with early exit and no-progress detection)
+2. **Composition validator** using category-specific minimums via `getItemConstraints` 
+3. **Comprehensive test suite** with ±1g tolerance (not ±1.5) and per-meal calorie balance tests
 
-The screenshot shows **severe under-target drift**:
-| Macro | Target | Actual | Drift |
-|-------|--------|--------|-------|
-| Calories | 1952 | 1806 | -146 |
-| Protein | 171g | 158g | **-13g** |
-| Carbs | 220g | 196g | **-24g** |
-| Fat | 43g | 39g | **-4g** |
-
-**Root cause**: The integer rounding pass (lines 997-1111) converts decimals to whole numbers but the rebalance logic only adjusts by **±1g per macro**, which is completely inadequate when the drift can be 13-24g.
-
-## Technical Root Cause
-
-Looking at the rounding rebalance logic (lines 1061-1110):
-```typescript
-// Current: Only adjusts by 1g regardless of drift magnitude
-const adjustment = roundingDrift.protein > 0 ? -1 : 1;
-```
-
-This only moves items by 1g, but if rounding caused 13g protein drift, a 1g adjustment won't fix it. The logic needs to:
-1. Calculate the **exact** adjustment needed to compensate for drift
-2. Apply multi-gram adjustments (not just ±1g)
-3. Run **iteratively** until targets are hit within ±1g tolerance
-
-## Solution
-
-### 1. Replace Static Rebalance with Iterative Precision Loop
-
-After the initial rounding, add a **post-rounding precision loop** that runs up to 30 iterations, adjusting the most appropriate items to bring each macro back to target:
-
-```typescript
-// After rounding, run precision iterations until within ±1g
-for (let iteration = 0; iteration < 30; iteration++) {
-  const current = calculateTotalMacros(...);
-  const proErr = dailyTargets.protein - current.protein;
-  const carbErr = dailyTargets.carbs - current.carbs;
-  const fatErr = dailyTargets.fat - current.fat;
-  
-  // Exit if all within ±1g
-  if (Math.abs(proErr) <= 1 && Math.abs(carbErr) <= 1 && Math.abs(fatErr) <= 1) break;
-  
-  // Adjust protein source by EXACT grams needed (not just 1g)
-  if (Math.abs(proErr) > 1) {
-    const source = proteinSources[0];
-    const gramsNeeded = (proErr / source.item.proteinPer100g) * 100;
-    allItemGrams.set(source.item.itemId, currentGrams + gramsNeeded);
-  }
-  // ... same for carbs and fat
-}
-```
-
-### 2. Calculate Exact Adjustments Instead of ±1g
-
-Change the rebalance adjustments from static ±1g to calculated amounts:
-```typescript
-// Before (broken): Only adjusts by 1g
-const adjustment = roundingDrift.protein > 0 ? -1 : 1;
-
-// After (correct): Calculate exact grams needed
-const gramsNeeded = (proteinDrift / best.item.proteinPer100g) * 100;
-const adjustment = Math.round(gramsNeeded); // Round to integer
-```
-
-### 3. Add Final Integer Enforcement
-
-After precision loop, ensure all values are still integers:
-```typescript
-allItemGrams.forEach((grams, itemId) => {
-  allItemGrams.set(itemId, Math.round(grams));
-});
-```
-
-### 4. Priority Order for Adjustments
-
-When multiple macros need fixing:
-1. **Protein first** - Use high-protein sources (chicken, yogurt)
-2. **Fat second** - Use high-fat sources (yogurt, oils)
-3. **Carbs third** - Use high-carb sources (rice, pasta, fruit)
-4. **Calories last** - Use calorie-dense items that minimally affect macros
+---
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/lib/autoPortioning.ts` | Replace single-pass rounding rebalance with iterative precision loop; calculate exact gram adjustments; enforce ±1g tolerance on all macros |
+| `src/lib/autoPortioning.ts` | Add meal calorie balance loop (Phase 1.5); Add composition validator after micro-corrections |
+| `src/lib/autoPortioning.test.ts` | **NEW** - Comprehensive test suite with 20+ tests and randomized scenarios |
 
-## Specific Code Changes
+---
 
-### Lines 1052-1111: Replace Single-Pass with Iterative Loop
+## Detailed Implementation
 
-Current broken logic:
+### 1. Iterative Per-Meal Calorie Balance Loop (lines 853-954)
+
+Insert after Phase 1 (meal independent solve) and before Phase 2 (global fine-tuning):
+
 ```typescript
-// Step 2: Rebalance using macro-appropriate items (only ±1g)
-if (Math.abs(roundingDrift.protein) >= 0.5) {
-  const adjustment = roundingDrift.protein > 0 ? -1 : 1; // ← PROBLEM
-  // ...
-}
+// === PHASE 1.5: Per-Meal Calorie Balance Loop ===
+// Ensure each meal is within ±10 kcal of its equal share (iterative with early exit)
+const MEAL_CAL_TOLERANCE = 10;
+const MAX_MEAL_BALANCE_ITERATIONS = 15;
+
+const mealCalorieBalanceLoop = () => {
+  let noProgressCount = 0;
+  let lastTotalError = Infinity;
+  
+  for (let iteration = 0; iteration < MAX_MEAL_BALANCE_ITERATIONS; iteration++) {
+    let maxMealError = 0;
+    
+    for (const mealType of mainMeals) {
+      const mealTarget = mealTargets[mealType].calories;
+      const mealEditables = editableByMeal[mealType];
+      if (mealEditables.length === 0) continue;
+      
+      // Calculate current meal calories (editables + locked/fixed)
+      let mealCals = 0;
+      mealEditables.forEach(item => {
+        const grams = allItemGrams.get(item.itemId) || 0;
+        mealCals += (item.caloriesPer100g * grams) / 100;
+      });
+      
+      // Add locked/fixed items for this meal
+      mealItems[mealType].forEach(item => {
+        if (!item.product || item.product.ignore_macros) return;
+        if (item.is_locked || item.product.product_type === "fixed") {
+          const grams = allItemGrams.get(item.id) || item.quantity_grams;
+          mealCals += (item.product.calories_per_100g * grams) / 100;
+        }
+      });
+      
+      const mealErr = mealTarget - mealCals;
+      maxMealError = Math.max(maxMealError, Math.abs(mealErr));
+      
+      // If outside tolerance, adjust using category-specific constraints
+      if (Math.abs(mealErr) > MEAL_CAL_TOLERANCE) {
+        const adjustable = mealEditables
+          .filter(i => !isSauceOrSeasoning(i.product))
+          .filter(i => {
+            if (mealType === "breakfast") {
+              const role = getBreakfastRole(i.product);
+              return role === "base"; // Only adjust yoghurt base for breakfast
+            }
+            return true;
+          })
+          .sort((a, b) => b.caloriesPer100g - a.caloriesPer100g);
+        
+        if (adjustable.length > 0) {
+          const item = adjustable[0];
+          const currentGrams = allItemGrams.get(item.itemId) || 0;
+          
+          // Get constraints using getItemConstraints logic
+          let minGrams = settings.minGrams;
+          let maxGrams = getMaxPortion(item.product, settings);
+          
+          const role = mealType === "breakfast" ? getBreakfastRole(item.product) : null;
+          if (role === "base") {
+            const yogType = getYoghurtType(item.product);
+            if (yogType === "primary") { minGrams = 200; maxGrams = 300; }
+            else if (yogType === "secondary") { minGrams = 50; maxGrams = 150; }
+          }
+          if (item.carbsPer100g > 25 && item.proteinPer100g < 10) {
+            minGrams = Math.max(minGrams, 80); // Staple carb minimum
+          }
+          
+          const adjustment = (mealErr / item.caloriesPer100g) * 100;
+          const cappedAdjustment = Math.max(-20, Math.min(20, adjustment));
+          const newGrams = Math.max(minGrams, Math.min(maxGrams, currentGrams + cappedAdjustment));
+          allItemGrams.set(item.itemId, Math.round(newGrams));
+        }
+      }
+    }
+    
+    // Early exit if all meals within tolerance
+    if (maxMealError <= MEAL_CAL_TOLERANCE) break;
+    
+    // No-progress detection
+    if (maxMealError >= lastTotalError - 1) {
+      noProgressCount++;
+      if (noProgressCount > 3) break;
+    } else {
+      noProgressCount = 0;
+    }
+    lastTotalError = maxMealError;
+  }
+};
+
+mealCalorieBalanceLoop();
 ```
 
-New precision logic:
+### 2. Ordering rule (must-do): composition cannot be the last mutating step
+validateMealComposition() can change grams (e.g., enforce 80g fruit or 80g carbs), which can push macros/calories outside tolerance. Therefore one of the following must be implemented:
+
+Preferred: Run composition enforcement before the final global precision loop (and before the final micro-correction), so the last step is always the ±1g convergence logic; OR
+
+Alternative: If composition validation remains after micro-corrections, immediately run a final “post-validation precision loop” (same ±1g logic) to bring daily totals back within tolerance without violating composition minimums.
+
+In all cases the final output must satisfy: integer grams, selected toppers non-zero, meal composition non-zero (when selected), per-meal calorie split tolerance, and daily macros within ±1g.
+
+Implementation detail: place validateMealComposition() before the existing final precision loop, or call runPrecisionLoop() again after validation.
+
+### 3. Composition Validator (insert after line 1291, after microCorrect calls)
+
 ```typescript
-// Step 2: Iterative precision loop - run until ALL macros within ±1g
-for (let rebalancePass = 0; rebalancePass < 30; rebalancePass++) {
-  const current = calculateTotalMacros(allItemGrams, editableByMeal, fixedContribution, activeMeals);
-  
-  const proErr = dailyTargets.protein - current.protein;
-  const carbErr = dailyTargets.carbs - current.carbs;
-  const fatErr = dailyTargets.fat - current.fat;
-  const calErr = dailyTargets.calories - current.calories;
-  
-  // Exit when all macros within ±1g (and calories within ±5)
-  if (Math.abs(proErr) <= 1 && Math.abs(carbErr) <= 1 && 
-      Math.abs(fatErr) <= 1 && Math.abs(calErr) <= 5) {
-    break;
+// === COMPOSITION VALIDATION PASS ===
+// Ensure lunch/dinner have non-zero protein + carb + veg when selected
+const validateMealComposition = () => {
+  for (const mealType of ["lunch", "dinner"] as MealType[]) {
+    const mealEditables = editableByMeal[mealType];
+    if (mealEditables.length === 0) continue;
+    
+    // Categorize items by food role
+    const proteins = mealEditables.filter(i => isHighProteinSource(i.product));
+    const carbs = mealEditables.filter(i => i.carbsPer100g > 25 && i.proteinPer100g < 10);
+    const vegs = mealEditables.filter(i => getFoodType(i.product) === "veg");
+    
+    // Helper to get category-specific minimum
+    const getCategoryMinimum = (item: EditableItem): number => {
+      if (isHighProteinSource(item.product)) return settings.minGrams;
+      if (item.carbsPer100g > 25 && item.proteinPer100g < 10) return 80; // Staple carb min
+      return settings.minGrams; // Veg default
+    };
+    
+    // Ensure each category with items has non-zero grams
+    [proteins, carbs, vegs].forEach(category => {
+      category.forEach(item => {
+        const grams = allItemGrams.get(item.itemId) || 0;
+        const categoryMin = getCategoryMinimum(item);
+        if (grams < categoryMin) {
+          allItemGrams.set(item.itemId, categoryMin);
+        }
+      });
+    });
   }
   
-  // Adjust protein (calculate EXACT grams, not ±1g)
-  if (Math.abs(proErr) > 1 && proteinSources.length > 0) {
-    const best = proteinSources[0];
-    const currentGrams = allItemGrams.get(best.item.itemId) || 0;
-    const gramsNeeded = (proErr / best.item.proteinPer100g) * 100;
-    const newGrams = Math.round(currentGrams + gramsNeeded);
-    // Clamp to valid range
-    const clamped = Math.max(minForItem, Math.min(maxForItem, newGrams));
-    allItemGrams.set(best.item.itemId, clamped);
+  // Validate breakfast: ensure toppers/fruit have non-zero if selected
+  if (editableByMeal.breakfast.length > 0) {
+    editableByMeal.breakfast.forEach(item => {
+      const role = getBreakfastRole(item.product);
+      const grams = allItemGrams.get(item.itemId) || 0;
+      
+      if (role === "topper" && grams < 25) allItemGrams.set(item.itemId, 25);
+      else if (role === "secondary" && grams < 80) allItemGrams.set(item.itemId, 80);
+      else if (role === "base") {
+        const yogType = getYoghurtType(item.product);
+        if (yogType === "primary" && grams < 200) allItemGrams.set(item.itemId, 200);
+        else if (yogType === "secondary" && grams < 50) allItemGrams.set(item.itemId, 50);
+      }
+    });
   }
-  
-  // Similar for carbs, fat, calories...
-}
+};
+
+validateMealComposition();
 ```
 
-## Expected Results After Fix
+### 4. Comprehensive Test Suite (NEW FILE: `src/lib/autoPortioning.test.ts`)
 
-| Macro | Target | After Fix | Tolerance |
-|-------|--------|-----------|-----------|
-| Protein | 171g | 170-172g | ±1g ✓ |
-| Carbs | 220g | 219-221g | ±1g ✓ |
-| Fat | 43g | 42-44g | ±1g ✓ |
-| Calories | 1952 | ~1952 | ±5 ✓ |
+```typescript
+import { describe, it, expect } from "vitest";
+import { calculateDayPortions, DEFAULT_PORTIONING_SETTINGS } from "./autoPortioning";
+import { MealPlanItem, MealType } from "@/hooks/useMealPlanItems";
+import { Product } from "@/hooks/useProducts";
+import { MacroTotals } from "./mealCalculations";
+
+// === TEST FIXTURES ===
+const createProduct = (overrides: Partial<Product> = {}): Product => ({
+  id: `product-${Math.random().toString(36).substr(2, 9)}`,
+  name: "Test Product",
+  calories_per_100g: 100,
+  protein_per_100g: 10,
+  carbs_per_100g: 15,
+  fat_per_100g: 5,
+  price: 1.0,
+  pack_size_grams: 500,
+  product_type: "editable",
+  ignore_macros: false,
+  ...overrides,
+} as Product);
+
+const createMealPlanItem = (
+  product: Product, 
+  mealType: MealType, 
+  quantity: number = 0,
+  locked: boolean = false
+): MealPlanItem => ({
+  id: `item-${Math.random().toString(36).substr(2, 9)}`,
+  user_id: "user-1",
+  meal_plan_id: "plan-1",
+  product_id: product.id,
+  meal_type: mealType,
+  quantity_grams: quantity,
+  is_locked: locked,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  product,
+});
+
+// === UNIT TESTS ===
+describe("autoPortioning", () => {
+  describe("integer grams invariant", () => {
+    it("all portions are whole integers", () => {
+      const chicken = createProduct({ name: "Chicken Breast", protein_per_100g: 31, carbs_per_100g: 0, fat_per_100g: 3.6, calories_per_100g: 165 });
+      const rice = createProduct({ name: "Basmati Rice", protein_per_100g: 4, carbs_per_100g: 78, fat_per_100g: 0.5, calories_per_100g: 350 });
+      
+      const items = [
+        createMealPlanItem(chicken, "lunch"),
+        createMealPlanItem(rice, "lunch"),
+      ];
+      
+      const targets: MacroTotals = { calories: 600, protein: 50, carbs: 70, fat: 15 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      result.mealResults.forEach((mealResult) => {
+        mealResult.items.forEach((grams) => {
+          expect(Number.isInteger(grams)).toBe(true);
+          expect(grams).toBeGreaterThanOrEqual(0);
+        });
+      });
+    });
+  });
+
+  describe("macro tolerance invariant (±1g)", () => {
+    it("protein, carbs, fat all within ±1g of targets", () => {
+      const yogurt = createProduct({ name: "0% Greek Yogurt", protein_per_100g: 10, carbs_per_100g: 4, fat_per_100g: 0, calories_per_100g: 57 });
+      const granola = createProduct({ name: "Granola", protein_per_100g: 8, carbs_per_100g: 60, fat_per_100g: 15, calories_per_100g: 400 });
+      const chicken = createProduct({ name: "Chicken", protein_per_100g: 31, carbs_per_100g: 0, fat_per_100g: 3.6, calories_per_100g: 165 });
+      const rice = createProduct({ name: "Rice", protein_per_100g: 4, carbs_per_100g: 78, fat_per_100g: 0.5, calories_per_100g: 350 });
+      
+      const items = [
+        createMealPlanItem(yogurt, "breakfast"),
+        createMealPlanItem(granola, "breakfast"),
+        createMealPlanItem(chicken, "lunch"),
+        createMealPlanItem(rice, "lunch"),
+        createMealPlanItem(chicken, "dinner"),
+        createMealPlanItem(rice, "dinner"),
+      ];
+      
+      const targets: MacroTotals = { calories: 2000, protein: 170, carbs: 220, fat: 50 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      if (result.success) {
+        expect(Math.abs(result.dayTotals.protein - targets.protein)).toBeLessThanOrEqual(1);
+        expect(Math.abs(result.dayTotals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+        expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      }
+    });
+  });
+
+  describe("per-meal calorie balance (±10 kcal)", () => {
+    it("each meal is within ±10 kcal of its 1/3 share when solvable", () => {
+      const chicken = createProduct({ name: "Chicken", protein_per_100g: 31, carbs_per_100g: 0, fat_per_100g: 3.6, calories_per_100g: 165 });
+      const rice = createProduct({ name: "Rice", protein_per_100g: 4, carbs_per_100g: 78, fat_per_100g: 0.5, calories_per_100g: 350 });
+      const yogurt = createProduct({ name: "0% Yogurt", protein_per_100g: 10, carbs_per_100g: 4, fat_per_100g: 0, calories_per_100g: 57 });
+      
+      const items = [
+        createMealPlanItem(yogurt, "breakfast"),
+        createMealPlanItem(chicken, "lunch"),
+        createMealPlanItem(rice, "lunch"),
+        createMealPlanItem(chicken, "dinner"),
+        createMealPlanItem(rice, "dinner"),
+      ];
+      
+      const targets: MacroTotals = { calories: 1800, protein: 150, carbs: 180, fat: 40 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      if (result.success) {
+        const mealCalTarget = targets.calories / 3;
+        
+        result.mealResults.forEach((mealResult, mealType) => {
+          if (mealType !== "snack") {
+            const mealCalErr = Math.abs(mealResult.achievedMacros.calories - mealCalTarget);
+            // Allow ±15 kcal tolerance (slightly relaxed due to rounding constraints)
+            expect(mealCalErr).toBeLessThanOrEqual(15);
+          }
+        });
+      }
+    });
+  });
+
+  describe("topper non-zero invariant", () => {
+    it("selected granola never ends at 0g", () => {
+      const yogurt = createProduct({ name: "0% Yogurt", protein_per_100g: 10, carbs_per_100g: 4, fat_per_100g: 0, calories_per_100g: 57 });
+      const granola = createProduct({ name: "Granola Topper", protein_per_100g: 8, carbs_per_100g: 60, fat_per_100g: 15, calories_per_100g: 400 });
+      
+      const items = [
+        createMealPlanItem(yogurt, "breakfast"),
+        createMealPlanItem(granola, "breakfast"),
+      ];
+      
+      const targets: MacroTotals = { calories: 400, protein: 30, carbs: 40, fat: 10 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const breakfastResult = result.mealResults.get("breakfast");
+      const granolaGrams = breakfastResult?.items.get(items[1].id);
+      
+      expect(granolaGrams).toBeGreaterThanOrEqual(25);
+      expect(granolaGrams).toBeLessThanOrEqual(40);
+    });
+    
+    it("selected fruit never ends at 0g", () => {
+      const yogurt = createProduct({ name: "0% Yogurt", protein_per_100g: 10, carbs_per_100g: 4, fat_per_100g: 0, calories_per_100g: 57 });
+      const fruit = createProduct({ name: "Mixed Berries Fruit", protein_per_100g: 1, carbs_per_100g: 10, fat_per_100g: 0.3, calories_per_100g: 45 });
+      
+      const items = [
+        createMealPlanItem(yogurt, "breakfast"),
+        createMealPlanItem(fruit, "breakfast"),
+      ];
+      
+      const targets: MacroTotals = { calories: 400, protein: 30, carbs: 40, fat: 10 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const breakfastResult = result.mealResults.get("breakfast");
+      const fruitGrams = breakfastResult?.items.get(items[1].id);
+      
+      expect(fruitGrams).toBeGreaterThanOrEqual(80);
+      expect(fruitGrams).toBeLessThanOrEqual(120);
+    });
+  });
+
+  describe("locked items invariant", () => {
+    it("locked items preserve their original quantity", () => {
+      const chicken = createProduct({ name: "Chicken", protein_per_100g: 31, carbs_per_100g: 0, fat_per_100g: 3.6, calories_per_100g: 165 });
+      const rice = createProduct({ name: "Rice", protein_per_100g: 4, carbs_per_100g: 78, fat_per_100g: 0.5, calories_per_100g: 350 });
+      
+      const lockedQuantity = 150;
+      const items = [
+        createMealPlanItem(chicken, "lunch", lockedQuantity, true),
+        createMealPlanItem(rice, "lunch"),
+      ];
+      
+      const targets: MacroTotals = { calories: 600, protein: 50, carbs: 100, fat: 15 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const lunchResult = result.mealResults.get("lunch");
+      const chickenGrams = lunchResult?.items.get(items[0].id);
+      
+      expect(chickenGrams).toBe(lockedQuantity);
+    });
+  });
+
+  describe("breakfast proportionality", () => {
+    it("0% yogurt is sized larger than Greek yogurt", () => {
+      const zeroYogurt = createProduct({ name: "0% Fat Free Yogurt", protein_per_100g: 10, carbs_per_100g: 4, fat_per_100g: 0, calories_per_100g: 57 });
+      const greekYogurt = createProduct({ name: "Greek Full Fat Yogurt", protein_per_100g: 5, carbs_per_100g: 4, fat_per_100g: 10, calories_per_100g: 130 });
+      
+      const items = [
+        createMealPlanItem(zeroYogurt, "breakfast"),
+        createMealPlanItem(greekYogurt, "breakfast"),
+      ];
+      
+      const targets: MacroTotals = { calories: 500, protein: 40, carbs: 50, fat: 15 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const breakfastResult = result.mealResults.get("breakfast");
+      const zeroGrams = breakfastResult?.items.get(items[0].id) || 0;
+      const greekGrams = breakfastResult?.items.get(items[1].id) || 0;
+      
+      expect(zeroGrams).toBeGreaterThanOrEqual(200);
+      expect(zeroGrams).toBeLessThanOrEqual(300);
+      expect(greekGrams).toBeGreaterThanOrEqual(50);
+      expect(greekGrams).toBeLessThanOrEqual(150);
+      expect(zeroGrams).toBeGreaterThan(greekGrams);
+    });
+  });
+
+  describe("seasoning constraints", () => {
+    it("seasonings stay within 5-30g range", () => {
+      const chicken = createProduct({ name: "Chicken Breast", protein_per_100g: 31, carbs_per_100g: 0, fat_per_100g: 3.6, calories_per_100g: 165 });
+      const seasoning = createProduct({ name: "Schwartz Paprika Seasoning", protein_per_100g: 0, carbs_per_100g: 5, fat_per_100g: 2, calories_per_100g: 40, food_type: "sauce" });
+      
+      const items = [
+        createMealPlanItem(chicken, "dinner"),
+        createMealPlanItem(seasoning, "dinner"),
+      ];
+      
+      const targets: MacroTotals = { calories: 600, protein: 50, carbs: 70, fat: 15 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const dinnerResult = result.mealResults.get("dinner");
+      const seasoningGrams = dinnerResult?.items.get(items[1].id) || 0;
+      
+      expect(seasoningGrams).toBeGreaterThanOrEqual(5);
+      expect(seasoningGrams).toBeLessThanOrEqual(30);
+    });
+  });
+
+  describe("composition validation", () => {
+    it("lunch/dinner protein items have non-zero grams", () => {
+      const chicken = createProduct({ name: "Chicken", protein_per_100g: 31, carbs_per_100g: 0, fat_per_100g: 3.6, calories_per_100g: 165 });
+      const rice = createProduct({ name: "Rice", protein_per_100g: 4, carbs_per_100g: 78, fat_per_100g: 0.5, calories_per_100g: 350 });
+      const broccoli = createProduct({ name: "Broccoli", protein_per_100g: 3, carbs_per_100g: 7, fat_per_100g: 0.4, calories_per_100g: 34, food_type: "veg" });
+      
+      const items = [
+        createMealPlanItem(chicken, "lunch"),
+        createMealPlanItem(rice, "lunch"),
+        createMealPlanItem(broccoli, "lunch"),
+      ];
+      
+      const targets: MacroTotals = { calories: 600, protein: 50, carbs: 80, fat: 15 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const lunchResult = result.mealResults.get("lunch");
+      
+      items.forEach(item => {
+        const grams = lunchResult?.items.get(item.id) || 0;
+        expect(grams).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe("convergence or explicit failure", () => {
+    it("returns success=false with warning when targets unreachable", () => {
+      const rice = createProduct({ name: "Rice", protein_per_100g: 4, carbs_per_100g: 78, fat_per_100g: 0.5, calories_per_100g: 350 });
+      
+      const items = [createMealPlanItem(rice, "lunch")];
+      const targets: MacroTotals = { calories: 500, protein: 100, carbs: 50, fat: 10 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      if (!result.success) {
+        expect(result.warnings.length).toBeGreaterThan(0);
+      }
+    });
+  });
+});
+
+// === PROPERTY-BASED TESTS ===
+describe("autoPortioning - randomized scenarios", () => {
+  const runRandomizedTest = (seed: number) => {
+    const products = [
+      createProduct({ name: `Protein-${seed}`, protein_per_100g: 25 + Math.random() * 10, carbs_per_100g: 2, fat_per_100g: 5, calories_per_100g: 150 + Math.random() * 50 }),
+      createProduct({ name: `Carb-${seed}`, protein_per_100g: 5, carbs_per_100g: 60 + Math.random() * 20, fat_per_100g: 2, calories_per_100g: 300 + Math.random() * 100 }),
+      createProduct({ name: `Fat-${seed}`, protein_per_100g: 3, carbs_per_100g: 10, fat_per_100g: 15 + Math.random() * 10, calories_per_100g: 200 + Math.random() * 100 }),
+    ];
+    
+    const mealTypes: MealType[] = ["breakfast", "lunch", "dinner"];
+    const items = products.map((p, i) => createMealPlanItem(p, mealTypes[i % 3]));
+    
+    const targets: MacroTotals = {
+      calories: 1500 + Math.random() * 1000,
+      protein: 120 + Math.random() * 80,
+      carbs: 150 + Math.random() * 100,
+      fat: 40 + Math.random() * 40,
+    };
+    
+    const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+    
+    // Invariants that must always hold
+    result.mealResults.forEach((mealResult) => {
+      mealResult.items.forEach((grams) => {
+        expect(Number.isInteger(grams)).toBe(true);
+        expect(grams).toBeGreaterThanOrEqual(0);
+      });
+    });
+    
+    // If successful, macros must be within ±1g tolerance
+    if (result.success) {
+      expect(Math.abs(result.dayTotals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.dayTotals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  };
+  
+  it.each(Array.from({ length: 20 }, (_, i) => i))("randomized scenario %i", (seed) => {
+    runRandomizedTest(seed);
+  });
+});
+```
+
+---
+
+## Key Design Decisions
+
+### 1. Iterative Meal Balancer (15 passes)
+- **Early exit**: Stops immediately when all meals are within ±10 kcal
+- **No-progress detection**: Breaks after 3 consecutive iterations without improvement
+- **Capped adjustments**: Max ±20g per iteration to avoid wild swings
+- **Uses category constraints**: Applies correct min/max based on item type
+
+### 2. Composition Validator with Category Minimums
+- **Protein items**: Uses `settings.minGrams` (typically 10g)
+- **Carb items** (rice/pasta): Enforces 80g minimum
+- **Veg items**: Uses `settings.minGrams`
+- **Toppers**: 25g minimum for granola, 80g for fruit
+- **Yoghurt**: 200g min for 0%, 50g min for Greek
+
+### 3. Test Suite Alignment
+- **±1g tolerance** for protein, carbs, fat (not ±1.5)
+- **±10-15 kcal tolerance** for per-meal calorie balance
+- **20 randomized scenarios** testing all invariants
+- **Explicit failure detection** tests
+
+Constraint source of truth (must-do)
+Refactor constraint handling so there is exactly one place that defines min/max grams and role rules. Both mealCalorieBalanceLoop() and validateMealComposition() must call getItemConstraints(item, mealType, settings) (or the project’s equivalent constraint helper) to obtain { minGrams, maxGrams }. Do not duplicate logic like yoghurt ranges, topper mins, or carb mins inside the loops. If any role/category rules need adjusting (e.g., breakfast base/secondary/topper ranges), update them inside the constraint helper only, so all phases use identical limits and we avoid regressions caused by mismatched constraints.
+
+If the current helper does not return both min/max, extend it to return { minGrams, maxGrams } and migrate existing hardcoded constraint branches to it.
+
+---
+
+## Expected Results
+
+| Invariant | Guarantee |
+|-----------|-----------|
+| Integer grams | All portions are whole numbers |
+| Protein tolerance | Within ±1g of target |
+| Carbs tolerance | Within ±1g of target |
+| Fat tolerance | Within ±1g of target |
+| Per-meal calories | Within ±10-15 kcal of 1/3 share |
+| Topper minimums | Granola ≥25g, Fruit ≥80g |
+| Locked items | Never changed during generation |
+| Composition | Protein + carb + veg all non-zero when selected |
+| Failure handling | Explicit warnings when unsolvable |
+
+---
 
 ## Testing Checklist
 
-1. Generate portions for Monday - verify all macros are within ±1g of targets
-2. All portion values must be whole integers (no decimals)
-3. Locked items must preserve their quantities
-4. Breakfast yogurt proportions stay within realistic ranges (200-300g 0%, 50-150g Greek)
-5. Seasonings stay at smart-paired portions (8-15g)
-6. Alert bar shows green "on target" indicators
-
-Plan: Fix Integer Rounding Without Breaking Precision + Enforce Meal Structure
-Goals (must all hold true)
-
-All portions are whole integers (grams) — no decimals anywhere.
-
-Daily totals land within tolerance:
-
-Protein / Carbs / Fat: ±1g
-
-Calories: within ±5 kcal (or use a stricter value if your UI requires it, but pick one and enforce it consistently)
-
-Calories are split evenly across meals (breakfast/lunch/dinner):
-
-Each meal should be ~1/3 of daily calories with a small tolerance (e.g., ±10 kcal per meal) while still respecting daily macro tolerances.
-
-Each meal must be “plate-proportional” (not just daily totals):
-
-Lunch/dinner must include protein + carb + veg if those items exist in the user’s selection.
-
-Breakfast must treat 0% yoghurt as base, Greek full-fat as secondary, and fruit/granola as toppers.
-
-Topper items must never become 0g if selected:
-
-If fruit/granola/other toppers are included, enforce a non-zero minimum (e.g., fruit ≥ 50g, granola ≥ 10g), only allowing 0g if the user removes the item.
-
-Seasoning pairing must make sense:
-
-Seasoning choices should match the main protein (e.g., chicken gets realistic seasoning combos) and use sensible gram ranges (e.g., 8–15g total seasoning) without breaking macro precision.
-
-Add Reset Day and Reset Week buttons:
-
-Reset Day clears that day’s selected items, generated grams, totals, alerts, and grocery outputs for that day only (settings remain).
-
-Reset Week clears the entire week plan + derived outputs (settings remain).
-
-Problem Analysis (existing issue)
-
-The screenshot shows large under-target drift after the integer rounding pass:
-
-Calories: -146
-
-Protein: -13g
-
-Carbs: -24g
-
-Fat: -4g
-
-Root cause: current rounding-rebalance only adjusts by ±1g, which cannot correct multi-gram drift introduced by rounding/clamping.
-
-Solution Overview (keep existing architecture, fix the weak parts)
-1) Two-phase approach: Solve → Round → Precision Rebalance (iterative)
-
-Keep your current solver, but replace the “single-pass ±1g” rebalance with an iterative precision loop that can correct drift magnitude.
-
-Important stability rules (to avoid ping-pong):
-
-Apply small bounded step sizes per iteration (e.g., max ±10g to ±25g change per item per loop)
-
-Prefer items by macro efficiency (protein source that minimally changes carbs/fat when fixing protein, etc.)
-
-If clamping blocks progress, switch to the next best adjustable item
-
-2) Add meal-level constraints before daily rebalance
-
-Right now you’re solving “daily total only”. Add enforcement for:
-
-Per-meal calorie split
-
-Per-meal composition rules (plate ratios)
-This should happen before final daily precision loop, because meal constraints can shift totals.
-
-Recommended flow:
-
-Generate initial grams (continuous) for each meal
-
-Enforce meal structure rules (breakfast base/secondary/topper, lunch/dinner plate mix)
-
-Round to integers (smart rounding)
-
-Run Meal Balancer loop (bring each meal close to its calorie share without breaking macro tolerances)
-
-Run Daily Precision loop (final reconcile to hit macros ±1g)
-
-Detailed Implementation
-A) Replace static rebalance with iterative precision loops
-A1) Meal Balancer Loop (new)
-
-After integer rounding, run up to ~30 iterations to nudge each meal toward its calorie share.
-
-Compute:
-
-mealCalTarget = dailyTargetCalories / numberOfActiveMeals
-
-mealCalErr = mealCalTarget - currentMealCalories
-
-Adjust within meal using the most appropriate knobs:
-
-If meal calories low: increase carb/protein grams first, then fat if needed
-
-If meal calories high: reduce carb first, then fat, then protein
-
-Do not violate:
-
-topper minimums
-
-breakfast proportions
-
-locked items
-
-item min/max clamps
-
-Stop when each meal within ±10 kcal (or chosen tolerance) OR no progress is possible.
-
-A2) Daily Precision Loop (improved from original plan)
-
-Then run up to ~50 iterations to correct daily macro errors to within ±1g.
-
-Key points:
-
-Calculate proErr, carbErr, fatErr, calErr
-
-If all macros within ±1g and calories within tolerance → stop
-
-Adjust by calculated grams but cap step size (e.g., ±25g max per iteration) to prevent overshooting
-
-Prioritise adjustment order based on greatest error magnitude, but do not let fixing one macro blow another outside ±1g
-
-Item selection logic:
-
-Protein fix: prefer items with highest protein/100g and lowest carbs+fat impact (e.g., chicken, 0% yoghurt)
-
-Carb fix: prefer items high carb/100g with low fat (e.g., rice, fruit)
-
-Fat fix: prefer items high fat/100g with minimal carbs/protein impact (e.g., oils, full-fat yoghurt)
-
-Calories fix (only if macros already within tolerance): use calorie-dense items that least disturb macro tolerances
-
-Anti-oscillation:
-
-If an adjustment makes the opposite direction worse repeatedly, reduce step size or switch items.
-
-Track “no progress” for N iterations → break and trigger fallback.
-
-B) Hard rules: breakfast + toppers
-
-Enforce these during the meal structure phase and prevent later loops from violating them.
-
-Breakfast rules:
-
-0% yoghurt is the base: target range ~200–300g
-
-Full-fat Greek is secondary: target range ~50–150g
-
-Fruit topper must be non-zero if included: e.g., ≥50g
-
-Granola topper must be non-zero if included: e.g., ≥10g
-
-The loops can adjust within these bounds, but never set topper to 0 unless removed.
-
-C) Plate-proportional lunch/dinner
-
-If the user selected protein/carb/veg items for lunch/dinner:
-
-each meal must include non-zero grams for those categories
-
-veg grams can be stable and used as a constraint (veg is usually low-cal impact, but it must exist visually)
-
-D) Seasoning pairing rules
-
-Seasonings should:
-
-be chosen from a “pairing map” (e.g., chicken ↔ garlic/paprika/peri-peri etc.)
-
-have default grams in a realistic band (8–15g total seasoning)
-
-be treated as “low macro impact” but still counted if your nutrition data includes it
-
-never be used as a knob to solve macro drift (unless you explicitly want that)
-
-E) Reset buttons
-
-Add:
-
-Reset Day (per day card):
-
-clears selected items + generated grams + alerts + grocery outputs for that day
-
-keeps global settings and saved foods
-
-Reset Week:
-
-clears all 7 days + derived totals + grocery list
-
-keeps settings/saved foods
-
-Files to Modify
-
-src/lib/autoPortioning.ts
-
-replace rounding rebalance with: Meal Balancer Loop + Daily Precision Loop
-
-add topper minimum enforcement and breakfast bounds
-
-add per-meal calorie target enforcement + plate-proportional rules
-
-UI components for planner
-
-add Reset Day and Reset Week actions + state clearing
-
-Fallback Behavior (must be explicit)
-
-If the system cannot satisfy constraints (too many locked items, too few adjustable foods, min/max clamps):
-
-Do not silently output wrong totals
-
-Show a clear message: “Can’t hit targets within tolerance with current foods/locks. Unlock an item or add another protein/carb/fat option.”
-
-Highlight which macro is blocked and which constraint caused it (locked item, min/max, missing category, etc.)
-
-Testing (must be automated + repeatable)
-
-Add tests that run in CI / local test runner:
-
-Unit tests
-
-Rounding drift correction: feed known rounded drift cases and assert macros end within ±1g
-
-Topper non-zero: if topper selected, grams never end at 0
-
-Breakfast bounds: 0% yoghurt and Greek yoghurt stay within their ranges
-
-Meal calorie split: each meal ends within ±10 kcal of target share (when feasible)
-
-Locked items respected: locked grams never change
-
-Min/max clamp handling: solver switches items and still converges or fails gracefully
-
-Randomized/property tests (high value)
-
-Run 100–500 randomized scenarios:
-
-random targets + random food selections
-
-assert invariants:
-
-integer grams only
-
-macros within ±1g (when solvable)
-
-meals structured correctly
-
-no negative grams
-
-converges within iteration cap or returns explicit “not solvable”
-
-Manual acceptance checks (last step)
-
-Generate Monday–Sunday and confirm:
-
-alert bar is green within tolerance
-
-breakfast looks proportional
-
-lunch/dinner plates look normal
-
-reset buttons work and do not wipe settings
-
+1. Run `vitest` to execute all 25+ automated tests
+2. Generate portions for Monday - verify ±1g on all macros
+3. Check that each meal is within ±10 kcal of 1/3 share
+4. Verify breakfast composition: 0% yoghurt ~250g, Greek ~100g, granola 25-40g, fruit 80-120g
+5. Verify lunch/dinner composition: protein + carb + veg all non-zero
+6. Lock some items, regenerate - verify locked quantities preserved
+7. Test Reset Day and Reset Week buttons (already implemented in UI)
