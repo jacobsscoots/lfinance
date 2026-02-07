@@ -23,6 +23,9 @@ import {
 import { MealBreakdownList } from "./MealBreakdownList";
 import { DayMacroSummary } from "./DayMacroSummary";
 import { cn } from "@/lib/utils";
+import { logPortioningUiComparison, PortioningDebugItem, PortioningDebugTotals } from "@/lib/portioningDebug";
+import { useEffect } from "react";
+
 
 interface DayDetailModalProps {
   open: boolean;
@@ -85,24 +88,65 @@ export function DayDetailModal({
   const carbDiff = Math.abs(dayMacros.totals.carbs - targets.carbs);
   const fatDiff = Math.abs(dayMacros.totals.fat - targets.fat);
   
-  // Success = all macros within tolerance (±1g for P/C/F, ±2 kcal for calories)
+  // Success = all macros within tolerance (±1g for P/C/F, <5 kcal for calories)
   const isWithinTolerance = calDiff < 5 && proDiff <= 1 && carbDiff <= 1 && fatDiff <= 1;
   const hasItems = items.length > 0;
   
   // Build specific failure messages for clarity
   const failedMacros: string[] = [];
-  if (proDiff > 1) failedMacros.push(`Protein: ${proDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.protein - targets.protein)}g`);
-  if (carbDiff > 1) failedMacros.push(`Carbs: ${carbDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.carbs - targets.carbs)}g`);
-  if (fatDiff > 1) failedMacros.push(`Fat: ${fatDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.fat - targets.fat)}g`);
-  if (calDiff >= 5) failedMacros.push(`Calories: ${calDiff > 0 ? '+' : ''}${Math.round(dayMacros.totals.calories - targets.calories)}`);
+  if (proDiff > 1) failedMacros.push(`Protein: ${Math.round(dayMacros.totals.protein - targets.protein) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.protein - targets.protein)}g`);
+  if (carbDiff > 1) failedMacros.push(`Carbs: ${Math.round(dayMacros.totals.carbs - targets.carbs) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.carbs - targets.carbs)}g`);
+  if (fatDiff > 1) failedMacros.push(`Fat: ${Math.round(dayMacros.totals.fat - targets.fat) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.fat - targets.fat)}g`);
+  if (calDiff >= 5) failedMacros.push(`Calories: ${Math.round(dayMacros.totals.calories - targets.calories) >= 0 ? '+' : ''}${Math.round(dayMacros.totals.calories - targets.calories)}`);
 
-  // Portioning settings info
+  // Portioning settings info (not used in UI but kept for future)
   const portioningSettings = {
     rounding: settings?.portion_rounding || 5,
     min: settings?.min_grams_per_item || 10,
     max: settings?.max_grams_per_item || 500,
     tolerance: settings?.target_tolerance_percent || 2,
   };
+
+  // DEV ONLY: log comparison with solver totals when modal opens
+  useEffect(() => {
+    if (!open) return;
+    // Build UI item list
+    const uiItems: PortioningDebugItem[] = items.map(item => {
+      const p = item.product;
+      return {
+        itemId: item.id,
+        name: p?.name ?? "?",
+        mealType: item.meal_type,
+        grams: item.quantity_grams,
+        per100g: {
+          calories: p?.calories_per_100g ?? 0,
+          protein: p?.protein_per_100g ?? 0,
+          carbs: p?.carbs_per_100g ?? 0,
+          fat: p?.fat_per_100g ?? 0,
+        },
+        contribution: {
+          calories: (p?.calories_per_100g ?? 0) * item.quantity_grams / 100,
+          protein: (p?.protein_per_100g ?? 0) * item.quantity_grams / 100,
+          carbs: (p?.carbs_per_100g ?? 0) * item.quantity_grams / 100,
+          fat: (p?.fat_per_100g ?? 0) * item.quantity_grams / 100,
+        },
+        flags: {
+          locked: item.is_locked,
+          fixed: p?.product_type === "fixed",
+          ignored: !!p?.ignore_macros,
+          seasoningLike: false,
+        },
+      };
+    });
+    logPortioningUiComparison({
+      mealDate: plan.meal_date,
+      uiTargets: targets,
+      uiAchieved: dayMacros.totals,
+      uiItems,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
