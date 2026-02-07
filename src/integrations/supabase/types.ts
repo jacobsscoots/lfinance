@@ -370,6 +370,7 @@ export type Database = {
           fibre_per_100g: number | null
           fixed_portion_grams: number | null
           food_type: string | null
+          gross_pack_size_grams: number | null
           id: string
           ignore_macros: boolean
           image_url: string | null
@@ -378,9 +379,13 @@ export type Database = {
           offer_label: string | null
           offer_price: number | null
           pack_size_grams: number | null
+          packaging_weight_grams: number | null
           price: number
           product_type: string
           protein_per_100g: number
+          quantity_in_use: number | null
+          quantity_on_hand: number | null
+          reorder_threshold: number | null
           salt_per_100g: number | null
           saturates_per_100g: number | null
           serving_basis: string
@@ -388,6 +393,7 @@ export type Database = {
           source_url: string | null
           storage_notes: string | null
           sugars_per_100g: number | null
+          target_quantity: number | null
           updated_at: string
           user_id: string
         }
@@ -401,6 +407,7 @@ export type Database = {
           fibre_per_100g?: number | null
           fixed_portion_grams?: number | null
           food_type?: string | null
+          gross_pack_size_grams?: number | null
           id?: string
           ignore_macros?: boolean
           image_url?: string | null
@@ -409,9 +416,13 @@ export type Database = {
           offer_label?: string | null
           offer_price?: number | null
           pack_size_grams?: number | null
+          packaging_weight_grams?: number | null
           price?: number
           product_type?: string
           protein_per_100g?: number
+          quantity_in_use?: number | null
+          quantity_on_hand?: number | null
+          reorder_threshold?: number | null
           salt_per_100g?: number | null
           saturates_per_100g?: number | null
           serving_basis?: string
@@ -419,6 +430,7 @@ export type Database = {
           source_url?: string | null
           storage_notes?: string | null
           sugars_per_100g?: number | null
+          target_quantity?: number | null
           updated_at?: string
           user_id: string
         }
@@ -432,6 +444,7 @@ export type Database = {
           fibre_per_100g?: number | null
           fixed_portion_grams?: number | null
           food_type?: string | null
+          gross_pack_size_grams?: number | null
           id?: string
           ignore_macros?: boolean
           image_url?: string | null
@@ -440,9 +453,13 @@ export type Database = {
           offer_label?: string | null
           offer_price?: number | null
           pack_size_grams?: number | null
+          packaging_weight_grams?: number | null
           price?: number
           product_type?: string
           protein_per_100g?: number
+          quantity_in_use?: number | null
+          quantity_on_hand?: number | null
+          reorder_threshold?: number | null
           salt_per_100g?: number | null
           saturates_per_100g?: number | null
           serving_basis?: string
@@ -450,6 +467,7 @@ export type Database = {
           source_url?: string | null
           storage_notes?: string | null
           sugars_per_100g?: number | null
+          target_quantity?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -457,51 +475,84 @@ export type Database = {
       }
       toiletry_items: {
         Row: {
+          brand: string | null
           category: string
           cost_per_item: number
           created_at: string
           current_remaining: number
+          gross_size: number | null
           id: string
+          image_url: string | null
           last_restocked_at: string | null
           name: string
           notes: string | null
+          offer_label: string | null
+          offer_price: number | null
           pack_size: number
+          packaging_weight: number | null
+          quantity_in_use: number | null
+          quantity_on_hand: number | null
+          reorder_threshold: number | null
           size_unit: string
+          source_url: string | null
           status: string
+          target_quantity: number | null
           total_size: number
           updated_at: string
           usage_rate_per_day: number
           user_id: string
         }
         Insert: {
+          brand?: string | null
           category?: string
           cost_per_item?: number
           created_at?: string
           current_remaining?: number
+          gross_size?: number | null
           id?: string
+          image_url?: string | null
           last_restocked_at?: string | null
           name: string
           notes?: string | null
+          offer_label?: string | null
+          offer_price?: number | null
           pack_size?: number
+          packaging_weight?: number | null
+          quantity_in_use?: number | null
+          quantity_on_hand?: number | null
+          reorder_threshold?: number | null
           size_unit?: string
+          source_url?: string | null
           status?: string
+          target_quantity?: number | null
           total_size: number
           updated_at?: string
           usage_rate_per_day?: number
           user_id: string
         }
         Update: {
+          brand?: string | null
           category?: string
           cost_per_item?: number
           created_at?: string
           current_remaining?: number
+          gross_size?: number | null
           id?: string
+          image_url?: string | null
           last_restocked_at?: string | null
           name?: string
           notes?: string | null
+          offer_label?: string | null
+          offer_price?: number | null
           pack_size?: number
+          packaging_weight?: number | null
+          quantity_in_use?: number | null
+          quantity_on_hand?: number | null
+          reorder_threshold?: number | null
           size_unit?: string
+          source_url?: string | null
           status?: string
+          target_quantity?: number | null
           total_size?: number
           updated_at?: string
           usage_rate_per_day?: number
