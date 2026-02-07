@@ -5,6 +5,8 @@ import { toast } from "sonner";
 
 export type ProductType = "editable" | "fixed";
 export type ServingBasis = "per_100g" | "per_serving" | "as_sold";
+export type FoodType = "protein" | "carb" | "fat" | "veg" | "fruit" | "dairy" | "sauce" | "treat" | "other";
+export type MealEligibility = "breakfast" | "lunch" | "dinner" | "snack";
 
 export interface Product {
   id: string;
@@ -38,6 +40,9 @@ export interface Product {
   source_url: string | null;
   image_url: string | null;
   storage_notes: string | null;
+  // Meal planning fields
+  meal_eligibility: MealEligibility[];
+  food_type: FoodType;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +77,9 @@ export interface ProductFormData {
   source_url?: string | null;
   image_url?: string | null;
   storage_notes?: string | null;
+  // Meal planning fields
+  meal_eligibility?: MealEligibility[];
+  food_type?: FoodType;
 }
 
 // Conversion helpers

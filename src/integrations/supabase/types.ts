@@ -369,9 +369,11 @@ export type Database = {
           fat_per_100g: number
           fibre_per_100g: number | null
           fixed_portion_grams: number | null
+          food_type: string | null
           id: string
           ignore_macros: boolean
           image_url: string | null
+          meal_eligibility: string[] | null
           name: string
           offer_label: string | null
           offer_price: number | null
@@ -398,9 +400,11 @@ export type Database = {
           fat_per_100g?: number
           fibre_per_100g?: number | null
           fixed_portion_grams?: number | null
+          food_type?: string | null
           id?: string
           ignore_macros?: boolean
           image_url?: string | null
+          meal_eligibility?: string[] | null
           name: string
           offer_label?: string | null
           offer_price?: number | null
@@ -427,9 +431,11 @@ export type Database = {
           fat_per_100g?: number
           fibre_per_100g?: number | null
           fixed_portion_grams?: number | null
+          food_type?: string | null
           id?: string
           ignore_macros?: boolean
           image_url?: string | null
+          meal_eligibility?: string[] | null
           name?: string
           offer_label?: string | null
           offer_price?: number | null
@@ -580,8 +586,12 @@ export type Database = {
           daily_calorie_target: number | null
           fat_target_grams: number | null
           id: string
+          max_grams_per_item: number | null
+          min_grams_per_item: number | null
           mode: string
+          portion_rounding: number | null
           protein_target_grams: number | null
+          target_tolerance_percent: number | null
           updated_at: string
           user_id: string
           weekend_calorie_target: number | null
@@ -596,8 +606,12 @@ export type Database = {
           daily_calorie_target?: number | null
           fat_target_grams?: number | null
           id?: string
+          max_grams_per_item?: number | null
+          min_grams_per_item?: number | null
           mode?: string
+          portion_rounding?: number | null
           protein_target_grams?: number | null
+          target_tolerance_percent?: number | null
           updated_at?: string
           user_id: string
           weekend_calorie_target?: number | null
@@ -612,8 +626,12 @@ export type Database = {
           daily_calorie_target?: number | null
           fat_target_grams?: number | null
           id?: string
+          max_grams_per_item?: number | null
+          min_grams_per_item?: number | null
           mode?: string
+          portion_rounding?: number | null
           protein_target_grams?: number | null
+          target_tolerance_percent?: number | null
           updated_at?: string
           user_id?: string
           weekend_calorie_target?: number | null
