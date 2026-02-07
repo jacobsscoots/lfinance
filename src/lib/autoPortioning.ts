@@ -44,6 +44,8 @@ export interface DayPortioningResult {
   dayTotals: MacroTotals;
   warnings: string[];
   success: boolean;
+  /** True if within relaxed tolerance (±3g macros) but outside strict (±1g) - still persists to DB */
+  nearMatch: boolean;
 }
 
 interface MacroError {
@@ -850,6 +852,7 @@ export function calculateDayPortions(
         ? ["No editable items to adjust. Add more foods or unlock some items."]
         : [],
       success: Math.abs(totalMacros.calories - dailyTargets.calories) < 10,
+      nearMatch: false,
     };
   }
 
@@ -1658,24 +1661,47 @@ export function calculateDayPortions(
 
   // Tolerances:
   // - Calories can be up to 50 kcal over target (user preference)
-  // - Macros within ±1g (inclusive) - PRIMARY SUCCESS CRITERIA
+  // - Macros within ±1g (inclusive) - STRICT SUCCESS CRITERIA
+  // - Macros within ±3g = "near match" - still saves, but warns
   const CAL_TOLERANCE = 50;
-  const MACRO_TOLERANCE = 1;
+  const MACRO_TOLERANCE_STRICT = 1;
+  const MACRO_TOLERANCE_RELAXED = 3; // Still persists, but shows warning
   
   // Calories: allow up to 50 over, but not under by more than a small margin
   const caloriesWithinTolerance = calDiff <= CAL_TOLERANCE;
-  const macrosWithinTolerance =
-    proDiff <= MACRO_TOLERANCE &&
-    carbDiff <= MACRO_TOLERANCE &&
-    fatDiff <= MACRO_TOLERANCE;
+  
+  // Strict tolerance: ±1g
+  const macrosWithinStrictTolerance =
+    proDiff <= MACRO_TOLERANCE_STRICT &&
+    carbDiff <= MACRO_TOLERANCE_STRICT &&
+    fatDiff <= MACRO_TOLERANCE_STRICT;
+  
+  // Relaxed tolerance: ±3g (still saves to DB with warning)
+  const macrosWithinRelaxedTolerance =
+    proDiff <= MACRO_TOLERANCE_RELAXED &&
+    carbDiff <= MACRO_TOLERANCE_RELAXED &&
+    fatDiff <= MACRO_TOLERANCE_RELAXED;
 
-  // Success = macros within ±1g AND calories within tolerance
-  const success = macrosWithinTolerance && caloriesWithinTolerance;
+  // Success = strict macros ±1g AND calories within tolerance
+  const success = macrosWithinStrictTolerance && caloriesWithinTolerance;
+  
+  // Near match = within relaxed tolerance but not strict - we still save these
+  const nearMatch = !success && macrosWithinRelaxedTolerance && caloriesWithinTolerance;
 
   if (!success) {
-    if (proDiff > MACRO_TOLERANCE) warnings.push(`Protein: ${Math.round(totalAchieved.protein)}g (target: ${dailyTargets.protein}g)`);
-    if (carbDiff > MACRO_TOLERANCE) warnings.push(`Carbs: ${Math.round(totalAchieved.carbs)}g (target: ${dailyTargets.carbs}g)`);
-    if (fatDiff > MACRO_TOLERANCE) warnings.push(`Fat: ${Math.round(totalAchieved.fat)}g (target: ${dailyTargets.fat}g)`);
+    // Show warnings for any macro outside ±1g
+    if (proDiff > MACRO_TOLERANCE_STRICT) {
+      const delta = totalAchieved.protein - dailyTargets.protein;
+      warnings.push(`Protein: ${Math.round(totalAchieved.protein)}g (target: ${dailyTargets.protein}g, ${delta >= 0 ? "+" : ""}${Math.round(delta)}g)`);
+    }
+    if (carbDiff > MACRO_TOLERANCE_STRICT) {
+      const delta = totalAchieved.carbs - dailyTargets.carbs;
+      warnings.push(`Carbs: ${Math.round(totalAchieved.carbs)}g (target: ${dailyTargets.carbs}g, ${delta >= 0 ? "+" : ""}${Math.round(delta)}g)`);
+    }
+    if (fatDiff > MACRO_TOLERANCE_STRICT) {
+      const delta = totalAchieved.fat - dailyTargets.fat;
+      warnings.push(`Fat: ${Math.round(totalAchieved.fat)}g (target: ${dailyTargets.fat}g, ${delta >= 0 ? "+" : ""}${Math.round(delta)}g)`);
+    }
     if (!caloriesWithinTolerance) warnings.push(`Calories: ${Math.round(totalAchieved.calories)} (target: ${dailyTargets.calories}, max +${CAL_TOLERANCE})`);
   }
 
@@ -1727,6 +1753,7 @@ export function calculateDayPortions(
     dayTotals: totalAchieved,
     warnings,
     success,
+    nearMatch,
   };
 }
 

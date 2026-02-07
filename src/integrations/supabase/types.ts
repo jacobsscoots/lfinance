@@ -20,6 +20,7 @@ export type Database = {
           balance: number
           connection_id: string | null
           created_at: string
+          deleted_at: string | null
           display_name: string | null
           external_id: string | null
           id: string
@@ -36,6 +37,7 @@ export type Database = {
           balance?: number
           connection_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           display_name?: string | null
           external_id?: string | null
           id?: string
@@ -52,6 +54,7 @@ export type Database = {
           balance?: number
           connection_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           display_name?: string | null
           external_id?: string | null
           id?: string
