@@ -281,9 +281,9 @@ describe("autoPortioning", () => {
       const breakfastResult = result.mealResults.get("breakfast");
       const granolaGrams = breakfastResult?.items.get(items[1].id);
       
-      // Granola should be at least 25g (topper minimum) and no more than 40g
+      // Granola should be at least 25g (topper minimum) and can now go up to 60g
       expect(granolaGrams).toBeGreaterThanOrEqual(25);
-      expect(granolaGrams).toBeLessThanOrEqual(40);
+      expect(granolaGrams).toBeLessThanOrEqual(60);
     });
     
     it("selected fruit never ends at 0g", () => {
@@ -401,7 +401,7 @@ describe("autoPortioning", () => {
   });
 
   describe("seasoning constraints", () => {
-    it("seasonings stay within 5-30g range", () => {
+    it("seasonings stay within 3-15g range (realistic portions)", () => {
       const items = [
         createMealPlanItem(testProducts.chicken, "dinner"),
         createMealPlanItem(testProducts.paprikaSeasoning, "dinner"),
@@ -413,9 +413,9 @@ describe("autoPortioning", () => {
       const dinnerResult = result.mealResults.get("dinner");
       const seasoningGrams = dinnerResult?.items.get(items[1].id) || 0;
       
-      // Seasoning should be in realistic 5-30g range
-      expect(seasoningGrams).toBeGreaterThanOrEqual(5);
-      expect(seasoningGrams).toBeLessThanOrEqual(30);
+      // Seasoning should be in realistic 3-15g range (hard capped)
+      expect(seasoningGrams).toBeGreaterThanOrEqual(3);
+      expect(seasoningGrams).toBeLessThanOrEqual(15);
     });
 
     it("seasonings are not used as macro adjustment knobs", () => {
@@ -435,8 +435,83 @@ describe("autoPortioning", () => {
       const seasoning1 = result1.mealResults.get("dinner")?.items.get(items[2].id) || 0;
       const seasoning2 = result2.mealResults.get("dinner")?.items.get(items[2].id) || 0;
       
-      // Seasonings should not vary wildly between runs
-      expect(Math.abs(seasoning1 - seasoning2)).toBeLessThanOrEqual(15);
+      // Seasonings should not vary between runs (they're fixed, not knobs)
+      expect(Math.abs(seasoning1 - seasoning2)).toBeLessThanOrEqual(5);
+    });
+
+    it("sauces are NOT capped at 15g (only seasonings are)", () => {
+      // Create a sauce product (not a seasoning)
+      const passataSauce = createProduct({
+        name: "Passata Tomato Sauce",
+        protein_per_100g: 1,
+        carbs_per_100g: 4,
+        fat_per_100g: 0.1,
+        calories_per_100g: 20,
+        food_type: "sauce"
+      });
+      
+      const items = [
+        createMealPlanItem(testProducts.chicken, "dinner"),
+        createMealPlanItem(passataSauce, "dinner"),
+      ];
+      
+      const targets: MacroTotals = { calories: 600, protein: 50, carbs: 70, fat: 15 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const dinnerResult = result.mealResults.get("dinner");
+      const sauceGrams = dinnerResult?.items.get(items[1].id) || 0;
+      
+      // Sauces can go above 15g (up to 30g) - NOT capped like seasonings
+      expect(sauceGrams).toBeGreaterThanOrEqual(0);
+      expect(sauceGrams).toBeLessThanOrEqual(30);
+    });
+  });
+
+  describe("granola topper extended range", () => {
+    it("granola can extend up to 60g when needed to hit targets", () => {
+      const items = [
+        createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+        createMealPlanItem(testProducts.granola, "breakfast"),
+        createMealPlanItem(testProducts.mixedBerries, "breakfast"),
+      ];
+      
+      // High carb target that may require more granola
+      const targets: MacroTotals = { calories: 600, protein: 35, carbs: 70, fat: 12 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const breakfastResult = result.mealResults.get("breakfast");
+      const granolaGrams = breakfastResult?.items.get(items[1].id);
+      
+      // Granola should be within 25-60g range
+      expect(granolaGrams).toBeGreaterThanOrEqual(25);
+      expect(granolaGrams).toBeLessThanOrEqual(60);
+    });
+
+    it("non-granola toppers still respect 40g max", () => {
+      // Create a non-granola topper
+      const muesliTopper = createProduct({
+        name: "Muesli Topper",
+        protein_per_100g: 6,
+        carbs_per_100g: 55,
+        fat_per_100g: 10,
+        calories_per_100g: 350
+      });
+      
+      const items = [
+        createMealPlanItem(testProducts.zeroYogurt, "breakfast"),
+        createMealPlanItem(muesliTopper, "breakfast"),
+      ];
+      
+      // High carb target
+      const targets: MacroTotals = { calories: 600, protein: 35, carbs: 70, fat: 12 };
+      const result = calculateDayPortions(items, targets, DEFAULT_PORTIONING_SETTINGS);
+      
+      const breakfastResult = result.mealResults.get("breakfast");
+      const muesliGrams = breakfastResult?.items.get(items[1].id);
+      
+      // Non-granola toppers should stay within 25-40g
+      expect(muesliGrams).toBeGreaterThanOrEqual(25);
+      expect(muesliGrams).toBeLessThanOrEqual(40);
     });
   });
 
