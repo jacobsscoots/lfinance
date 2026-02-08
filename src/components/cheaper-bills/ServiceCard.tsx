@@ -10,10 +10,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   MoreVertical,
   Pencil,
   Trash2,
-  Calendar,
   CalendarPlus,
   Zap,
   Wifi,
@@ -23,12 +27,17 @@ import {
   TrendingDown,
   Search,
   Loader2,
+  ChevronDown,
 } from "lucide-react";
 import { TrackedService } from "@/hooks/useTrackedServices";
+import { ComparisonResult } from "@/hooks/useComparisonResults";
 import { daysUntilContractEnd, generateIcsContent } from "@/lib/billsCalculations";
+import { ScanResultsPanel } from "./ScanResultsPanel";
+import { useState } from "react";
 
 interface ServiceCardProps {
   service: TrackedService;
+  comparisonResults?: ComparisonResult[];
   onEdit: () => void;
   onDelete: () => void;
   onToggleTracking: (enabled: boolean) => void;
@@ -44,10 +53,21 @@ const serviceIcons: Record<string, any> = {
   streaming: Tv,
 };
 
-export function ServiceCard({ service, onEdit, onDelete, onToggleTracking, onScan, isScanning }: ServiceCardProps) {
+export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete, onToggleTracking, onScan, isScanning }: ServiceCardProps) {
+  const [isResultsOpen, setIsResultsOpen] = useState(false);
   const Icon = serviceIcons[service.service_type] || Zap;
   const daysLeft = daysUntilContractEnd(service.contract_end_date);
   const isEnding = daysLeft !== null && daysLeft <= 30;
+  
+  // Filter results for this service
+  const serviceResults = comparisonResults.filter(
+    r => r.tracked_service_id === service.id || r.service_type === service.service_type
+  );
+  const cheaperAlternatives = serviceResults.filter(r => {
+    const resultAnnual = r.annual_cost || r.monthly_cost * 12;
+    const currentAnnual = service.monthly_cost * 12;
+    return resultAnnual < currentAnnual;
+  });
 
   const handleAddToCalendar = () => {
     if (!service.contract_end_date) return;
@@ -178,6 +198,26 @@ export function ServiceCard({ service, onEdit, onDelete, onToggleTracking, onSca
           <p className="text-xs text-muted-foreground mt-3 border-t pt-3">
             {service.last_recommendation_reason}
           </p>
+        )}
+        
+        {/* Collapsible comparison results */}
+        {cheaperAlternatives.length > 0 && (
+          <Collapsible open={isResultsOpen} onOpenChange={setIsResultsOpen} className="mt-3 border-t pt-3">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-between">
+                <span className="text-sm">
+                  View {cheaperAlternatives.length} cheaper alternative{cheaperAlternatives.length !== 1 ? 's' : ''}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isResultsOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">
+              <ScanResultsPanel 
+                results={serviceResults} 
+                currentMonthlyCost={service.monthly_cost} 
+              />
+            </CollapsibleContent>
+          </Collapsible>
         )}
       </CardContent>
     </Card>

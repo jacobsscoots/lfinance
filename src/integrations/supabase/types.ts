@@ -428,6 +428,7 @@ export type Database = {
           source: string | null
           tracked_service_id: string | null
           user_id: string
+          website_url: string | null
         }
         Insert: {
           annual_cost?: number | null
@@ -443,6 +444,7 @@ export type Database = {
           source?: string | null
           tracked_service_id?: string | null
           user_id: string
+          website_url?: string | null
         }
         Update: {
           annual_cost?: number | null
@@ -458,6 +460,7 @@ export type Database = {
           source?: string | null
           tracked_service_id?: string | null
           user_id?: string
+          website_url?: string | null
         }
         Relationships: [
           {

@@ -16,6 +16,7 @@ export interface ComparisonResult {
   source: string;
   scanned_at: string;
   is_best_offer: boolean;
+  website_url: string | null;
   created_at: string;
 }
 

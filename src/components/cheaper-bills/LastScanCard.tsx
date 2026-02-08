@@ -1,12 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Clock, Loader2, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { ComparisonResult } from "@/hooks/useComparisonResults";
 
 interface LastScanCardProps {
   lastScanDate: string | null;
   recommendation: string | null;
   recommendationReason: string | null;
+  bestOffer?: ComparisonResult | null;
   onScan?: () => void;
   isScanning?: boolean;
   scanProgress?: string | null;
@@ -16,6 +18,7 @@ export function LastScanCard({
   lastScanDate, 
   recommendation, 
   recommendationReason,
+  bestOffer,
   onScan,
   isScanning,
   scanProgress,
@@ -93,6 +96,15 @@ export function LastScanCard({
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                 {recommendationReason}
               </p>
+            )}
+            {/* Best offer link */}
+            {recommendation === 'switch' && bestOffer?.website_url && (
+              <Button asChild size="sm" className="mt-3 w-full sm:w-auto">
+                <a href={bestOffer.website_url} target="_blank" rel="noopener noreferrer">
+                  View Best Deal: {bestOffer.provider}
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </a>
+              </Button>
             )}
           </>
         )}

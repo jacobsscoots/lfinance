@@ -22,7 +22,38 @@ interface TariffComparison {
   reason: string;
   source: string;
   features?: Record<string, any>;
+  websiteUrl?: string;
 }
+
+// Provider website URLs
+const PROVIDER_URLS: Record<string, string> = {
+  // Energy
+  'Octopus Energy': 'https://octopus.energy/dashboard/new-quote/',
+  'British Gas': 'https://www.britishgas.co.uk/energy.html',
+  'EDF': 'https://www.edfenergy.com/gas-electricity',
+  'E.ON Next': 'https://www.eonnext.com/',
+  'Scottish Power': 'https://www.scottishpower.co.uk/gas-electricity/',
+  'Ovo Energy': 'https://www.ovoenergy.com/energy-plans',
+  'Shell Energy': 'https://www.shellenergy.co.uk/energy/electricity-gas',
+  'Utility Warehouse': 'https://www.utilitywarehouse.co.uk/energy',
+  // Broadband
+  'BT': 'https://www.bt.com/broadband/',
+  'Sky': 'https://www.sky.com/broadband/',
+  'Virgin Media': 'https://www.virginmedia.com/broadband/',
+  'Vodafone': 'https://www.vodafone.co.uk/broadband/',
+  'Plusnet': 'https://www.plus.net/broadband/',
+  'TalkTalk': 'https://www.talktalk.co.uk/broadband/',
+  'NOW Broadband': 'https://www.nowtv.com/broadband',
+  // Mobile
+  'Three': 'https://www.three.co.uk/sim-only-plans',
+  'Voxi': 'https://www.voxi.co.uk/plans/',
+  'GiffGaff': 'https://www.giffgaff.com/sim-only-plans/',
+  'EE': 'https://ee.co.uk/mobile/pay-monthly-plans',
+  'O2': 'https://www.o2.co.uk/shop/sim-only',
+  'iD Mobile': 'https://www.idmobile.co.uk/sim-only-deals',
+  'Smarty': 'https://smarty.co.uk/sim-only-plans',
+  'Lebara': 'https://www.lebara.co.uk/sim-only',
+};
 
 // Market data for different service types (updated Feb 2026)
 const BROADBAND_PLANS = [
@@ -124,6 +155,7 @@ async function scanEnergyDeals(
               reason: '',
               source: 'octopus_api',
               features: { unitRate, standingCharge, isFixed: !product.is_variable },
+              websiteUrl: PROVIDER_URLS['Octopus Energy'],
             });
           }
         } catch (e) {
@@ -156,6 +188,7 @@ async function scanEnergyDeals(
       reason: '',
       source: 'market_estimate',
       features: { unitRate: rate.unitRate, standingCharge: rate.standingCharge, isFixed: rate.isFixed },
+      websiteUrl: PROVIDER_URLS[rate.provider],
     });
   }
 
@@ -220,6 +253,7 @@ function scanBroadbandDeals(
       reason,
       source: plan.source,
       features: { speed: plan.speed, contract: plan.contract },
+      websiteUrl: PROVIDER_URLS[plan.provider],
     };
   }).sort((a, b) => b.savings - a.savings);
 }
@@ -257,6 +291,7 @@ function scanMobileDeals(
       reason,
       source: plan.source,
       features: { data: plan.data, contract: plan.contract },
+      websiteUrl: PROVIDER_URLS[plan.provider],
     };
   }).sort((a, b) => b.savings - a.savings);
 }
@@ -366,6 +401,7 @@ serve(async (req) => {
           source: offer.source,
           scanned_at: new Date().toISOString(),
           is_best_offer: offer === bestOffers[0],
+          website_url: offer.websiteUrl || null,
         }, {
           onConflict: 'user_id,provider,plan_name',
           ignoreDuplicates: false,
