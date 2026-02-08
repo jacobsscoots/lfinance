@@ -247,7 +247,7 @@ serve(async (req) => {
     }
 
     const emailResponse = await resend.emails.send({
-      from: "Cheaper Bills <noreply@lfinance.lovable.app>",
+      from: "Cheaper Bills <onboarding@resend.dev>",
       to: [recipientEmail],
       subject,
       html,
@@ -255,8 +255,18 @@ serve(async (req) => {
 
     console.log("Notification email sent:", emailResponse);
 
+    // Check for Resend errors
+    if (emailResponse.error) {
+      console.error("Resend error:", emailResponse.error);
+      throw new Error(emailResponse.error.message || "Email provider error");
+    }
+
     return new Response(
-      JSON.stringify({ success: true, messageId: emailResponse.id }),
+      JSON.stringify({ 
+        success: true, 
+        messageId: emailResponse.data?.id,
+        sentAt: new Date().toISOString(),
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
