@@ -1,88 +1,85 @@
 
-# Fix Bank Sync Not Re-Creating Deleted Accounts
+# Add Editable Monthly Contribution for Investments
 
-## Problem Summary
-Your Monzo current account exists in the database but is marked as **soft-deleted** (has a `deleted_at` timestamp). When you sync:
-1. The sync function tries to find an existing account - but the SELECT RLS policy filters out soft-deleted rows
-2. It thinks the account is new and tries to INSERT
-3. The INSERT fails because the unique constraint on `(provider, external_id)` still includes the soft-deleted row
-4. The sync logs the error but continues, only syncing your savings pots
-
-| Account | Status | Why Not Showing |
-|---------|--------|-----------------|
-| Monzo Current (Jacob Lawrence Martin Lane) | Soft-deleted (deleted_at set) | Unique constraint blocks re-insert |
-| Starling Current | Soft-deleted | Same issue |
-| Groceries Pot | Active | Shows correctly |
-| Clothing Pot | Active | Shows correctly |
-| Saving Challenge Pot | Active | Shows correctly |
+## Summary
+You want to set a £50/month contribution for your ChipX AI Fund and have the projections reflect this accurately. Currently, the monthly contribution is calculated from historical transactions rather than being a configurable value.
 
 ---
 
-## Solution Options
+## Current Behavior
 
-Since you chose **hard delete** for accounts earlier, the cleanest fix is to:
+| Item | How It Works Now |
+|------|------------------|
+| Monthly contribution display | Calculated by averaging all deposits over time |
+| Projection calculations | Uses the calculated average |
+| Editing contribution | Not possible - read-only display |
 
-**Option A (Recommended):** Remove the soft-deleted rows so sync can recreate them
-- Run a database migration to hard-delete rows where `deleted_at IS NOT NULL`
-- The next sync will recreate the accounts fresh
-
-**Option B:** Update the unique constraint to exclude soft-deleted rows
-- Modify the unique index to include `WHERE deleted_at IS NULL`
-- This allows re-inserting accounts with the same external_id if the original was soft-deleted
-
-I recommend **Option A** since you've already switched to hard-delete strategy.
+This means if you made irregular deposits, the "monthly contribution" shown is just an estimate, not your actual planned contribution.
 
 ---
 
-## Implementation
+## Solution
 
-### Step 1: Clean Up Soft-Deleted Rows
-
-Run a migration to permanently remove rows that were previously soft-deleted:
-
-```sql
--- Remove orphaned soft-deleted accounts so sync can recreate them
-DELETE FROM public.bank_accounts 
-WHERE deleted_at IS NOT NULL;
-```
-
-This is safe because:
-- These accounts were already "deleted" by the user
-- Related transactions/bills were already cascade-deleted
-- The sync will recreate them with fresh data from TrueLayer
-
-### Step 2: Update Unique Index (Belt-and-Suspenders)
-
-Also update the unique constraint to only apply to active accounts, preventing this issue in the future if any soft-deleted rows remain:
+### Step 1: Add Database Column
+Add a `monthly_contribution` column to the `investment_accounts` table to store your configured contribution amount:
 
 ```sql
--- Drop existing partial unique indexes
-DROP INDEX IF EXISTS bank_accounts_provider_external_id_unique;
-DROP INDEX IF EXISTS bank_accounts_provider_external_id_key;
-
--- Recreate with deleted_at IS NULL condition
-CREATE UNIQUE INDEX bank_accounts_provider_external_id_unique 
-ON public.bank_accounts (provider, external_id) 
-WHERE provider IS NOT NULL 
-  AND external_id IS NOT NULL 
-  AND deleted_at IS NULL;
+ALTER TABLE public.investment_accounts 
+ADD COLUMN monthly_contribution numeric DEFAULT 0;
 ```
 
-### Step 3: Remove deleted_at Column (Optional)
+### Step 2: Update ProjectionCard to Be Editable
+Modify the ProjectionCard component to:
+- Accept an `onContributionChange` callback prop
+- Display an editable input field for monthly contribution (defaulting to £50)
+- Call the update function when the value changes
 
-Since you're now using hard-delete, the `deleted_at` column is no longer needed. However, this is optional and can be done later.
+### Step 3: Update Investment Hook and Types
+- Add `monthly_contribution` to the `InvestmentAccount` interface
+- Allow updating the contribution via `updateInvestment`
+
+### Step 4: Wire Up the Investments Page
+- Pass the stored `monthly_contribution` to ProjectionCard instead of the calculated average
+- Add a handler to save changes when the contribution is edited
+- Fall back to £50 if no value is set
 
 ---
 
 ## Files to Modify
 
-1. **Database migration** - Delete soft-deleted rows and update unique index
+1. **Database migration** - Add `monthly_contribution` column
+2. **`src/hooks/useInvestments.ts`** - Add type for new column
+3. **`src/components/investments/ProjectionCard.tsx`** - Make contribution editable
+4. **`src/pages/Investments.tsx`** - Use stored value, handle updates
 
 ---
 
-## Verification Steps
+## Result
 
-After the migration:
-1. Press the **sync button** on Bank Connections card
-2. Your Monzo current account should now appear
-3. All transactions from your current account should sync
+After implementation:
+- Your ChipX AI Fund will show £50/month as the monthly contribution
+- You can edit this value directly in the projections card
+- Projections (3m, 6m, 12m) will accurately reflect £50/month contributions
+- The value persists in the database so it's remembered between sessions
+
+---
+
+## Technical Details
+
+### ProjectionCard Changes
+```text
+Before: <span>£{monthlyContribution}/month</span> (read-only)
+After:  <Input value={50} onChange={...} /> /month (editable)
+```
+
+### Projection Formula
+The projection uses compound growth with monthly contributions:
+```text
+For each month:
+  value = (value + monthlyContribution) * (1 + monthlyRate)
+```
+
+With £50/month at 8% annual return:
+- 3 months: currentValue + £150 + growth
+- 6 months: currentValue + £300 + growth  
+- 12 months: currentValue + £600 + growth
