@@ -1,104 +1,88 @@
 
-
-# Fix Account Deletion - Delete Related Data
+# Fix Bank Sync Not Re-Creating Deleted Accounts
 
 ## Problem Summary
-You're getting "new row violates row-level security policy for table 'bank_accounts'" when trying to delete an account. Additionally, you want related bills and transactions to be deleted along with the account.
+Your Monzo current account exists in the database but is marked as **soft-deleted** (has a `deleted_at` timestamp). When you sync:
+1. The sync function tries to find an existing account - but the SELECT RLS policy filters out soft-deleted rows
+2. It thinks the account is new and tries to INSERT
+3. The INSERT fails because the unique constraint on `(provider, external_id)` still includes the soft-deleted row
+4. The sync logs the error but continues, only syncing your savings pots
+
+| Account | Status | Why Not Showing |
+|---------|--------|-----------------|
+| Monzo Current (Jacob Lawrence Martin Lane) | Soft-deleted (deleted_at set) | Unique constraint blocks re-insert |
+| Starling Current | Soft-deleted | Same issue |
+| Groceries Pot | Active | Shows correctly |
+| Clothing Pot | Active | Shows correctly |
+| Saving Challenge Pot | Active | Shows correctly |
 
 ---
 
-## Root Cause Analysis
+## Solution Options
 
-The RLS policies on `bank_accounts` have been updated and **should now work** for soft-delete. However, there may be a caching delay or the error you're seeing is from before the fix was applied.
+Since you chose **hard delete** for accounts earlier, the cleanest fix is to:
 
-Since you've indicated you want **related data deleted too**, I'll implement a different approach: **hard delete with cascade**.
+**Option A (Recommended):** Remove the soft-deleted rows so sync can recreate them
+- Run a database migration to hard-delete rows where `deleted_at IS NOT NULL`
+- The next sync will recreate the accounts fresh
+
+**Option B:** Update the unique constraint to exclude soft-deleted rows
+- Modify the unique index to include `WHERE deleted_at IS NULL`
+- This allows re-inserting accounts with the same external_id if the original was soft-deleted
+
+I recommend **Option A** since you've already switched to hard-delete strategy.
 
 ---
 
-## Current Database Relationships
+## Implementation
 
-| Table | Column | Foreign Key Rule |
-|-------|--------|------------------|
-| `transactions` | `account_id` | `ON DELETE CASCADE` (auto-deletes) |
-| `bills` | `account_id` | No cascade (will cause error or orphan) |
+### Step 1: Clean Up Soft-Deleted Rows
 
----
-
-## Solution
-
-### Step 1: Update Foreign Key on Bills Table
-Change the `bills.account_id` foreign key to `ON DELETE CASCADE` so bills are automatically deleted when their linked account is deleted.
+Run a migration to permanently remove rows that were previously soft-deleted:
 
 ```sql
--- Drop existing FK
-ALTER TABLE public.bills 
-DROP CONSTRAINT IF EXISTS bills_account_id_fkey;
-
--- Recreate with CASCADE
-ALTER TABLE public.bills 
-ADD CONSTRAINT bills_account_id_fkey 
-FOREIGN KEY (account_id) 
-REFERENCES public.bank_accounts(id) 
-ON DELETE CASCADE;
+-- Remove orphaned soft-deleted accounts so sync can recreate them
+DELETE FROM public.bank_accounts 
+WHERE deleted_at IS NOT NULL;
 ```
 
-### Step 2: Change Delete Strategy from Soft-Delete to Hard-Delete
-Update `useAccounts.ts` to perform a real DELETE instead of setting `deleted_at`:
+This is safe because:
+- These accounts were already "deleted" by the user
+- Related transactions/bills were already cascade-deleted
+- The sync will recreate them with fresh data from TrueLayer
 
-```typescript
-const deleteAccount = useMutation({
-  mutationFn: async (id: string) => {
-    // Hard delete - cascades to transactions and bills
-    const { error } = await supabase
-      .from('bank_accounts')
-      .delete()
-      .eq('id', id);
+### Step 2: Update Unique Index (Belt-and-Suspenders)
 
-    if (error) throw error;
-  },
-  // ... rest stays the same
-});
-```
+Also update the unique constraint to only apply to active accounts, preventing this issue in the future if any soft-deleted rows remain:
 
-### Step 3: Update RLS for Hard Delete (if needed)
-The existing DELETE policy should work:
 ```sql
--- Already exists:
--- USING (auth.uid() = user_id)
+-- Drop existing partial unique indexes
+DROP INDEX IF EXISTS bank_accounts_provider_external_id_unique;
+DROP INDEX IF EXISTS bank_accounts_provider_external_id_key;
+
+-- Recreate with deleted_at IS NULL condition
+CREATE UNIQUE INDEX bank_accounts_provider_external_id_unique 
+ON public.bank_accounts (provider, external_id) 
+WHERE provider IS NOT NULL 
+  AND external_id IS NOT NULL 
+  AND deleted_at IS NULL;
 ```
 
----
+### Step 3: Remove deleted_at Column (Optional)
 
-## Alternative: Keep Soft-Delete + Cascade Orphan Handling
-
-If you'd prefer to keep soft-delete (marking accounts as deleted rather than removing them), I can instead:
-1. Set `bills.account_id = NULL` when an account is soft-deleted
-2. Filter out bills with no account from certain views
-
-Let me know if you prefer this approach instead.
+Since you're now using hard-delete, the `deleted_at` column is no longer needed. However, this is optional and can be done later.
 
 ---
 
 ## Files to Modify
 
-1. **Database migration** - Update `bills_account_id_fkey` to `ON DELETE CASCADE`
-2. **`src/hooks/useAccounts.ts`** - Change from soft-delete to hard-delete
-
----
-
-## What Gets Deleted
-
-When you delete an account:
-- The account record will be **permanently removed**
-- All **transactions** linked to that account will be **automatically deleted**
-- All **bills** linked to that account will be **automatically deleted**
+1. **Database migration** - Delete soft-deleted rows and update unique index
 
 ---
 
 ## Verification Steps
 
-After implementation:
-1. Try deleting an account on the Accounts page
-2. Check the Transactions page - transactions for that account should be gone
-3. Check the Bills page - bills linked to that account should be gone
-
+After the migration:
+1. Press the **sync button** on Bank Connections card
+2. Your Monzo current account should now appear
+3. All transactions from your current account should sync
