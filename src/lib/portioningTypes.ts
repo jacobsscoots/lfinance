@@ -117,6 +117,9 @@ export type FailureReason =
   | 'ratio_constraint'
   | 'rounding_conflict'
   | 'max_iterations_exceeded'
+  | 'impossible_targets'
+  | 'stagnation'
+  | 'invalid_product_nutrition'
   | 'no_adjustable_items';
 
 // Blocker info for failure reporting

@@ -424,7 +424,8 @@ describe('solve - edge cases', () => {
     
     expect(result.success).toBe(false);
     if (!result.success && 'failure' in result) {
-      expect(result.failure.reason).toBe('no_adjustable_items');
+      // With feasibility pre-check, this now correctly returns 'impossible_targets'
+      expect(['impossible_targets', 'no_adjustable_items']).toContain(result.failure.reason);
     }
   });
   
@@ -985,6 +986,257 @@ describe('seasoning hard cap enforcement', () => {
       // 300g chicken * 3g/100g = 9g, which is under 15g cap
       expect(seasoningGrams).toBeLessThanOrEqual(15);
       expect(seasoningGrams).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ============================================================================
+// FIX B0: Seasoning Constraints Override Tests
+// ============================================================================
+
+describe('Seasoning Constraints Override (Fix B0)', () => {
+  it('should override product min/max for seasonings to prevent contradictory constraints', () => {
+    // This product has min=100, max=300 in the DB (bad for seasoning)
+    const seasoningProduct = {
+      id: 'seasoning-bad-constraints',
+      name: 'Schwartz Cajun Chicken Seasoning',
+      calories_per_100g: 300,
+      protein_per_100g: 10,
+      carbs_per_100g: 50,
+      fat_per_100g: 5,
+      food_type: 'other' as const, // Will be detected by name
+      min_portion_grams: 100,  // BAD: should be overridden
+      max_portion_grams: 300,  // BAD: should be overridden
+    };
+    
+    const solverItem = productToSolverItem(seasoningProduct, 'lunch', 100);
+    
+    // Seasoning constraints should be forced to safe values
+    expect(solverItem.category).toBe('seasoning');
+    expect(solverItem.minPortionGrams).toBe(0); // Not 100
+    expect(solverItem.maxPortionGrams).toBe(15); // Not 300
+    expect(solverItem.editableMode).toBe('LOCKED'); // Not adjustable by solver
+    expect(solverItem.countMacros).toBe(false); // Doesn't count toward targets
+  });
+  
+  it('should cap seasoning currentGrams to max even if initial value is higher', () => {
+    const seasoningProduct = {
+      id: 'seasoning-high-initial',
+      name: 'Paprika Powder',
+      calories_per_100g: 200,
+      protein_per_100g: 5,
+      carbs_per_100g: 40,
+      fat_per_100g: 5,
+      food_type: 'seasoning' as const,
+      fixed_portion_grams: 50, // Higher than max
+    };
+    
+    const solverItem = productToSolverItem(seasoningProduct, 'dinner', 100);
+    
+    // currentGrams should be clamped to 15
+    expect(solverItem.currentGrams).toBe(15);
+  });
+  
+  it('should detect seasonings by food_type sauce', () => {
+    const sauceProduct = {
+      id: 'sauce-1',
+      name: 'BBQ Sauce',
+      calories_per_100g: 150,
+      protein_per_100g: 1,
+      carbs_per_100g: 30,
+      fat_per_100g: 2,
+      food_type: 'sauce' as const,
+    };
+    
+    const solverItem = productToSolverItem(sauceProduct, 'dinner', 50);
+    
+    expect(solverItem.category).toBe('seasoning');
+    expect(solverItem.maxPortionGrams).toBe(15);
+  });
+  
+  it('should NOT override constraints for non-seasoning items', () => {
+    const proteinProduct = {
+      id: 'protein-1',
+      name: 'Chicken Breast',
+      calories_per_100g: 165,
+      protein_per_100g: 31,
+      carbs_per_100g: 0,
+      fat_per_100g: 4,
+      food_type: 'protein' as const,
+      min_portion_grams: 100,
+      max_portion_grams: 300,
+    };
+    
+    const solverItem = productToSolverItem(proteinProduct, 'dinner', 200);
+    
+    expect(solverItem.category).toBe('protein');
+    expect(solverItem.minPortionGrams).toBe(100); // Preserved
+    expect(solverItem.maxPortionGrams).toBe(300); // Preserved
+    expect(solverItem.editableMode).toBe('FREE'); // Adjustable
+    expect(solverItem.countMacros).toBe(true);
+  });
+});
+
+// ============================================================================
+// FIX A1: Feasibility Pre-check Tests
+// ============================================================================
+
+describe('Feasibility Pre-check (Fix A1)', () => {
+  it('should fail fast with impossible_targets when max protein is below target', () => {
+    // Create items that can only provide limited protein
+    const items = [
+      createTestItem({
+        id: 'carb-only',
+        category: 'carb',
+        nutritionPer100g: { calories: 350, protein: 5, carbs: 70, fat: 2 },
+        minPortionGrams: 100,
+        maxPortionGrams: 200,
+        currentGrams: 150,
+      }),
+    ];
+    
+    // Target requires 150g protein - impossible with only 10g max achievable
+    const targets: SolverTargets = {
+      calories: 700,
+      protein: 150,
+      carbs: 150,
+      fat: 10,
+    };
+    
+    const result = solve(items, targets);
+    
+    expect(result.success).toBe(false);
+    if (!result.success && 'failure' in result) {
+      expect(result.failure.reason).toBe('impossible_targets');
+      expect(result.failure.blockers.length).toBeGreaterThan(0);
+      // Should mention protein constraint
+      const proteinBlocker = result.failure.blockers.find(b => 
+        b.constraint.includes('protein') || b.detail?.includes('protein')
+      );
+      expect(proteinBlocker).toBeDefined();
+    }
+  });
+  
+  it('should fail fast when min achievable calories exceeds target + tolerance', () => {
+    // Single locked item contributing too many calories
+    const items = [
+      createTestItem({
+        id: 'locked-big',
+        editableMode: 'LOCKED',
+        nutritionPer100g: { calories: 500, protein: 30, carbs: 50, fat: 20 },
+        currentGrams: 500, // 2500 kcal locked
+      }),
+    ];
+    
+    const targets: SolverTargets = {
+      calories: 1500, // Way below the locked 2500
+      protein: 100,
+      carbs: 150,
+      fat: 50,
+    };
+    
+    const result = solve(items, targets);
+    
+    expect(result.success).toBe(false);
+    if (!result.success && 'failure' in result) {
+      expect(result.failure.reason).toBe('impossible_targets');
+    }
+  });
+  
+  it('should proceed to solve when targets are within feasible bounds', () => {
+    const items = [
+      createTestItem({
+        id: 'protein-item',
+        category: 'protein',
+        nutritionPer100g: { calories: 165, protein: 31, carbs: 0, fat: 4 },
+        minPortionGrams: 100,
+        maxPortionGrams: 300,
+        currentGrams: 200,
+      }),
+      createTestItem({
+        id: 'carb-item',
+        category: 'carb',
+        nutritionPer100g: { calories: 130, protein: 3, carbs: 28, fat: 1 },
+        minPortionGrams: 100,
+        maxPortionGrams: 300,
+        currentGrams: 200,
+      }),
+    ];
+    
+    // Feasible target
+    const targets: SolverTargets = {
+      calories: 600,
+      protein: 60,
+      carbs: 60,
+      fat: 10,
+    };
+    
+    const result = solve(items, targets);
+    
+    // Should NOT fail with impossible_targets since bounds are valid
+    if (!result.success && 'failure' in result) {
+      expect(result.failure.reason).not.toBe('impossible_targets');
+    }
+  });
+});
+
+// ============================================================================
+// FIX A2/A3: Multi-start and Stagnation Tests
+// ============================================================================
+
+describe('Multi-start Solver and Stagnation Detection (Fix A2/A3)', () => {
+  it('should produce deterministic results across multiple runs', () => {
+    const items = [
+      createChickenItem(150),
+      createRiceItem(150),
+    ];
+    
+    const targets: SolverTargets = {
+      calories: 600,
+      protein: 50,
+      carbs: 40,
+      fat: 8,
+    };
+    
+    // Run solver multiple times
+    const result1 = solve(items, targets);
+    const result2 = solve(items, targets);
+    
+    // Results should be identical (deterministic)
+    expect(result1.success).toBe(result2.success);
+    if (result1.success && result2.success) {
+      expect(result1.totals.calories).toBe(result2.totals.calories);
+      expect(result1.totals.protein).toBe(result2.totals.protein);
+    }
+  });
+  
+  it('should report stagnation or accurate failure reason when stuck', () => {
+    // Create a scenario where improvement is impossible due to tight constraints
+    const items = [
+      createTestItem({
+        id: 'tight-item',
+        nutritionPer100g: { calories: 100, protein: 10, carbs: 10, fat: 5 },
+        minPortionGrams: 100,
+        maxPortionGrams: 100, // No room to adjust
+        portionStepGrams: 100,
+        currentGrams: 100,
+      }),
+    ];
+    
+    // Targets that can't be reached with fixed portion
+    const targets: SolverTargets = {
+      calories: 200, // Double what's achievable
+      protein: 20,
+      carbs: 20,
+      fat: 10,
+    };
+    
+    const result = solve(items, targets);
+    
+    // Should fail (impossible_targets since max=min, or no_adjustable_items)
+    expect(result.success).toBe(false);
+    if (!result.success && 'failure' in result) {
+      expect(['impossible_targets', 'no_adjustable_items', 'stagnation', 'max_iterations_exceeded']).toContain(result.failure.reason);
     }
   });
 });

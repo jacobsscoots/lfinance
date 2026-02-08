@@ -17,6 +17,7 @@ import { Product } from "@/hooks/useProducts";
 import { MealType, MealPlanItem, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { isProductAllowedForMeal } from "@/lib/autoPortioning";
+import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
 import { cn } from "@/lib/utils";
 
 interface MealItemMultiSelectDialogProps {
@@ -92,10 +93,18 @@ export function MealItemMultiSelectDialog({
       const selectedProducts = products.filter(p => selectedProductIds.has(p.id));
       
       const items = selectedProducts.map(product => {
-        // For fixed products, use fixed portion; otherwise 0 in target mode, 100 in manual
+        // Check if this product is a seasoning
+        const isSeasoning = shouldCapAsSeasoning(product.food_type, product.name, product.food_type);
+        
+        // For fixed products, use fixed portion; 
+        // For seasonings, use fallback (5g) clamped to max (15g)
+        // Otherwise 0 in target mode, 100 in manual
         let quantity = 100;
         if (product.product_type === "fixed" && product.fixed_portion_grams) {
           quantity = product.fixed_portion_grams;
+        } else if (isSeasoning) {
+          // Seasonings always get fallback grams (Fix B3)
+          quantity = DEFAULT_SEASONING_FALLBACK_GRAMS;
         } else if (isTargetMode) {
           quantity = 0;
         }
