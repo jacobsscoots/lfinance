@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.bright-sync-readings]
 verify_jwt = false
+
+[functions.scan-deals]
+verify_jwt = false
