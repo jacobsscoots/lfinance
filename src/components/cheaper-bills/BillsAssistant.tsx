@@ -3,10 +3,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Send, Loader2, Lightbulb, RefreshCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sparkles, Send, Loader2, Lightbulb, RefreshCw, MoreHorizontal, Check, X, ThumbsUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEnergyReadings } from "@/hooks/useEnergyReadings";
 import { useEnergyTariffs } from "@/hooks/useEnergyTariffs";
+import { useRecommendationFeedback, RECOMMENDATION_LABELS } from "@/hooks/useRecommendationFeedback";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -19,6 +27,7 @@ export function BillsAssistant() {
   const [isLoading, setIsLoading] = useState(false);
   const { readings } = useEnergyReadings();
   const { tariffs } = useEnergyTariffs();
+  const { alreadyDoing, notRelevant, setFeedback, removeFeedback, isUpdating } = useRecommendationFeedback();
 
   const currentTariff = tariffs.find(t => t.is_current);
 
@@ -65,6 +74,10 @@ export function BillsAssistant() {
     "What's causing my high usage?",
   ];
 
+  // Get recommendations that user can mark as "already doing"
+  const recommendationKeys = Object.keys(RECOMMENDATION_LABELS);
+  const excludedKeys = [...alreadyDoing, ...notRelevant];
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -74,6 +87,26 @@ export function BillsAssistant() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Excluded tips badges */}
+        {excludedKeys.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">I won't suggest these (click to undo):</p>
+            <div className="flex flex-wrap gap-1">
+              {excludedKeys.map((key) => (
+                <Badge
+                  key={key}
+                  variant="secondary"
+                  className="text-xs cursor-pointer hover:bg-destructive/20"
+                  onClick={() => removeFeedback(key)}
+                >
+                  {RECOMMENDATION_LABELS[key] || key}
+                  <X className="h-3 w-3 ml-1" />
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Quick Actions */}
         {messages.length === 0 && (
           <div className="space-y-2">
@@ -146,6 +179,54 @@ export function BillsAssistant() {
             <Send className="h-4 w-4" />
           </Button>
         </div>
+
+        {/* Feedback buttons for common recommendations */}
+        {messages.length > 0 && (
+          <div className="border-t pt-3 space-y-2">
+            <p className="text-xs text-muted-foreground">Mark tips you already follow:</p>
+            <div className="flex flex-wrap gap-1">
+              {recommendationKeys
+                .filter(key => !excludedKeys.includes(key))
+                .slice(0, 6)
+                .map((key) => (
+                  <DropdownMenu key={key}>
+                    <DropdownMenuTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className="text-xs cursor-pointer hover:bg-muted"
+                      >
+                        {RECOMMENDATION_LABELS[key]}
+                        <MoreHorizontal className="h-3 w-3 ml-1" />
+                      </Badge>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        onClick={() => setFeedback({ recommendation_key: key, status: 'already_do' })}
+                        disabled={isUpdating}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        I already do this
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setFeedback({ recommendation_key: key, status: 'not_relevant' })}
+                        disabled={isUpdating}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Not relevant to me
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setFeedback({ recommendation_key: key, status: 'helpful' })}
+                        disabled={isUpdating}
+                      >
+                        <ThumbsUp className="h-4 w-4 mr-2" />
+                        Helpful tip
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Reset */}
         {messages.length > 0 && (

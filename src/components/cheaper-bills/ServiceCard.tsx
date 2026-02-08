@@ -197,20 +197,43 @@ export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete,
                     "Review"
                   )}
                 </Badge>
-                {service.last_recommendation === "switch" && bestOffer && (
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0 text-xs"
-                    onClick={() => setSwitchingDialogOpen(true)}
-                  >
-                    View details
-                    <ExternalLink className="h-3 w-3 ml-1" />
-                  </Button>
+                {service.last_recommendation === "switch" && (
+                  bestOffer ? (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs"
+                      onClick={() => setSwitchingDialogOpen(true)}
+                    >
+                      View details
+                      <ExternalLink className="h-3 w-3 ml-1" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-muted-foreground"
+                      onClick={onScan}
+                      disabled={isScanning}
+                    >
+                      {isScanning ? "Scanning..." : "Run scan for details"}
+                    </Button>
+                  )
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Not scanned</p>
+              <div className="flex flex-col gap-1">
+                <p className="text-sm text-muted-foreground">Not scanned</p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={onScan}
+                  disabled={isScanning}
+                >
+                  {isScanning ? "Scanning..." : "Scan for deals"}
+                </Button>
+              </div>
             )}
           </div>
         </div>

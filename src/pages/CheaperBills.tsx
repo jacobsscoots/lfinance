@@ -19,6 +19,7 @@ import { EnergyUsageChart } from "@/components/cheaper-bills/EnergyUsageChart";
 import { TariffFormDialog } from "@/components/cheaper-bills/TariffFormDialog";
 import { ReadingFormDialog } from "@/components/cheaper-bills/ReadingFormDialog";
 import { BillsAssistant } from "@/components/cheaper-bills/BillsAssistant";
+import { EnergyProfileCard } from "@/components/cheaper-bills/EnergyProfileCard";
 import { SmartMeterCard } from "@/components/cheaper-bills/SmartMeterCard";
 import { NotificationSettingsCard } from "@/components/cheaper-bills/NotificationSettingsCard";
 import { daysUntilContractEnd } from "@/lib/billsCalculations";
@@ -271,6 +272,9 @@ export default function CheaperBills() {
                 ))}
               </div>
             )}
+
+            {/* Energy Profile - Personalize AI tips */}
+            <EnergyProfileCard />
 
             {/* AI Assistant */}
             <BillsAssistant />

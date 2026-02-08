@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -327,7 +327,7 @@ serve(async (req) => {
       postcode,
     } = body;
 
-    console.log(`Scanning ${serviceType} deals for user ${user.id}, postcode: ${postcode}`);
+    console.log(`Scanning ${serviceType} deals for user ${user.id}, serviceId: ${serviceId}, postcode: ${postcode}`);
 
     // Get user settings
     const { data: settings } = await supabase
@@ -384,34 +384,60 @@ serve(async (req) => {
         }];
     }
 
-    // Store top results in database
+    // Store top results in database with proper error handling
     const bestOffers = comparisons.slice(0, 5);
-    for (const offer of bestOffers) {
-      await supabase
+    let storedCount = 0;
+    const upsertErrors: string[] = [];
+
+    // First, clear old results for this service/user combo to avoid stale data
+    const { error: deleteError } = await supabase
+      .from('comparison_results')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('service_type', serviceType)
+      .eq('tracked_service_id', serviceId || null);
+
+    if (deleteError) {
+      console.warn('Error clearing old results:', deleteError.message);
+    }
+
+    // Insert new results
+    for (let i = 0; i < bestOffers.length; i++) {
+      const offer = bestOffers[i];
+      const { error: upsertError } = await supabase
         .from('comparison_results')
-        .upsert({
+        .insert({
           user_id: user.id,
           tracked_service_id: serviceId || null,
           service_type: serviceType,
           provider: offer.provider,
-          plan_name: offer.planName,
+          plan_name: offer.planName || '',
           monthly_cost: offer.monthlyCost,
           annual_cost: offer.annualCost,
           features: offer.features || {},
           source: offer.source,
           scanned_at: new Date().toISOString(),
-          is_best_offer: offer === bestOffers[0],
+          is_best_offer: i === 0, // First one is best offer
           website_url: offer.websiteUrl || null,
-        }, {
-          onConflict: 'user_id,provider,plan_name',
-          ignoreDuplicates: false,
         });
+
+      if (upsertError) {
+        console.error('Error storing comparison result:', upsertError.message);
+        upsertErrors.push(`${offer.provider}: ${upsertError.message}`);
+      } else {
+        storedCount++;
+      }
+    }
+
+    console.log(`Stored ${storedCount}/${bestOffers.length} comparison results`);
+    if (upsertErrors.length > 0) {
+      console.warn('Upsert errors:', upsertErrors);
     }
 
     // Update service with scan results
     if (serviceId && bestOffers.length > 0) {
       const best = bestOffers[0];
-      await supabase
+      const { error: updateError } = await supabase
         .from('tracked_services')
         .update({
           last_scan_date: new Date().toISOString(),
@@ -420,6 +446,10 @@ serve(async (req) => {
           estimated_savings_annual: best.savings > 0 ? best.savings : 0,
         })
         .eq('id', serviceId);
+
+      if (updateError) {
+        console.error('Error updating tracked service:', updateError.message);
+      }
     }
 
     const bestOffer = bestOffers[0] || null;
@@ -434,13 +464,16 @@ serve(async (req) => {
           planName: bestOffer.planName,
           savings: bestOffer.savings,
           recommend: bestOffer.recommend,
+          websiteUrl: bestOffer.websiteUrl,
         } : null,
         scannedAt: new Date().toISOString(),
+        storedCount,
+        errors: upsertErrors.length > 0 ? upsertErrors : undefined,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Compare deals error:', error);
+    console.error('Compare energy deals error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
