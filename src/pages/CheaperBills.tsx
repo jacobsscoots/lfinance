@@ -16,6 +16,8 @@ import { EnergyUsageChart } from "@/components/cheaper-bills/EnergyUsageChart";
 import { TariffFormDialog } from "@/components/cheaper-bills/TariffFormDialog";
 import { ReadingFormDialog } from "@/components/cheaper-bills/ReadingFormDialog";
 import { BillsAssistant } from "@/components/cheaper-bills/BillsAssistant";
+import { SmartMeterCard } from "@/components/cheaper-bills/SmartMeterCard";
+import { NotificationSettingsCard } from "@/components/cheaper-bills/NotificationSettingsCard";
 import { daysUntilContractEnd } from "@/lib/billsCalculations";
 
 export default function CheaperBills() {
@@ -175,6 +177,9 @@ export default function CheaperBills() {
               </CardContent>
             </Card>
 
+            {/* Smart Meter Connection */}
+            <SmartMeterCard />
+
             {/* Usage Chart */}
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Usage</h3>
@@ -205,6 +210,9 @@ export default function CheaperBills() {
 
             {/* AI Assistant */}
             <BillsAssistant />
+
+            {/* Notification Settings */}
+            <NotificationSettingsCard />
           </TabsContent>
 
           {/* Broadband Tab */}
