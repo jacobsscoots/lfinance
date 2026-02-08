@@ -15,6 +15,7 @@ export interface InvestmentAccount {
   risk_preset: string | null;
   notes: string | null;
   status: string;
+  monthly_contribution: number | null;
   created_at: string;
   updated_at: string;
 }
