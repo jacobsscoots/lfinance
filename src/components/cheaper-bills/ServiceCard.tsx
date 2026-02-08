@@ -28,11 +28,13 @@ import {
   Search,
   Loader2,
   ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import { TrackedService } from "@/hooks/useTrackedServices";
 import { ComparisonResult } from "@/hooks/useComparisonResults";
 import { daysUntilContractEnd, generateIcsContent } from "@/lib/billsCalculations";
 import { ScanResultsPanel } from "./ScanResultsPanel";
+import { SwitchingPopupDialog } from "./SwitchingPopupDialog";
 import { useState } from "react";
 
 interface ServiceCardProps {
@@ -55,6 +57,7 @@ const serviceIcons: Record<string, any> = {
 
 export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete, onToggleTracking, onScan, isScanning }: ServiceCardProps) {
   const [isResultsOpen, setIsResultsOpen] = useState(false);
+  const [switchingDialogOpen, setSwitchingDialogOpen] = useState(false);
   const Icon = serviceIcons[service.service_type] || Zap;
   const daysLeft = daysUntilContractEnd(service.contract_end_date);
   const isEnding = daysLeft !== null && daysLeft <= 30;
@@ -68,6 +71,10 @@ export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete,
     const currentAnnual = service.monthly_cost * 12;
     return resultAnnual < currentAnnual;
   });
+  
+  // Get the best offer from cheaper alternatives
+  const bestOffer = cheaperAlternatives.find(r => r.is_best_offer) || 
+    cheaperAlternatives.sort((a, b) => (a.monthly_cost) - (b.monthly_cost))[0] || null;
 
   const handleAddToCalendar = () => {
     if (!service.contract_end_date) return;
@@ -174,21 +181,34 @@ export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete,
           <div>
             <p className="text-xs text-muted-foreground">Recommendation</p>
             {service.last_recommendation ? (
-              <Badge
-                variant={service.last_recommendation === "switch" ? "default" : "secondary"}
-                className="mt-1"
-              >
-                {service.last_recommendation === "switch" ? (
-                  <>
-                    <TrendingDown className="h-3 w-3 mr-1" />
-                    Switch
-                  </>
-                ) : service.last_recommendation === "dont_switch" ? (
-                  "Don't Switch"
-                ) : (
-                  "Review"
+              <div className="flex flex-col gap-1">
+                <Badge
+                  variant={service.last_recommendation === "switch" ? "default" : "secondary"}
+                  className="w-fit"
+                >
+                  {service.last_recommendation === "switch" ? (
+                    <>
+                      <TrendingDown className="h-3 w-3 mr-1" />
+                      Switch
+                    </>
+                  ) : service.last_recommendation === "dont_switch" ? (
+                    "Don't Switch"
+                  ) : (
+                    "Review"
+                  )}
+                </Badge>
+                {service.last_recommendation === "switch" && bestOffer && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs"
+                    onClick={() => setSwitchingDialogOpen(true)}
+                  >
+                    View details
+                    <ExternalLink className="h-3 w-3 ml-1" />
+                  </Button>
                 )}
-              </Badge>
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">Not scanned</p>
             )}
@@ -219,6 +239,14 @@ export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete,
             </CollapsibleContent>
           </Collapsible>
         )}
+
+        {/* Switching popup dialog */}
+        <SwitchingPopupDialog
+          open={switchingDialogOpen}
+          onOpenChange={setSwitchingDialogOpen}
+          result={bestOffer}
+          currentMonthlyCost={service.monthly_cost}
+        />
       </CardContent>
     </Card>
   );

@@ -1357,6 +1357,7 @@ export type Database = {
           is_recurring: boolean | null
           notes: string | null
           recurring_frequency: string | null
+          source_transaction_id: string | null
           transaction_date: string
           type: string
           updated_at: string
@@ -1370,6 +1371,7 @@ export type Database = {
           is_recurring?: boolean | null
           notes?: string | null
           recurring_frequency?: string | null
+          source_transaction_id?: string | null
           transaction_date: string
           type?: string
           updated_at?: string
@@ -1383,6 +1385,7 @@ export type Database = {
           is_recurring?: boolean | null
           notes?: string | null
           recurring_frequency?: string | null
+          source_transaction_id?: string | null
           transaction_date?: string
           type?: string
           updated_at?: string
@@ -1394,6 +1397,13 @@ export type Database = {
             columns: ["investment_account_id"]
             isOneToOne: false
             referencedRelation: "investment_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_transactions_source_transaction_id_fkey"
+            columns: ["source_transaction_id"]
+            isOneToOne: true
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
         ]
@@ -1883,6 +1893,51 @@ export type Database = {
           },
         ]
       }
+      service_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          payment_date: string
+          tracked_service_id: string
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          payment_date: string
+          tracked_service_id: string
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          payment_date?: string
+          tracked_service_id?: string
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_payments_tracked_service_id_fkey"
+            columns: ["tracked_service_id"]
+            isOneToOne: false
+            referencedRelation: "tracked_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_payments_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       toiletry_items: {
         Row: {
           brand: string | null
@@ -2261,6 +2316,7 @@ export type Database = {
           description: string
           external_id: string | null
           id: string
+          investment_account_id: string | null
           is_pending: boolean | null
           merchant: string | null
           receipt_path: string | null
@@ -2279,6 +2335,7 @@ export type Database = {
           description: string
           external_id?: string | null
           id?: string
+          investment_account_id?: string | null
           is_pending?: boolean | null
           merchant?: string | null
           receipt_path?: string | null
@@ -2297,6 +2354,7 @@ export type Database = {
           description?: string
           external_id?: string | null
           id?: string
+          investment_account_id?: string | null
           is_pending?: boolean | null
           merchant?: string | null
           receipt_path?: string | null
@@ -2326,6 +2384,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_investment_account_id_fkey"
+            columns: ["investment_account_id"]
+            isOneToOne: false
+            referencedRelation: "investment_accounts"
             referencedColumns: ["id"]
           },
         ]

@@ -20,6 +20,10 @@ export type Transaction = Tables<"transactions"> & {
     id: string;
     name: string;
   } | null;
+  investment?: {
+    id: string;
+    name: string;
+  } | null;
   // Receipt fields (added for attachment support)
   receipt_path?: string | null;
   receipt_uploaded_at?: string | null;
@@ -68,7 +72,8 @@ export function useTransactions(filters?: TransactionFilters) {
           *,
           category:categories(id, name, color, icon),
           account:bank_accounts(id, name),
-          bill:bills(id, name)
+          bill:bills(id, name),
+          investment:investment_accounts(id, name)
         `)
         .in("account_id", filters?.accountId ? [filters.accountId] : accountIds)
         .gte("transaction_date", format(dateFrom, "yyyy-MM-dd"))
