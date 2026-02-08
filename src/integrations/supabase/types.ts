@@ -296,6 +296,45 @@ export type Database = {
           },
         ]
       }
+      bright_connections: {
+        Row: {
+          access_token: string | null
+          created_at: string | null
+          electricity_resource_id: string | null
+          gas_resource_id: string | null
+          id: string
+          last_synced_at: string | null
+          status: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string | null
+          electricity_resource_id?: string | null
+          gas_resource_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string | null
+          electricity_resource_id?: string | null
+          gas_resource_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           color: string | null
@@ -335,6 +374,7 @@ export type Database = {
           email_notifications: boolean | null
           id: string
           in_app_notifications: boolean | null
+          notification_email: string | null
           postcode: string | null
           preferred_contract_type: string | null
           risk_preference: string | null
@@ -348,6 +388,7 @@ export type Database = {
           email_notifications?: boolean | null
           id?: string
           in_app_notifications?: boolean | null
+          notification_email?: string | null
           postcode?: string | null
           preferred_contract_type?: string | null
           risk_preference?: string | null
@@ -361,6 +402,7 @@ export type Database = {
           email_notifications?: boolean | null
           id?: string
           in_app_notifications?: boolean | null
+          notification_email?: string | null
           postcode?: string | null
           preferred_contract_type?: string | null
           risk_preference?: string | null

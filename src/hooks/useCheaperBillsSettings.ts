@@ -13,6 +13,7 @@ export interface CheaperBillsSettings {
   email_notifications: boolean;
   in_app_notifications: boolean;
   postcode: string | null;
+  notification_email: string | null;
   created_at: string;
   updated_at: string;
 }
