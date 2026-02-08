@@ -60,8 +60,9 @@ describe("getTargetsForDate", () => {
       expect(targets.calories).toBe(1717);
       expect(targets.protein).toBe(160);
       expect(targets.carbs).toBe(180);
-      // Fat is now DERIVED from remaining calories: (1717 - 160*4 - 180*4) / 9
+      // Fat is DERIVED from remaining calories: (1717 - 160*4 - 180*4) / 9
       // = (1717 - 640 - 720) / 9 = 357 / 9 = 39.67 → 40
+      // But minimum fat floor is 30g, so max(40, 30) = 40
       expect(targets.fat).toBe(40);
     });
 
@@ -167,9 +168,11 @@ describe("getTargetsForDate", () => {
       const targets = getTargetsForDate(monday, mockGlobalSettings, weeklyOverride);
       
       expect(targets.calories).toBe(1717); // From override
-      expect(targets.protein).toBe(150); // Falls back to global
-      expect(targets.carbs).toBe(200); // Falls back to global
+      // Protein/carbs fall back to global BUT scaled by ratio (1717/1717 = 1.0)
+      expect(targets.protein).toBe(150); // global × 1.0
+      expect(targets.carbs).toBe(200); // global × 1.0
       // Fat is DERIVED: (1717 - 150*4 - 200*4) / 9 = (1717 - 600 - 800) / 9 = 317/9 = 35.2 → 35
+      // But minimum fat floor is 30g, so max(35, 30) = 35
       expect(targets.fat).toBe(35);
     });
   });
