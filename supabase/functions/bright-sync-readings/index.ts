@@ -24,10 +24,8 @@ interface BrightResource {
   classifier: string;
 }
 
-interface BrightReading {
-  time: string;
-  value: number;
-}
+// Bright API returns readings as [timestamp, value] arrays
+type BrightReading = [number, number];
 
 async function authenticateBright(username: string, password: string): Promise<BrightAuthResponse> {
   const response = await fetch(`${BRIGHT_API_BASE}/auth`, {
@@ -70,7 +68,15 @@ async function getReadings(
   to: string,
   period: string = "P1D"
 ): Promise<BrightReading[]> {
-  const url = `${BRIGHT_API_BASE}/resource/${resourceId}/readings?from=${from}&to=${to}&period=${period}&function=sum`;
+  const params = new URLSearchParams({
+    from,
+    to,
+    period,
+    function: "sum",
+  });
+  const url = `${BRIGHT_API_BASE}/resource/${resourceId}/readings?${params.toString()}`;
+  
+  console.log("Fetching readings from:", url);
   
   const response = await fetch(url, {
     headers: {
@@ -180,8 +186,11 @@ serve(async (req) => {
         throw new Error("Not connected to Bright. Please connect first.");
       }
 
-      // Check if token expired
-      if (new Date(connection.token_expires_at) < new Date()) {
+      console.log("Connection token_expires_at:", connection.token_expires_at);
+      
+      // Check if token expired - handle null/undefined
+      const tokenExpiry = connection.token_expires_at ? new Date(connection.token_expires_at) : null;
+      if (tokenExpiry && tokenExpiry < new Date()) {
         await supabase
           .from("bright_connections")
           .update({ status: "expired" })
@@ -189,8 +198,18 @@ serve(async (req) => {
         throw new Error("Token expired. Please reconnect.");
       }
 
-      const syncFrom = from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      const syncTo = to || new Date().toISOString().split("T")[0];
+      // Format dates as YYYY-MM-DDTHH:mm:ss for Bright API
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      const formatBrightDate = (d: Date) => {
+        return d.toISOString().slice(0, 19);
+      };
+      
+      const syncFrom = from || formatBrightDate(thirtyDaysAgo);
+      const syncTo = to || formatBrightDate(now);
+      
+      console.log("Syncing from:", syncFrom, "to:", syncTo);
 
       const results = { electricity: 0, gas: 0 };
 
@@ -204,8 +223,12 @@ serve(async (req) => {
           "P1D"
         );
 
+        console.log("Got electricity readings:", readings.length, "First reading:", readings[0]);
+
         for (const reading of readings) {
-          const readingDate = new Date(reading.time).toISOString().split("T")[0];
+          // Bright API returns [timestamp, value] arrays
+          const [timestamp, value] = reading;
+          const readingDate = new Date(timestamp * 1000).toISOString().split("T")[0];
           
           await supabase
             .from("energy_readings")
@@ -213,7 +236,7 @@ serve(async (req) => {
               user_id: user.id,
               reading_date: readingDate,
               fuel_type: "electricity",
-              consumption_kwh: reading.value,
+              consumption_kwh: value,
               source: "bright",
             }, { onConflict: "user_id,reading_date,fuel_type" });
           
@@ -231,8 +254,12 @@ serve(async (req) => {
           "P1D"
         );
 
+        console.log("Got gas readings:", readings.length);
+
         for (const reading of readings) {
-          const readingDate = new Date(reading.time).toISOString().split("T")[0];
+          // Bright API returns [timestamp, value] arrays
+          const [timestamp, value] = reading;
+          const readingDate = new Date(timestamp * 1000).toISOString().split("T")[0];
           
           await supabase
             .from("energy_readings")
@@ -240,7 +267,7 @@ serve(async (req) => {
               user_id: user.id,
               reading_date: readingDate,
               fuel_type: "gas",
-              consumption_kwh: reading.value,
+              consumption_kwh: value,
               source: "bright",
             }, { onConflict: "user_id,reading_date,fuel_type" });
           
