@@ -49,6 +49,7 @@ export function useAccounts() {
       const { data, error } = await supabase
         .from('bank_accounts')
         .select('*')
+        .is('deleted_at', null)
         .order('is_primary', { ascending: false })
         .order('name');
 
