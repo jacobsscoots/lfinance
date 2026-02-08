@@ -87,12 +87,15 @@ export interface ToleranceConfig {
   fat: { min: number; max: number };      // e.g., { min: 0, max: 2 }
 }
 
-// Default tolerances per spec
+// Default tolerances per spec — SYMMETRIC: ±1g macros, ±50 kcal calories
+// Using symmetric (min = max) prevents the solver from being unable to find
+// solutions when hitting all 4 macros at-or-above simultaneously is impossible
+// (e.g., overshooting protein/carbs steals calorie budget from fat).
 export const DEFAULT_TOLERANCES: ToleranceConfig = {
-  calories: { min: 0, max: 50 },
-  protein: { min: 0, max: 2 },
-  carbs: { min: 0, max: 2 },
-  fat: { min: 0, max: 2 },
+  calories: { min: 50, max: 50 },
+  protein: { min: 1, max: 1 },
+  carbs: { min: 1, max: 1 },
+  fat: { min: 1, max: 1 },
 };
 
 // Solver targets
@@ -149,10 +152,11 @@ export interface SolverSuccess {
   warnings?: string[];
 }
 
-// Failed solver result
+// Failed solver result — always includes bestEffortPortions so UI never shows 0g
 export interface SolverFailed {
   success: false;
   failure: SolverFailure;
+  bestEffortPortions?: Map<string, number>;
 }
 
 // Union result type

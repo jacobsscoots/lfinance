@@ -198,7 +198,10 @@ export function calculateDelta(achieved: MacroTotals, targets: SolverTargets): M
 
 /**
  * Score a plan - lower is better
- * Priority: calorie overage, then macro overage, then portion naturalness
+ *
+ * SYMMETRIC scoring: penalize distance from target equally in both directions.
+ * This prevents the old asymmetric bias that pushed all portions upward,
+ * making fat impossible when protein/carbs slightly overshoot.
  */
 export function scorePlan(
   portions: Map<string, number>,
@@ -207,37 +210,27 @@ export function scorePlan(
   items: SolverItem[]
 ): number {
   const delta = calculateDelta(totals, targets);
-  
-  // Penalize being under target heavily (should be >= target)
+
   let score = 0;
-  
-  // Calorie overage (weight: 10)
-  const calOverage = Math.max(0, delta.calories);
-  const calUnder = Math.max(0, -delta.calories);
-  score += calOverage * 10 + calUnder * 100; // Heavy penalty for under
-  
-  // Macro overages (weight: 5 each)
-  const proteinOver = Math.max(0, delta.protein);
-  const proteinUnder = Math.max(0, -delta.protein);
-  score += proteinOver * 5 + proteinUnder * 50;
-  
-  const carbsOver = Math.max(0, delta.carbs);
-  const carbsUnder = Math.max(0, -delta.carbs);
-  score += carbsOver * 5 + carbsUnder * 50;
-  
-  const fatOver = Math.max(0, delta.fat);
-  const fatUnder = Math.max(0, -delta.fat);
-  score += fatOver * 5 + fatUnder * 50;
-  
+
+  // Symmetric penalties — absolute distance from target
+  // Calories: weight 1 per kcal deviation
+  score += Math.abs(delta.calories) * 1;
+
+  // Macros: weight 10 per gram deviation (macros are 1g precision)
+  score += Math.abs(delta.protein) * 10;
+  score += Math.abs(delta.carbs) * 10;
+  score += Math.abs(delta.fat) * 10;
+
   // Portion naturalness - prefer round numbers and middle-of-range portions
   for (const item of items) {
     if (item.editableMode === 'LOCKED') continue;
-    
+
     const grams = portions.get(item.id) ?? 0;
-    
+
     // Prefer portions divisible by 5
     if (grams % 5 !== 0) score += 0.5;
-    
+
     // Prefer portions in the middle of the allowed range
     if (item.minPortionGrams > 0 && item.maxPortionGrams > 0) {
       const midPoint = (item.minPortionGrams + item.maxPortionGrams) / 2;
@@ -248,7 +241,7 @@ export function scorePlan(
       }
     }
   }
-  
+
   return score;
 }
 
@@ -304,23 +297,42 @@ export function scaleSeasonings(items: SolverItem[], portions: Map<string, numbe
 // ============================================================================
 
 /**
- * Calculate net error for optimization
+ * Calculate net error for optimization — SYMMETRIC
+ *
+ * Equal penalty for over and under, with extra penalty for exceeding tolerance.
+ * This ensures the solver converges toward the center of the tolerance band
+ * instead of biasing toward one side.
  */
 function calculateNetError(delta: MacroTotals, tolerances: ToleranceConfig): number {
   let error = 0;
-  
-  // Under-target is heavily penalized
-  if (delta.calories < 0) error += Math.abs(delta.calories) * 2;
-  if (delta.protein < 0) error += Math.abs(delta.protein) * 20;
-  if (delta.carbs < 0) error += Math.abs(delta.carbs) * 10;
-  if (delta.fat < 0) error += Math.abs(delta.fat) * 15;
-  
-  // Over-tolerance is penalized
-  if (delta.calories > tolerances.calories.max) error += (delta.calories - tolerances.calories.max) * 2;
-  if (delta.protein > tolerances.protein.max) error += (delta.protein - tolerances.protein.max) * 20;
-  if (delta.carbs > tolerances.carbs.max) error += (delta.carbs - tolerances.carbs.max) * 10;
-  if (delta.fat > tolerances.fat.max) error += (delta.fat - tolerances.fat.max) * 15;
-  
+
+  // Symmetric base penalty: absolute distance from target
+  error += Math.abs(delta.calories) * 1;
+  error += Math.abs(delta.protein) * 10;
+  error += Math.abs(delta.carbs) * 8;
+  error += Math.abs(delta.fat) * 10;
+
+  // Extra penalty for exceeding tolerance in EITHER direction
+  const calAbs = Math.abs(delta.calories);
+  if (calAbs > tolerances.calories.max) {
+    error += (calAbs - tolerances.calories.max) * 5;
+  }
+
+  const proAbs = Math.abs(delta.protein);
+  if (proAbs > tolerances.protein.max) {
+    error += (proAbs - tolerances.protein.max) * 30;
+  }
+
+  const carbAbs = Math.abs(delta.carbs);
+  if (carbAbs > tolerances.carbs.max) {
+    error += (carbAbs - tolerances.carbs.max) * 20;
+  }
+
+  const fatAbs = Math.abs(delta.fat);
+  if (fatAbs > tolerances.fat.max) {
+    error += (fatAbs - tolerances.fat.max) * 30;
+  }
+
   return error;
 }
 
@@ -688,6 +700,11 @@ function initializePortionsWithStrategy(
 
 /**
  * Main solver function
+ *
+ * IMPORTANT: Always returns usable portions — even when the exact tolerance
+ * cannot be satisfied, the solver returns its best-effort closest plan so the
+ * UI never shows 0g blanks. The `success` flag distinguishes "within
+ * tolerance" (true) from "best-effort" (false).
  */
 export function solve(
   items: SolverItem[],
@@ -696,22 +713,19 @@ export function solve(
 ): SolverResult {
   const opts: SolverOptions = { ...DEFAULT_SOLVER_OPTIONS, ...options };
   const { maxIterations, tolerances, seasoningsCountMacros } = opts;
-  
+
   // ============================================================
-  // FIX A1: Feasibility pre-check - fail fast if impossible
+  // FIX A1: Feasibility pre-check — but still return best-effort
   // ============================================================
   const feasibilityFailure = checkFeasibility(items, targets, tolerances, seasoningsCountMacros);
-  if (feasibilityFailure) {
-    return { success: false, failure: feasibilityFailure };
-  }
-  
-  // Early exit: no adjustable items
+
+  // Early exit: no adjustable items — return whatever we have
   if (!hasAdjustableItems(items)) {
     const portions = initializePortions(items);
     scaleSeasonings(items, portions);
     const totals = sumMacros(items, portions, seasoningsCountMacros);
     const delta = calculateDelta(totals, targets);
-    
+
     if (isWithinTolerance(totals, targets, tolerances)) {
       return {
         success: true,
@@ -721,7 +735,8 @@ export function solve(
         iterationsRun: 0,
       };
     }
-    
+
+    // Best-effort: return the portions we have (non-zero) with failure flag
     return {
       success: false,
       failure: {
@@ -731,19 +746,25 @@ export function solve(
         targetDelta: delta,
         iterationsRun: 0,
       },
-    };
+      // Attach best-effort portions so caller can still use them
+      bestEffortPortions: portions,
+    } as SolverResult;
   }
-  
+
+  // If infeasible, still run the solver to get closest-possible portions
+  // (don't short-circuit; the solver will get as close as it can)
+
   // ============================================================
   // FIX A2: Multi-start solver with deterministic strategies
   // ============================================================
   const strategies: InitStrategy[] = ['current', 'midpoint', 'protein_heavy', 'carb_heavy'];
   const iterationsPerAttempt = Math.ceil(maxIterations / strategies.length);
-  
+
   let bestResult: SolverResult | null = null;
+  let bestFailedPortions: Map<string, number> | null = null;
   let totalIterations = 0;
   let lastFailureReason: 'max_iterations_exceeded' | 'stagnation' = 'max_iterations_exceeded';
-  
+
   for (const strategy of strategies) {
     const result = runSingleSolve(
       items,
@@ -754,49 +775,54 @@ export function solve(
       strategy,
       opts.debugMode
     );
-    
+
     totalIterations += result.iterationsRun;
-    
+
     if (result.success) {
       // Found a valid solution - return it
       return result;
     }
-    
-    // Track best failed result (by score/closeness)
-    if (!bestResult || !bestResult.success) {
-      const currentFailure = (result as { success: false; failure: SolverFailure }).failure;
-      const currentScore = Math.abs(currentFailure.targetDelta.calories) + 
-        Math.abs(currentFailure.targetDelta.protein) * 10;
-      
-      if (!bestResult) {
+
+    // Track best failed result (by weighted error closeness)
+    const currentFailure = (result as { success: false; failure: SolverFailure }).failure;
+    const currentScore = Math.abs(currentFailure.targetDelta.calories) +
+      Math.abs(currentFailure.targetDelta.protein) * 10 +
+      Math.abs(currentFailure.targetDelta.carbs) * 8 +
+      Math.abs(currentFailure.targetDelta.fat) * 10;
+
+    if (!bestResult) {
+      bestResult = result;
+      bestFailedPortions = (result as any).bestEffortPortions ?? null;
+      lastFailureReason = currentFailure.reason as 'max_iterations_exceeded' | 'stagnation';
+    } else {
+      const bestFailure = (bestResult as { success: false; failure: SolverFailure }).failure;
+      const bestScore = Math.abs(bestFailure.targetDelta.calories) +
+        Math.abs(bestFailure.targetDelta.protein) * 10 +
+        Math.abs(bestFailure.targetDelta.carbs) * 8 +
+        Math.abs(bestFailure.targetDelta.fat) * 10;
+
+      if (currentScore < bestScore) {
         bestResult = result;
+        bestFailedPortions = (result as any).bestEffortPortions ?? null;
         lastFailureReason = currentFailure.reason as 'max_iterations_exceeded' | 'stagnation';
-      } else {
-        const bestFailure = (bestResult as { success: false; failure: SolverFailure }).failure;
-        const bestScore = Math.abs(bestFailure.targetDelta.calories) + 
-          Math.abs(bestFailure.targetDelta.protein) * 10;
-        
-        if (currentScore < bestScore) {
-          bestResult = result;
-          lastFailureReason = currentFailure.reason as 'max_iterations_exceeded' | 'stagnation';
-        }
       }
     }
   }
-  
-  // All strategies failed - return best attempt with accurate reason
+
+  // All strategies failed — return best attempt with portions attached
   if (bestResult && !bestResult.success) {
     const failure = (bestResult as { success: false; failure: SolverFailure }).failure;
     return {
       success: false,
       failure: {
         ...failure,
-        reason: lastFailureReason,
+        reason: feasibilityFailure ? 'impossible_targets' : lastFailureReason,
         iterationsRun: totalIterations,
       },
-    };
+      bestEffortPortions: bestFailedPortions ?? undefined,
+    } as SolverResult;
   }
-  
+
   // Fallback (shouldn't reach here)
   const portions = initializePortions(items);
   const totals = sumMacros(items, portions, seasoningsCountMacros);
@@ -809,7 +835,8 @@ export function solve(
       targetDelta: calculateDelta(totals, targets),
       iterationsRun: totalIterations,
     },
-  };
+    bestEffortPortions: portions,
+  } as SolverResult;
 }
 
 /**
@@ -951,20 +978,35 @@ function runSingleSolve(
     };
   }
   
-  // No valid solution found - check if it was stagnation or just out of iterations
-  const finalTotals = sumMacros(items, portions, seasoningsCountMacros);
+  // No valid solution found — return best-effort portions so UI never shows 0g
+  // Apply seasoning normalization to the best-effort portions too
+  const itemsWithMeta = items.map(item => ({
+    id: item.id,
+    category: item.category,
+    maxPortionGrams: item.maxPortionGrams,
+    name: item.name,
+    foodType: item.category === 'seasoning' ? 'seasoning' : undefined,
+  }));
+  const { portions: normalizedPortions } = normalizeSeasoningPortions(
+    portions,
+    itemsWithMeta,
+    DEFAULT_SEASONING_MAX_GRAMS
+  );
+
+  const finalTotals = sumMacros(items, normalizedPortions, seasoningsCountMacros);
   const finalDelta = calculateDelta(finalTotals, targets);
   const failureReason = stagnationCount >= STAGNATION_LIMIT ? 'stagnation' : 'max_iterations_exceeded';
-  
+
   return {
     success: false,
     failure: {
       reason: failureReason,
-      blockers: collectBlockers(items, portions, targets, tolerances),
+      blockers: collectBlockers(items, normalizedPortions, targets, tolerances),
       closestTotals: roundMacros(finalTotals),
       targetDelta: finalDelta,
       iterationsRun,
     },
+    bestEffortPortions: normalizedPortions,
     iterationsRun,
   };
 }
