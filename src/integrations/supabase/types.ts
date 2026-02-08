@@ -820,6 +820,295 @@ export type Database = {
           },
         ]
       }
+      debt_attachments: {
+        Row: {
+          created_at: string
+          file_path: string
+          filename: string
+          id: string
+          owner_id: string
+          owner_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_path: string
+          filename: string
+          id?: string
+          owner_id: string
+          owner_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_path?: string
+          filename?: string
+          id?: string
+          owner_id?: string
+          owner_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      debt_balance_snapshots: {
+        Row: {
+          balance: number
+          created_at: string
+          debt_id: string
+          id: string
+          notes: string | null
+          snapshot_date: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          balance: number
+          created_at?: string
+          debt_id: string
+          id?: string
+          notes?: string | null
+          snapshot_date: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          debt_id?: string
+          id?: string
+          notes?: string | null
+          snapshot_date?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_balance_snapshots_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      debt_payment_transactions: {
+        Row: {
+          created_at: string
+          id: string
+          payment_id: string
+          transaction_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payment_id: string
+          transaction_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payment_id?: string
+          transaction_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_payment_transactions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "debt_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_payment_transactions_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "debt_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      debt_payments: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          debt_id: string
+          fee_amount: number | null
+          id: string
+          interest_amount: number | null
+          notes: string | null
+          payment_date: string
+          principal_amount: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category?: string
+          created_at?: string
+          debt_id: string
+          fee_amount?: number | null
+          id?: string
+          interest_amount?: number | null
+          notes?: string | null
+          payment_date: string
+          principal_amount?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          debt_id?: string
+          fee_amount?: number | null
+          id?: string
+          interest_amount?: number | null
+          notes?: string | null
+          payment_date?: string
+          principal_amount?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_payments_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      debt_settings: {
+        Row: {
+          created_at: string
+          id: string
+          monthly_budget: number | null
+          no_payment_days_threshold: number
+          preferred_strategy: string
+          reminder_days_before: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          monthly_budget?: number | null
+          no_payment_days_threshold?: number
+          preferred_strategy?: string
+          reminder_days_before?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          monthly_budget?: number | null
+          no_payment_days_threshold?: number
+          preferred_strategy?: string
+          reminder_days_before?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      debt_transactions: {
+        Row: {
+          account_name: string | null
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          reference: string | null
+          transaction_date: string
+          user_id: string
+        }
+        Insert: {
+          account_name?: string | null
+          amount: number
+          created_at?: string
+          description: string
+          id?: string
+          reference?: string | null
+          transaction_date: string
+          user_id: string
+        }
+        Update: {
+          account_name?: string | null
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          reference?: string | null
+          transaction_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      debts: {
+        Row: {
+          apr: number | null
+          closed_date: string | null
+          created_at: string
+          creditor_name: string
+          current_balance: number
+          debt_type: string
+          due_day: number | null
+          id: string
+          interest_type: string
+          min_payment: number | null
+          notes: string | null
+          opened_date: string | null
+          promo_end_date: string | null
+          starting_balance: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          apr?: number | null
+          closed_date?: string | null
+          created_at?: string
+          creditor_name: string
+          current_balance: number
+          debt_type: string
+          due_day?: number | null
+          id?: string
+          interest_type?: string
+          min_payment?: number | null
+          notes?: string | null
+          opened_date?: string | null
+          promo_end_date?: string | null
+          starting_balance: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          apr?: number | null
+          closed_date?: string | null
+          created_at?: string
+          creditor_name?: string
+          current_balance?: number
+          debt_type?: string
+          due_day?: number | null
+          id?: string
+          interest_type?: string
+          min_payment?: number | null
+          notes?: string | null
+          opened_date?: string | null
+          promo_end_date?: string | null
+          starting_balance?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       energy_profiles: {
         Row: {
           created_at: string

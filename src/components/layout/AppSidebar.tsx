@@ -11,7 +11,8 @@ import {
   Sparkles,
   PieChart,
   Percent,
-  Tag
+  Tag,
+  Wallet2
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Meal Plan", href: "/meal-plan", icon: UtensilsCrossed },
   { name: "Toiletries", href: "/toiletries", icon: Sparkles },
   { name: "Deal Scanner", href: "/deals", icon: Tag },
+  { name: "Debt Tracker", href: "/debt-tracker", icon: Wallet2 },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
