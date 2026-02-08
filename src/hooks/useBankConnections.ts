@@ -12,6 +12,14 @@ interface BankConnection {
   created_at: string;
 }
 
+// Known OAuth error messages for better UX
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  'invalid_grant': 'The authorization code has expired or was already used. Please try connecting again.',
+  'invalid_request': 'The connection request was invalid. Please try again.',
+  'access_denied': 'Access was denied. Please try connecting again and approve access.',
+  'server_error': 'The bank connection service is temporarily unavailable. Please try again later.',
+};
+
 // Helper to extract meaningful error messages from Supabase function errors
 function normalizeError(error: unknown, functionName: string): string {
   if (!error) return "Unknown error";
@@ -27,6 +35,11 @@ function normalizeError(error: unknown, functionName: string): string {
         try {
           const parsed = JSON.parse(ctx.body);
           if (parsed.error) {
+            // Check if this is a known OAuth error
+            const knownMessage = OAUTH_ERROR_MESSAGES[parsed.error];
+            if (knownMessage) {
+              return knownMessage;
+            }
             const stage = parsed.stage ? ` [${parsed.stage}]` : "";
             return `${functionName}${stage}: ${parsed.error}`;
           }
@@ -39,11 +52,23 @@ function normalizeError(error: unknown, functionName: string): string {
 
     // Direct error message
     if (err.message && typeof err.message === "string") {
+      // Check for known OAuth errors in the message
+      for (const [code, message] of Object.entries(OAUTH_ERROR_MESSAGES)) {
+        if (err.message.includes(code)) {
+          return message;
+        }
+      }
       return `${functionName}: ${err.message}`;
     }
   }
 
   if (typeof error === "string") {
+    // Check for known OAuth errors
+    for (const [code, message] of Object.entries(OAUTH_ERROR_MESSAGES)) {
+      if (error.includes(code)) {
+        return message;
+      }
+    }
     return `${functionName}: ${error}`;
   }
 
