@@ -34,6 +34,9 @@ export function NotificationSettingsCard() {
   };
 
   const handleSendTestEmail = async () => {
+    // Debounce: prevent duplicate sends
+    if (isSendingTest) return;
+
     const targetEmail = email || (await supabase.auth.getUser()).data.user?.email;
     
     if (!targetEmail) {
@@ -60,11 +63,14 @@ export function NotificationSettingsCard() {
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
+      const sentTime = data?.sentAt ? new Date(data.sentAt).toLocaleTimeString() : "now";
       toast({
         title: "Test email sent!",
-        description: `Check your inbox at ${targetEmail}`,
+        description: `Sent to ${targetEmail} at ${sentTime}. Message ID: ${data?.messageId || "n/a"}`,
       });
+      console.log("Email sent successfully:", data);
     } catch (error: any) {
       console.error("Test email error:", error);
       toast({
