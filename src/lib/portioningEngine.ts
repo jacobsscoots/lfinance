@@ -28,6 +28,7 @@ import {
   RoundingRule,
   MealType,
 } from './portioningTypes';
+import { normalizeSeasoningPortions, DEFAULT_SEASONING_MAX_GRAMS } from './seasoningRules';
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -570,12 +571,25 @@ export function solve(
     candidates.sort((a, b) => a.score - b.score);
     const best = candidates[0];
     
+    // Post-solve: enforce seasoning hard caps (isolated patch)
+    const { portions: normalizedPortions, capped } = normalizeSeasoningPortions(
+      best.portions,
+      items,
+      DEFAULT_SEASONING_MAX_GRAMS
+    );
+    
+    const warnings: string[] = [];
+    if (capped.length > 0) {
+      warnings.push(`Capped ${capped.length} seasoning(s) to max ${DEFAULT_SEASONING_MAX_GRAMS}g`);
+    }
+    
     return {
       success: true,
-      portions: best.portions,
+      portions: normalizedPortions,
       totals: best.totals,
       score: best.score,
       iterationsRun: candidates.length,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
   
@@ -626,6 +640,7 @@ export function productToSolverItem(
   pairedProteinId?: string
 ): SolverItem {
   // Determine category from food_type
+  // NOTE: Both 'sauce' and 'seasoning' map to 'seasoning' category for hard cap enforcement
   const categoryMap: Record<string, SolverItem['category']> = {
     protein: 'protein',
     carb: 'carb',
@@ -633,6 +648,7 @@ export function productToSolverItem(
     dairy: 'dairy',
     fruit: 'fruit',
     sauce: 'seasoning',
+    seasoning: 'seasoning', // Explicit mapping for 'seasoning' food_type
     treat: 'snack',
     fat: 'fat',
     other: 'other',
