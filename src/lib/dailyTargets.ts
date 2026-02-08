@@ -194,7 +194,7 @@ export function computeTotals(
 
   for (const item of items) {
     const product = item.product;
-    
+
     // Skip items without product data or with ignore_macros
     if (!product || product.ignore_macros) {
       continue;
@@ -202,12 +202,17 @@ export function computeTotals(
 
     // Use override grams if provided, otherwise use item's stored grams
     const grams = gramsOverride?.get(item.id) ?? item.quantity_grams;
-    
+
     if (grams <= 0) {
       continue;
     }
 
-    const multiplier = grams / 100;
+    // Apply eaten_factor so UI totals match what the solver calculated.
+    // Without this, items with eaten_factor < 1 show higher macros in the
+    // UI than what the solver targeted, causing apparent drift.
+    const eatenFactor = product.eaten_factor ?? 1;
+    const effectiveGrams = grams * eatenFactor;
+    const multiplier = effectiveGrams / 100;
     calories += product.calories_per_100g * multiplier;
     protein += product.protein_per_100g * multiplier;
     carbs += product.carbs_per_100g * multiplier;

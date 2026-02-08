@@ -10,13 +10,15 @@ interface DayMacroSummaryProps {
 
 type Status = "success" | "warning" | "error";
 
-function getStatus(actual: number, target: number): Status {
+function getStatus(actual: number, target: number, isCal = false): Status {
   if (target === 0) return "success";
   const diff = Math.abs(actual - target);
-  // Exact match within 5 units = success
-  if (diff <= 5) return "success";
-  // Within 10% = warning
-  if (diff <= target * 0.1) return "warning";
+  // Use tolerance rules: ±1g for macros, ±50 kcal for calories
+  const tolerance = isCal ? 50 : 1;
+  if (diff <= tolerance) return "success";
+  // Wider warning band
+  const warnTolerance = isCal ? 100 : 5;
+  if (diff <= warnTolerance) return "warning";
   return "error";
 }
 
@@ -41,15 +43,15 @@ interface MacroCellProps {
   unit: string;
   showBar: boolean;
   compact?: boolean;
+  isCal?: boolean;
 }
 
-function MacroCell({ label, actual, target, unit, showBar, compact }: MacroCellProps) {
-  const status = getStatus(actual, target);
+function MacroCell({ label, actual, target, unit, showBar, compact, isCal = false }: MacroCellProps) {
+  const status = getStatus(actual, target, isCal);
   const percent = target > 0 ? Math.min(100, (actual / target) * 100) : 0;
   const diff = getDiffLabel(actual, target);
-  
+
   if (compact) {
-    // Simplified compact view - just show actual value with status indicator
     return (
       <div className="text-center min-w-0">
         <div className="text-[10px] text-muted-foreground truncate">{label}</div>
@@ -60,10 +62,23 @@ function MacroCell({ label, actual, target, unit, showBar, compact }: MacroCellP
           status === "error" && "text-red-600 dark:text-red-400"
         )}>
           {Math.round(actual)}
+          {showBar && target > 0 && (
+            <span className="text-muted-foreground font-normal">/{target}</span>
+          )}
         </div>
+        {diff && showBar && (
+          <div className={cn(
+            "text-[9px] tabular-nums",
+            status === "success" && "text-green-600 dark:text-green-400",
+            status === "warning" && "text-amber-600 dark:text-amber-400",
+            status === "error" && "text-red-600 dark:text-red-400"
+          )}>
+            {diff}{unit}
+          </div>
+        )}
         {showBar && (
           <div className="mt-0.5 h-1 rounded-full bg-muted overflow-hidden">
-            <div 
+            <div
               className={cn("h-full transition-all", getStatusColor(status))}
               style={{ width: `${Math.min(percent, 100)}%` }}
             />
@@ -111,76 +126,22 @@ function MacroCell({ label, actual, target, unit, showBar, compact }: MacroCellP
 
 export function DayMacroSummary({ totals, targets, isTargetMode, compact = false }: DayMacroSummaryProps) {
   if (compact) {
-    // Compact 4-column layout for card headers - fixed width columns
     return (
       <div className="grid grid-cols-4 gap-2 text-xs py-1">
-        <MacroCell 
-          label="Cal" 
-          actual={totals.calories} 
-          target={targets.calories} 
-          unit="kcal"
-          showBar={isTargetMode}
-          compact
-        />
-        <MacroCell 
-          label="P" 
-          actual={totals.protein} 
-          target={targets.protein} 
-          unit="g"
-          showBar={isTargetMode}
-          compact
-        />
-        <MacroCell 
-          label="C" 
-          actual={totals.carbs} 
-          target={targets.carbs} 
-          unit="g"
-          showBar={isTargetMode}
-          compact
-        />
-        <MacroCell 
-          label="F" 
-          actual={totals.fat} 
-          target={targets.fat} 
-          unit="g"
-          showBar={isTargetMode}
-          compact
-        />
+        <MacroCell label="Cal" actual={totals.calories} target={targets.calories} unit="kcal" showBar={isTargetMode} compact isCal />
+        <MacroCell label="P" actual={totals.protein} target={targets.protein} unit="g" showBar={isTargetMode} compact />
+        <MacroCell label="C" actual={totals.carbs} target={targets.carbs} unit="g" showBar={isTargetMode} compact />
+        <MacroCell label="F" actual={totals.fat} target={targets.fat} unit="g" showBar={isTargetMode} compact />
       </div>
     );
   }
 
-  // Full layout with progress bars
   return (
     <div className="space-y-2 text-xs">
-      <MacroCell 
-        label="Calories" 
-        actual={totals.calories} 
-        target={targets.calories} 
-        unit="kcal"
-        showBar={isTargetMode}
-      />
-      <MacroCell 
-        label="Protein" 
-        actual={totals.protein} 
-        target={targets.protein} 
-        unit="g"
-        showBar={isTargetMode}
-      />
-      <MacroCell 
-        label="Carbs" 
-        actual={totals.carbs} 
-        target={targets.carbs} 
-        unit="g"
-        showBar={isTargetMode}
-      />
-      <MacroCell 
-        label="Fat" 
-        actual={totals.fat} 
-        target={targets.fat} 
-        unit="g"
-        showBar={isTargetMode}
-      />
+      <MacroCell label="Calories" actual={totals.calories} target={targets.calories} unit="kcal" showBar={isTargetMode} isCal />
+      <MacroCell label="Protein" actual={totals.protein} target={targets.protein} unit="g" showBar={isTargetMode} />
+      <MacroCell label="Carbs" actual={totals.carbs} target={targets.carbs} unit="g" showBar={isTargetMode} />
+      <MacroCell label="Fat" actual={totals.fat} target={targets.fat} unit="g" showBar={isTargetMode} />
     </div>
   );
 }

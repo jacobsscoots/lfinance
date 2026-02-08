@@ -48,14 +48,16 @@ export interface BalanceWarning {
   date?: string;
 }
 
-// Calculate macros for a single item
+// Calculate macros for a single item (applies eaten_factor for solver consistency)
 export function calculateItemMacros(item: MealPlanItem): MacroTotals {
   const product = item.product;
   if (!product || product.ignore_macros) {
     return { calories: 0, protein: 0, carbs: 0, fat: 0 };
   }
 
-  const multiplier = item.quantity_grams / 100;
+  const eatenFactor = product.eaten_factor ?? 1;
+  const effectiveGrams = item.quantity_grams * eatenFactor;
+  const multiplier = effectiveGrams / 100;
   return {
     calories: product.calories_per_100g * multiplier,
     protein: product.protein_per_100g * multiplier,
