@@ -1,85 +1,160 @@
+Part 1: Database changes
+1.1 Transactions table: add investment link only
+ALTER TABLE public.transactions
+ADD COLUMN investment_account_id uuid
+REFERENCES public.investment_accounts(id) ON DELETE SET NULL;
 
-# Add Editable Monthly Contribution for Investments
 
-## Summary
-You want to set a £50/month contribution for your ChipX AI Fund and have the projections reflect this accurately. Currently, the monthly contribution is calculated from historical transactions rather than being a configurable value.
+✅ Keep this because it’s a simple 1-to-1 relationship.
 
----
+1.2 Investment transactions: make linking safe (no duplicates)
 
-## Current Behavior
+Add a direct link column so we can upsert and delete reliably:
 
-| Item | How It Works Now |
-|------|------------------|
-| Monthly contribution display | Calculated by averaging all deposits over time |
-| Projection calculations | Uses the calculated average |
-| Editing contribution | Not possible - read-only display |
+ALTER TABLE public.investment_transactions
+ADD COLUMN source_transaction_id uuid UNIQUE
+REFERENCES public.transactions(id) ON DELETE SET NULL;
 
-This means if you made irregular deposits, the "monthly contribution" shown is just an estimate, not your actual planned contribution.
+1.3 Cheaper Bills payments: use a proper linking table (remove tracked_service_id from transactions)
 
----
+Create service_payments (this is the “link transaction → service” record + payment history):
 
-## Solution
+CREATE TABLE public.service_payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  tracked_service_id uuid NOT NULL REFERENCES public.tracked_services(id) ON DELETE CASCADE,
+  transaction_id uuid REFERENCES public.transactions(id) ON DELETE SET NULL,
+  payment_date date NOT NULL,
+  amount numeric NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-### Step 1: Add Database Column
-Add a `monthly_contribution` column to the `investment_accounts` table to store your configured contribution amount:
+ALTER TABLE public.service_payments ENABLE ROW LEVEL SECURITY;
 
-```sql
-ALTER TABLE public.investment_accounts 
-ADD COLUMN monthly_contribution numeric DEFAULT 0;
-```
+CREATE POLICY "Users can view own service payments" ON public.service_payments
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create own service payments" ON public.service_payments
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own service payments" ON public.service_payments
+  FOR DELETE USING (auth.uid() = user_id);
 
-### Step 2: Update ProjectionCard to Be Editable
-Modify the ProjectionCard component to:
-- Accept an `onContributionChange` callback prop
-- Display an editable input field for monthly contribution (defaulting to £50)
-- Call the update function when the value changes
 
-### Step 3: Update Investment Hook and Types
-- Add `monthly_contribution` to the `InvestmentAccount` interface
-- Allow updating the contribution via `updateInvestment`
+Prevent duplicate links:
 
-### Step 4: Wire Up the Investments Page
-- Pass the stored `monthly_contribution` to ProjectionCard instead of the calculated average
-- Add a handler to save changes when the contribution is edited
-- Fall back to £50 if no value is set
+CREATE UNIQUE INDEX service_payments_unique_link
+ON public.service_payments (tracked_service_id, transaction_id)
+WHERE transaction_id IS NOT NULL;
 
----
+Part 2: Transaction “Link to…” UX
+2.1 TransactionList menu
 
-## Files to Modify
+Add “Link to…” → opens LinkTransactionDialog with tabs:
 
-1. **Database migration** - Add `monthly_contribution` column
-2. **`src/hooks/useInvestments.ts`** - Add type for new column
-3. **`src/components/investments/ProjectionCard.tsx`** - Make contribution editable
-4. **`src/pages/Investments.tsx`** - Use stored value, handle updates
+Bill (existing)
 
----
+Investment (new)
 
-## Result
+Cheaper Bills Service (new)
 
-After implementation:
-- Your ChipX AI Fund will show £50/month as the monthly contribution
-- You can edit this value directly in the projections card
-- Projections (3m, 6m, 12m) will accurately reflect £50/month contributions
-- The value persists in the database so it's remembered between sessions
+2.2 Linking actions
 
----
+Bill tab: existing bill_id update
 
-## Technical Details
+Investment tab:
 
-### ProjectionCard Changes
-```text
-Before: <span>£{monthlyContribution}/month</span> (read-only)
-After:  <Input value={50} onChange={...} /> /month (editable)
-```
+set transactions.investment_account_id = selected_id
 
-### Projection Formula
-The projection uses compound growth with monthly contributions:
-```text
-For each month:
-  value = (value + monthlyContribution) * (1 + monthlyRate)
-```
+upsert investment_transactions where source_transaction_id = transaction.id
 
-With £50/month at 8% annual return:
-- 3 months: currentValue + £150 + growth
-- 6 months: currentValue + £300 + growth  
-- 12 months: currentValue + £600 + growth
+amount/date/type from transaction
+
+Service tab:
+
+create service_payments row:
+
+user_id
+
+tracked_service_id
+
+transaction_id = transaction.id
+
+payment_date = transaction.transaction_date
+
+amount = transaction.amount
+
+2.3 Unlinking actions
+
+Investment unlink
+
+set transactions.investment_account_id = NULL
+
+delete investment_transactions where source_transaction_id = transaction.id
+
+Service unlink
+
+delete the service_payments row (do not edit transaction)
+
+Part 3: Cheaper Bills switching popup + link fix
+3.1 Fix comparison_results upsert properly
+
+If edge function does ON CONFLICT (user_id, provider, plan_name) then add the matching unique index:
+
+CREATE UNIQUE INDEX comparison_results_user_provider_plan
+ON public.comparison_results (user_id, provider, plan_name)
+WHERE provider IS NOT NULL;
+
+3.2 Confirm data actually exists + includes website_url
+
+After scan runs, verify:
+
+rows are inserted for that user_id
+
+best result includes website_url (or equivalent)
+
+UI query is filtering by user_id and service type/provider correctly
+
+3.3 UI behaviour (must not be a dead button)
+
+Add SwitchingPopupDialog that displays:
+
+provider + plan
+
+monthly/annual savings (if fields available)
+
+“View deal” button:
+
+if website_url exists → open it
+
+if missing → show a message like “No switching link available for this deal”
+
+Add clear empty state if there are no comparison_results yet (explain user needs to run scan)
+
+Part 4: Types / queries
+Transactions query include
+
+investment join
+
+bill join
+(No need to join tracked_service on transactions if using service_payments)
+
+New hook
+
+useServicePayments(tracked_service_id)
+
+list payments (including joined transaction basic fields)
+
+create/delete payment link
+
+Quick “is this what Jacob asked for” checklist
+
+Link transactions to bills ✅
+
+Link transactions to investments ✅ (safe, no duplicates)
+
+Link transactions to cheaper bills ✅ (via payment history)
+
+Switching popup shows info ✅
+
+Switching popup has a working link ✅ (with fallback if missing)
+
+No weird duplicate records ✅
