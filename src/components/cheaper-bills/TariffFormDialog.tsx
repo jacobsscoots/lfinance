@@ -54,7 +54,19 @@ interface TariffFormDialogProps {
   mode?: "create" | "edit";
 }
 
-const PROVIDERS = ["British Gas", "EDF", "Octopus Energy", "E.ON", "Scottish Power", "SSE", "Bulb", "OVO"];
+const PROVIDERS = [
+  "British Gas",
+  "EDF",
+  "Octopus Energy",
+  "E.ON",
+  "Scottish Power",
+  "SSE",
+  "Bulb",
+  "OVO",
+  "Outfox Energy",
+  "Shell Energy",
+  "Utility Warehouse",
+];
 
 export function TariffFormDialog({
   open,

@@ -4,14 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Bell, Mail, Loader2 } from "lucide-react";
+import { Bell, Mail, Loader2, Send } from "lucide-react";
 import { useCheaperBillsSettings } from "@/hooks/useCheaperBillsSettings";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export function NotificationSettingsCard() {
   const { settings, updateSettings, isUpdating } = useCheaperBillsSettings();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [inAppNotifications, setInAppNotifications] = useState(true);
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -27,6 +31,50 @@ export function NotificationSettingsCard() {
       email_notifications: emailNotifications,
       in_app_notifications: inAppNotifications,
     });
+  };
+
+  const handleSendTestEmail = async () => {
+    const targetEmail = email || (await supabase.auth.getUser()).data.user?.email;
+    
+    if (!targetEmail) {
+      toast({
+        title: "No email configured",
+        description: "Please enter an email address or sign in with an email account.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSendingTest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-bills-notification", {
+        body: {
+          type: "usage_summary",
+          email: targetEmail,
+          data: {
+            period: "Test Email",
+            totalUsage: 123.4,
+            totalCost: 45.67,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Test email sent!",
+        description: `Check your inbox at ${targetEmail}`,
+      });
+    } catch (error: any) {
+      console.error("Test email error:", error);
+      toast({
+        title: "Failed to send test email",
+        description: error.message || "Please check your Resend configuration.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
   };
 
   const hasChanges =
@@ -51,13 +99,29 @@ export function NotificationSettingsCard() {
             <Mail className="h-4 w-4" />
             Notification Email
           </Label>
-          <Input
-            id="notification-email"
-            type="email"
-            placeholder="your@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="notification-email"
+              type="email"
+              placeholder="your@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSendTestEmail}
+              disabled={isSendingTest}
+              title="Send test email"
+            >
+              {isSendingTest ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">
             Leave empty to use your account email
           </p>

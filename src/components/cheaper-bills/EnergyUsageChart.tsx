@@ -19,6 +19,12 @@ interface EnergyUsageChartProps {
   days?: number;
 }
 
+function getSourceBreakdown(readings: EnergyReading[]) {
+  const smartMeter = readings.filter((r) => r.source === "bright").length;
+  const manual = readings.filter((r) => r.source === "manual" || !r.source).length;
+  return { smartMeter, manual };
+}
+
 export function EnergyUsageChart({ readings, days = 30 }: EnergyUsageChartProps) {
   const chartData = useMemo(() => {
     // Create a map of readings by date
@@ -60,9 +66,10 @@ export function EnergyUsageChart({ readings, days = 30 }: EnergyUsageChartProps)
     },
   };
 
-  // Calculate totals
+  // Calculate totals and source breakdown
   const totalElectricity = chartData.reduce((sum, d) => sum + d.electricity, 0);
   const totalGas = chartData.reduce((sum, d) => sum + d.gas, 0);
+  const sourceBreakdown = getSourceBreakdown(readings);
 
   return (
     <Card>
@@ -112,6 +119,23 @@ export function EnergyUsageChart({ readings, days = 30 }: EnergyUsageChartProps)
             <span className="font-medium">{totalGas.toFixed(1)} kWh</span>
           </div>
         </div>
+
+        {(sourceBreakdown.smartMeter > 0 || sourceBreakdown.manual > 0) && (
+          <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted-foreground">
+            {sourceBreakdown.smartMeter > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                {sourceBreakdown.smartMeter} smart meter
+              </span>
+            )}
+            {sourceBreakdown.manual > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary-foreground/50" />
+                {sourceBreakdown.manual} manual
+              </span>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
