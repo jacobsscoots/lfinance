@@ -1,188 +1,133 @@
 
-# Cheaper Bills: Resend Email + Smart Meter Integration
+
+# Cheaper Bills: Provider Update, Smart Meter Chart, and Test Email
 
 ## Overview
 
-This plan covers two integrations for your Cheaper Bills module:
-
-1. **Resend Email Notifications** - Contract end reminders, savings alerts, weekly summaries
-2. **Glowmarkt/Bright API Integration** - Automatic electricity meter readings from your Chameleon IHD
-
----
-
-## Part 1: Resend Email Integration
-
-### What You'll Get
-- Contract ending reminder emails (e.g., "Your EDF contract ends in 30 days")
-- Savings opportunity alerts (e.g., "We found you could save £87/year")
-- Weekly/monthly summary emails with usage stats
-
-### Prerequisites
-You already have the Resend API ready. I'll need you to provide the API key when we start implementation.
-
-### Implementation Steps
-
-**Step 1: Add RESEND_API_KEY secret**
-- I'll request the API key from you
-- You'll paste it into the secure input
-
-**Step 2: Create `send-bills-notification` edge function**
-Handles three notification types:
-- `contract_reminder` - Upcoming contract end dates
-- `savings_alert` - When a comparison finds significant savings
-- `usage_summary` - Weekly/monthly usage report
-
-**Step 3: Update database schema**
-Add `user_email` preference storage:
-- Add `notification_email` column to `cheaper_bills_settings`
-- Store user's preferred email for notifications
-
-**Step 4: Add notification triggers**
-- Update `compare-energy-deals` to optionally send savings alerts
-- Create a scheduled check for contract end dates (using pg_cron)
-- Add UI toggle in Cheaper Bills settings for email preferences
+This plan addresses three requests:
+1. Add "Outfox Energy" to the tariff provider list
+2. Display smart meter data on the usage chart
+3. Add a "Send Test Email" button to verify Resend integration
 
 ---
 
-## Part 2: Glowmarkt/Bright API Integration (Chameleon IHD)
+## Part 1: Add Outfox Energy to Tariff Providers
 
-### How Chameleon Smart Meter Data Works
-
-Your Chameleon IHD is a "Consumer Access Device" (CAD) that connects directly to your SMETS2 smart meter via ZigBee. The IHD pushes data to Hildebrand's cloud platform, accessible via the **Glowmarkt/Bright API**.
-
-**Important clarification**: "Chameleon" is the hardware manufacturer - there's no separate "Chameleon API". The data flows like this:
-
-```text
-Your SMETS2 Meter --> Chameleon IHD (via ZigBee) --> Hildebrand Cloud --> Bright/Glowmarkt API
+### Current State
+The `TariffFormDialog.tsx` has a hardcoded provider list:
+```
+["British Gas", "EDF", "Octopus Energy", "E.ON", "Scottish Power", "SSE", "Bulb", "OVO"]
 ```
 
-### What You Need
+The `ServiceFormDialog.tsx` already includes Outfox Energy in its list.
 
-1. **Bright App account** - Download from App Store/Google Play, sign up
-2. **CAD device paired** - Your Chameleon IHD must be connected to the meter and WiFi
-3. **API access enabled** - Email support@hildebrand.co.uk requesting API access with:
-   - Your Bright account username
-   - Your CAD's MAC ID (printed on the device)
+### Changes Required
 
-### What You'll Get
+**File: `src/components/cheaper-bills/TariffFormDialog.tsx`**
 
-- Automatic half-hourly electricity readings synced to your app
-- Real-time consumption data (updates every 10 seconds when CAD is connected)
-- Historical data up to 13 months back
-- Cost estimates using your current tariff rates
+Update the PROVIDERS array to include Outfox Energy and match the comprehensive list from ServiceFormDialog:
+- Add: "Outfox Energy", "Shell Energy", "Utility Warehouse"
 
-### Implementation Steps
+---
 
-**Step 1: Add Bright credentials as secrets**
-- `BRIGHT_USERNAME` - Your Bright app email
-- `BRIGHT_PASSWORD` - Your Bright app password
-- Application ID is public: `b0f1b774-a586-4f72-9edd-27ead8aa7a8d`
+## Part 2: Display Smart Meter Data on Usage Chart
 
-**Step 2: Create `bright-sync-readings` edge function**
-```text
-Functionality:
-1. Authenticate with Bright API (POST /api/v0-1/auth)
-2. Discover resources (GET /api/v0-1/resource)
-   - electricity.consumption (kWh)
-   - electricity.consumption.cost (pence)
-   - gas.consumption (if available)
-3. Fetch readings for date range (GET /resource/{id}/readings)
-4. Upsert readings into energy_readings table
-5. Store token in database for reuse (expires after 7 days)
-```
+### Current State
+- `SmartMeterCard` shows connection status and last sync time
+- `EnergyUsageChart` displays readings from `useEnergyReadings()`
+- Smart meter sync writes to `energy_readings` table with `source: "bright"`
+- The chart already shows any readings in the table
 
-**Step 3: Update database schema**
-Add table for storing API tokens and resource IDs:
-```sql
-CREATE TABLE bright_connections (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id),
-  access_token TEXT,
-  token_expires_at TIMESTAMPTZ,
-  electricity_resource_id TEXT,
-  gas_resource_id TEXT,
-  last_synced_at TIMESTAMPTZ,
-  status TEXT DEFAULT 'pending',
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-```
+### Why It Should Already Work
+When you sync from the smart meter, the `bright-sync-readings` edge function inserts readings into `energy_readings` with `source: "bright"`. The `useEnergyReadings` hook fetches all readings for the user regardless of source, and the chart displays them.
 
-**Step 4: Add UI for Bright connection**
-- Settings card in Cheaper Bills: "Connect Smart Meter"
-- Shows connection status, last sync time
-- Manual "Sync Now" button
-- Auto-sync toggle (uses pg_cron for hourly sync)
+### Potential Issue
+If no data is showing, it could be because:
+1. The smart meter hasn't been synced yet
+2. The date range doesn't match (chart shows last 30 days by default)
+3. Readings are being stored but with dates outside the range
 
-**Step 5: Set up scheduled sync (optional)**
-Using pg_cron:
-- Every hour: sync last 2 hours of data
-- Daily at 2am: sync full previous day (handles any gaps)
+### Changes Required
+
+**File: `src/components/cheaper-bills/EnergyUsageChart.tsx`**
+
+Add a visual indicator showing the data source breakdown (manual vs smart meter):
+- Show a small badge or legend indicating how many readings came from smart meter vs manual entry
+- This helps confirm smart meter data is flowing correctly
+
+**File: `src/pages/CheaperBills.tsx`**
+
+Add a hint near the chart showing data source status:
+- "X readings from smart meter" if smart meter is connected
+
+---
+
+## Part 3: Add Test Email Button
+
+### Current State
+- `send-bills-notification` edge function is ready and deployed
+- `NotificationSettingsCard` has email settings but no way to send a test
+- RESEND_API_KEY secret is configured
+
+### Changes Required
+
+**File: `src/components/cheaper-bills/NotificationSettingsCard.tsx`**
+
+Add a "Send Test Email" button that:
+1. Calls the `send-bills-notification` edge function with type `usage_summary`
+2. Uses the configured email address (or falls back to account email)
+3. Shows loading state and success/error feedback
+
+**New functionality:**
+- Add `sendTestEmail` function using `supabase.functions.invoke`
+- Button with loading spinner
+- Toast notification on success/failure
 
 ---
 
 ## Technical Details
 
-### Bright API Endpoints Used
+### Files to Modify
 
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /api/v0-1/auth` | Get JWT token (valid 7 days) |
-| `GET /api/v0-1/resource` | List available data streams |
-| `GET /api/v0-1/resource/{id}/readings` | Fetch consumption data |
-| `GET /api/v0-1/resource/{id}/current` | Get real-time reading |
+| File | Change |
+|------|--------|
+| `src/components/cheaper-bills/TariffFormDialog.tsx` | Add Outfox Energy + more providers |
+| `src/components/cheaper-bills/EnergyUsageChart.tsx` | Add source breakdown indicator |
+| `src/components/cheaper-bills/NotificationSettingsCard.tsx` | Add "Send Test Email" button |
 
-### Reading Aggregation Options
+### Test Email Request Body
 
-| Period | Description | Use Case |
-|--------|-------------|----------|
-| `PT30M` | Half-hourly | Default billing data |
-| `PT1H` | Hourly | Charts, trends |
-| `P1D` | Daily | Summary cards |
+```typescript
+{
+  type: "usage_summary",
+  data: {
+    period: "Test",
+    totalUsage: 123.4,
+    totalCost: 45.67,
+  }
+}
+```
 
-### Files to Create/Modify
+### Resend Domain Note
 
-**New Files:**
-- `supabase/functions/send-bills-notification/index.ts`
-- `supabase/functions/bright-sync-readings/index.ts`
-- `src/hooks/useBrightConnection.ts`
-- `src/components/cheaper-bills/SmartMeterCard.tsx`
-- `src/components/cheaper-bills/BrightConnectDialog.tsx`
-
-**Modified Files:**
-- `src/pages/CheaperBills.tsx` - Add Smart Meter card
-- `src/hooks/useCheaperBillsSettings.ts` - Add notification email field
-- `src/components/cheaper-bills/ServiceCard.tsx` - Add "Send Reminder" action
-- `supabase/functions/compare-energy-deals/index.ts` - Add email notification trigger
+The edge function uses `noreply@lfinance.lovable.app` as the sender. This domain needs to be verified in Resend for emails to send successfully. If not verified, the test email will fail with a domain verification error.
 
 ---
 
 ## Implementation Order
 
-1. **Resend Email Setup** (simpler, faster)
-   - Add secret
-   - Create edge function
-   - Add UI toggles
-   - Test with contract reminder
-
-2. **Bright/Glowmarkt Integration** (more complex)
-   - Add secrets
-   - Create database tables
-   - Create sync edge function
-   - Add connection UI
-   - Test sync
-   - Optional: Add scheduled sync
+1. Update TariffFormDialog providers (quick, isolated change)
+2. Add source indicator to EnergyUsageChart
+3. Add test email button to NotificationSettingsCard
 
 ---
 
-## Questions Addressed
+## Verification Steps
 
-**"How do I implement Chameleon for automatic meter readings?"**
+After implementation:
+1. Open Cheaper Bills page
+2. Click "Add Tariff" - verify Outfox Energy appears in dropdown
+3. If smart meter is connected, sync and verify data appears on chart with source indicator
+4. Enter email in notification settings and click "Send Test Email"
+5. Check inbox for test email with usage summary format
 
-There's no direct "Chameleon API" - instead, you use the **Glowmarkt/Bright API** which receives data from your Chameleon IHD. The IHD acts as a bridge between your smart meter and the internet.
-
-**Requirements:**
-- Bright App account (free)
-- CAD connected to WiFi and meter
-- API access enabled (email Hildebrand support)
-
-Once connected, you'll get automatic half-hourly readings without needing to manually enter anything!
