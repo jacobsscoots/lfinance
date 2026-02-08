@@ -1,332 +1,207 @@
-# Fix Plan: Seasoning Caps & Settings Propagation (Non-Breaking Patch Plan)
 
-## ✅ IMPLEMENTATION COMPLETE
+## What’s actually happening (based on the live failing data)
 
-### Test Report
-- **Total scenarios run:** 306 tests across 14 test files
-- **Pass rate:** 305/306 (99.7%)
-- **New tests added:** 54 (22 in seasoningRules.test.ts + 4 new seasoning cap tests in portioningEngine.test.ts)
-- **Bulk validation:** 200 random scenarios with <20% failure rate ✓
-- **Pre-existing failure:** 1 unrelated test in mealCalculations.test.ts (weekly override protein for Saturday)
-- **Seasoning tests:** All 22 new tests pass
-- **Portioning engine tests:** All 32 tests pass (including 4 new seasoning cap tests)
-- **AutoPortioning tests:** All 62 tests pass
+### 1) The “At maximum portion of 15g; At minimum portion of 100g” blocker is real and is currently caused by a global constraint bug for seasonings
+From the database for **2026-02-08**, the “Schwartz … Chicken Seasoning” product has:
+- `food_type = other` (so it relies on name fallback to be treated as seasoning)
+- **`min_portion_grams = 100`**
+- **`max_portion_grams = 300`**
 
----
+Our code currently:
+- correctly *detects by name* that it is a seasoning and clamps **max** to 15g
+- but it **does not override the product’s min_portion_grams**, so the solver item becomes:
+  - `minPortionGrams = 100`
+  - `maxPortionGrams = 15`
+This creates a contradictory constraint pair and the failure message you’re seeing.
 
-## Summary
-This plan fixes two issues with **minimal, isolated patches** and **rigorous testing**, without breaking what currently works:
+### 2) Why seasoning still “shows 100g” on later days/weeks
+Weekly generation only writes new grams **on solver success**. If a day fails, the existing stored grams remain unchanged.
+So if seasoning was previously 100g (from manual entry or copying), it will stay 100g on days that fail—making it look like “caps aren’t applied”, when in practice the day never committed updated quantities.
 
-1. **Fix 1: Seasoning Too High**  
-   Seasonings are sometimes treated as adjustable foods, causing unrealistic amounts (e.g., 100g seasoning).  
-   **Solution:** Add a post-solve seasoning normaliser with a hard cap (15g) and ensure seasoning categorisation/pairing is correct.
-
-2. **Fix 2: Settings Changes Not Applying to Week Ahead**  
-   When calorie/macro targets are updated in Settings, the meal planner UI for 9–16 Feb 2026 doesn’t refresh to the new targets.  
-   **Solution:** Add cross-query invalidation when settings are saved (meal plans + weekly targets), and ensure settings are re-read by components.
+### 3) The “Contributes 70g protein; At minimum portion of 10g” message is not necessarily a unit bug
+That “Contributes 70g protein” is consistent with a locked/fixed meal item contributing a large chunk of protein (e.g., a big fixed pasta meal), and “At minimum 10g” usually comes from default min constraints on “other” items.
+It may still be solvable, but the current local-search loop can stagnate, and it reports `max_iterations_exceeded` even when it broke early due to stagnation.
 
 ---
 
-# IMPORTANT: Make these fixes WITHOUT breaking what currently works
-
-## Non-negotiable instruction
-- **Do NOT refactor or rewrite** the current working solver.
-- **Do NOT change existing behaviour** for normal foods that already solve correctly.
-- Implement only **small, isolated patches** with tests.
-
-### Safety rules
-- Keep `src/lib/autoPortioning.ts` / current working V2 flow intact as much as possible.
-- Avoid changing the scoring / optimisation flow unless absolutely required.
-- Changes must be limited to:
-  1) seasoning handling (cap + derived scaling + categorisation)
-  2) settings propagation (targets refresh / invalidation)
-- Add unit tests proving:
-  - existing scenarios still pass
-  - only seasoning + settings behaviour changes
+## Goals (non-negotiable, kept)
+- No solver rewrite
+- Additive, isolated patches
+- Seasoning must never exceed 15g everywhere (day/week/copy)
+- Fail fast when impossible; retry deterministically when feasible-but-stuck
+- Add tests + re-run the rigorous bulk harness
 
 ---
 
-## Current State Analysis
+## Fix B (Seasoning) — Make it impossible for seasoning to be 100g anywhere
 
-### Seasoning Handling (Existing)
-- V2 solver already has `scaleSeasonings()` (line ~255–268) that derives seasoning grams from paired protein.
-- Default constraints in `productToSolverItem()` already set `seasoning: { min: 1, max: 15 }` (line ~650).
-- **Problem A:** Seasonings without a paired protein ID can be treated like adjustable items and grow unrealistically large.
-- **Problem B:** Products not flagged as `food_type: 'sauce'` don’t get seasoning category applied, so they bypass seasoning constraints.
+### B0) Core change: “Seasoning constraints override product constraints”
+**Change in `productToSolverItem()`** (isolated):
+- If the item is classified as seasoning (by food_type, explicit category, or name fallback), then:
+  - Force constraints to seasoning-safe values, regardless of product min/max:
+    - `minPortionGrams = 0` (or 1, depending on preference)
+    - `maxPortionGrams = 15`
+    - `portionStepGrams = 1` (or keep product step, but clamped)
+    - `roundingRule = nearest_1g` (safe default)
+  - Force `editableMode = 'LOCKED'` (pre-solve rule: not an optimization variable)
+  - Force `countMacros = false` unless a feature flag says otherwise
 
-### Settings Propagation (Existing)
-- `useNutritionSettings` invalidates `["nutrition-settings"]` on save.
-- Meal planner uses separate queries:
-  - `useMealPlanItems` → `["meal-plans"]`
-  - `useWeeklyNutritionTargets` → `["weekly-nutrition-targets"]`
-- **Problem A:** No cross-invalidation - meal planner doesn’t re-render when settings change.
-- **Problem B:** React Query may keep old settings in mounted components until invalidated/refetched.
+This resolves the contradictory “min 100 / max 15” and enforces “non-optimisable + capped”.
+
+### B1) Persist seasoning clamp even when the day fails
+In `useMealPlanItems.ts`:
+- In both `recalculateDay` and `recalculateAll`:
+  1) Identify seasoning items (same detection rule as solver: food_type OR name fallback).
+  2) Compute their intended grams:
+     - If paired protein exists + rate configured: derived grams
+     - Else fallback: 5g
+     - Clamp to 15g
+  3) **Update seasoning items in the DB first (or at least update them even if solve fails)**
+
+This guarantees:
+- seasonings never remain at 100g just because the rest of the solve failed.
+
+### B2) Clamp on copy operations so 100g can’t propagate forward
+Update these mutations in `useMealPlanItems.ts`:
+- `copyDayToNext`
+- `copyFromPreviousWeek`
+
+During copying, if an item is a seasoning:
+- copy the row but cap grams to <= 15 (or set fallback 5)
+
+### B3) Clamp at item-add time (manual + target mode)
+Update UI add flows:
+- `MealItemDialog` (single add)
+- `MealItemMultiSelectDialog` (multi add)
+
+Rules:
+- If a selected product matches seasoning detection, default grams to 5 (manual or target mode)
+- If user types a larger number, clamp to 15 and show a small inline hint:
+  - “Seasonings are capped at 15g”
+
+### B4) Tests for seasoning “everywhere”
+Add/extend tests to cover:
+- `productToSolverItem()` seasoning override ignores product min/max (this is the key regression test)
+- “Clamp even if solve fails” (a unit test around the mutation function helper, or a mocked mutation test)
+- “Copy clamps seasonings”
 
 ---
 
-# Fix 1: Seasoning Too High (Patch Only)
-
-## Problem
-Seasoning is being treated as a normal adjustable food in some cases, causing unrealistic amounts (e.g., 100g seasoning).
-
-## Required behaviour (non-negotiable)
-- Seasoning must **never** be used as a tuning lever to hit calories/macros.
-- Seasoning grams must be **derived from paired protein grams** and **clamped** to a realistic cap.
-- Seasoning must never exceed **15g** (hard cap), regardless of solver behaviour.
-- Keep rice from exploding: rice must remain within **BOUNDED** limits.
-
-## Patch approach (minimal change)
-Implement a **post-solve seasoning normaliser** plus small categorisation fixes, without changing the core solver loop.
-
-### Implementation (minimal)
-
-#### 1) New helper file: `src/lib/seasoningRules.ts`
-Create a pure helper module:
-
-```typescript
-/**
- * Seasoning Rules - Post-solve normalization and hard caps
- *
- * Provides:
- * - isSeasoning()
- * - computeSeasoningGrams()
- * - normalizeSeasoningPortions()
- */
-
-export const DEFAULT_SEASONING_MAX_GRAMS = 15;
-
-export function isSeasoning(foodType: string | null | undefined): boolean {
-  if (!foodType) return false;
-  const type = foodType.toLowerCase();
-  return type === 'sauce' || type === 'seasoning';
-}
-
-export function computeSeasoningGrams(
-  proteinGrams: number,
-  ratePer100g: number,
-  maxGrams: number = DEFAULT_SEASONING_MAX_GRAMS
-): number {
-  const derived = Math.round((proteinGrams * ratePer100g) / 100);
-  return Math.min(derived, maxGrams);
-}
-
-export function normalizeSeasoningPortions(
-  portions: Map<string, number>,
-  items: Array<{ id: string; category: string; maxPortionGrams: number }>,
-  hardCap: number = DEFAULT_SEASONING_MAX_GRAMS
-): { portions: Map<string, number>; capped: string[] } {
-  const result = new Map(portions);
-  const capped: string[] = [];
-
-  for (const item of items) {
-    if (item.category !== 'seasoning') continue;
-
-    const current = result.get(item.id) ?? 0;
-    const cap = Math.min(item.maxPortionGrams, hardCap);
-
-    if (current > cap) {
-      result.set(item.id, cap);
-      capped.push(item.id);
-    }
-  }
-
-  return { portions: result, capped };
-}
-2) Single hook point (post-solve) in src/lib/portioningEngine.ts
-Add ONE call at the return point of a successful solve (no loop changes):
-
-import { normalizeSeasoningPortions, DEFAULT_SEASONING_MAX_GRAMS } from './seasoningRules';
-
-// ... after selecting best candidate:
-const best = candidates[0];
-
-const { portions: normalizedPortions, capped } = normalizeSeasoningPortions(
-  best.portions,
-  items,
-  DEFAULT_SEASONING_MAX_GRAMS
-);
-
-const warnings: string[] = [];
-if (capped.length > 0) {
-  warnings.push(`Capped ${capped.length} seasoning(s) to max ${DEFAULT_SEASONING_MAX_GRAMS}g`);
-}
-
-return {
-  success: true,
-  portions: normalizedPortions,
-  totals: best.totals,
-  score: best.score,
-  iterationsRun: candidates.length,
-  warnings: warnings.length ? warnings : undefined,
-};
-3) Ensure correct seasoning categorisation in productToSolverItem()
-Seasoning must map correctly even if not flagged as sauce:
-
-const categoryMap: Record<string, SolverItem['category']> = {
-  protein: 'protein',
-  carb: 'carb',
-  veg: 'veg',
-  dairy: 'dairy',
-  fruit: 'fruit',
-  sauce: 'seasoning',
-  seasoning: 'seasoning', // add explicit mapping
-  treat: 'snack',
-  fat: 'fat',
-  other: 'other',
-};
-4) Seasoning pairing rule (only if needed)
-If a seasoning doesn’t have a paired protein id:
-
-Default to a small fixed amount (e.g., 5g)
-
-Still clamp to max 15g
-
-Never allow it to grow to meet macros
-
-5) Rice constraint (don’t push rice too high)
-Do NOT change global solver behaviour.
-Instead:
-
-Add/confirm rice is BOUNDED with sensible min/max/step so solver can’t blow it up
-
-Example config (tuneable in product settings):
-
-min 60g, max 120g, step 5g (or whatever fits your real portions)
-
-Fix 2: Settings Changes Not Applying to Week Ahead (Patch Only)
-Problem
-When user edits calorie/macro targets in Settings, week 9–16 Feb 2026 still shows/uses old targets.
-
-Required behaviour
-Targets displayed and used for generation must reflect the latest Settings.
-
-Meal planner must re-render when settings are saved.
-
-Do not delete existing meal items automatically.
-
-Patch approach (minimal)
-Add cross-query invalidation in useNutritionSettings on save.
-
-Implementation details
-Modify: src/hooks/useNutritionSettings.ts
-In onSuccess:
-
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ["nutrition-settings"] });
-
-  // Cross-invalidate so meal planner re-renders with new targets
-  queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
-  queryClient.invalidateQueries({ queryKey: ["weekly-nutrition-targets"] });
-
-  toast.success("Settings saved");
-},
-Optional fallback if still sticky
-Set staleTime: 0 for nutrition settings query so it always refetches when navigating:
-
-staleTime: 0
-Must not break what works
-Existing generated meal items should not be deleted automatically.
-
-Only targets and derived totals must refresh; user chooses to regenerate if needed.
-
-Add/verify a quick integration/manual check to confirm the UI updates after saving settings.
-
-Tests to Add / Update (Required)
-Seasoning tests
-Modify: src/lib/portioningEngine.test.ts
-Add:
-
-Seasoning never exceeds 15g
-
-Warning appears if seasoning was capped
-
-New: src/lib/seasoningRules.test.ts
-Add unit tests for:
-
-isSeasoning
-
-computeSeasoningGrams
-
-normalizeSeasoningPortions
-
-Rigorous Testing Requirement (Must be re-run after changes)
-Non-negotiable
-After implementing the fixes, re-run the full rigorous testing again to prove nothing has broken.
-
-Must-do test steps
-Run the entire existing test suite (no skipped tests).
-
-Run bulk generation / harness testing again:
-
-200–1000 scenarios minimum
-
-verify strict tolerances
-
-group failures by reason
-
-Add/verify new tests:
-
-Seasoning cap test (never > 15g)
-
-Settings propagation test (settings change updates week 9–16 Feb display + targets)
-
-Manual regression checks:
-
-Generate week 9–16 Feb
-
-Change settings targets
-
-Confirm UI updates targets immediately
-
-Regenerate and confirm solver uses the new targets
-
-Confirm no unrealistic portions appear
-
-Output required
-Provide a short test report:
-
-total scenarios run
-
-pass rate
-
-failures (if any) with grouped reasons
-
-confirmation that all existing tests still pass
-
-Files to Create/Modify
-File	Action	Lines Changed
-src/lib/seasoningRules.ts	CREATE	~50 lines
-src/lib/seasoningRules.test.ts	CREATE	~40 lines
-src/lib/portioningEngine.ts	MODIFY	~15 lines (import + post-solve hook + category map tweak)
-src/lib/portioningEngine.test.ts	MODIFY	~30 lines (new seasoning tests)
-src/hooks/useNutritionSettings.ts	MODIFY	2–3 lines (add invalidations)
-Regression Protection (Pre-merge checklist)
-Run existing test suite — all existing tests must pass.
-
-Run bulk validation — 200+ scenarios; investigate failures.
-
-New seasoning tests must pass (cap + warning).
-
-Manual check:
-
-Generate week 9–16 Feb
-
-Change settings
-
-Confirm week UI updates targets
-
-Confirm seasoning never exceeds 15g
-
-Risk Assessment
-Risk	Likelihood	Mitigation
-Post-solve cap changes totals	Low	Seasonings usually excluded from macros; cap rarely triggers
-Invalidation causes UI flicker	Low	React Query handles this; acceptable
-Existing tests break	Very Low	Changes are additive and isolated
-Success Criteria
-Seasoning never exceeds 15g (hard cap) in any generated plan.
-
-Settings updates instantly reflect on week 9–16 Feb 2026 targets display and generation.
-
-No regressions: existing tests continue to pass.
-
-Rigorous bulk testing is re-run and reported.
+## Fix A (Iteration failures) — Fail fast if impossible; deterministic retries if feasible-but-stuck
+
+### A1) Add a feasibility pre-check (necessary-condition bounds)
+Add a small pre-check inside `solve()` (before the iteration loop):
+- Compute:
+  - `minTotals` = locked items + min for adjustable items (after clamping/rounding)
+  - `maxTotals` = locked items + max for adjustable items (after clamping/rounding)
+  - exclude seasonings from totals unless `seasoningsCountMacros=true`
+
+Then check necessary conditions for each macro and calories:
+- If `maxTotals.protein < targetProtein` ⇒ impossible
+- If `minTotals.protein > targetProtein + tolerance.max` ⇒ impossible
+- Repeat for carbs/fat/calories
+
+If impossible:
+- return `success:false` with:
+  - `reason: 'impossible_targets'` (new FailureReason)
+  - blockers include:
+    - which macro failed
+    - target vs min/max achievable totals
+    - top 2–3 items limiting that macro (e.g., items already at max or locked contributors)
+
+This replaces misleading `max_iterations_exceeded` in truly impossible cases.
+
+### A2) Deterministic multi-start retries (minimal change, no randomness)
+Implement a wrapper inside `portioningEngine.ts`:
+- Attempt 1: current initialization (unchanged)
+- Attempt 2: midpoint initialization for FREE/BOUNDED items
+- Attempt 3: protein-heavy / carb-light initialization
+- Attempt 4: carb-heavy / protein-light initialization
+
+Implementation approach (minimal refactor):
+- Extract the existing loop into a helper function like:
+  - `runLocalSearch(initialPortions): CandidatePlan[] | failureSnapshot`
+- Keep scoring, adjustment selection, tolerances identical
+- Only swap the initial portions used
+
+Return the best candidate across attempts by existing score function.
+
+### A3) Make failure reason accurate when we break due to stagnation
+Currently, stagnation breaks early but we still return `max_iterations_exceeded`.
+Add a new failure reason:
+- `reason: 'stagnation'` (or `local_optimum`)
+and include blockers + closestTotals as before.
+
+This improves debugging and avoids “you didn’t test enough” confusion, because it will report what actually happened.
+
+### A4) Product nutrition validation used for solver gating (not just a helper)
+We already have `validateProductNutrition()` but it is not used to prevent a bad product entering the solve.
+Add two gates:
+1) On product save (create/update): block invalid values with a clear error toast.
+2) Before solve: if any item product fails validation, return:
+   - `reason: 'invalid_product_nutrition'`
+   - blockers listing the product(s) and the exact validation error
+
+This catches unit conversion mistakes deterministically.
+
+### A5) Tests for feasibility + multi-start
+Add tests:
+- Feasibility fail-fast:
+  - construct a scenario where max achievable protein < target
+  - assert `reason === 'impossible_targets'` and min/max bounds are reported
+- Multi-start success:
+  - construct a small synthetic scenario known to stagnate from current initialization but solvable from midpoint
+  - assert at least one attempt succeeds
+- Stagnation reason:
+  - scenario that breaks on stagnation and returns `reason === 'stagnation'`
+
+---
+
+## Fix C (Global constraints + targets across all dates) — tighten propagation and stop snapshot bleed
+
+### C1) Constraints always come from Products (already mostly true, but fix the seasoning exception)
+With the seasoning override, constraints become globally consistent across all dates even if a product has a “bad” min/max for a seasoning.
+
+### C2) Targets are hybrid explicit-only (your choice)
+Keep the current hybrid behavior:
+- Weekly overrides apply only when explicit (protein/carbs nullable)
+- Otherwise, compute from global settings for any date
+
+### C3) Invalidation completeness (additive)
+We already invalidate meal-plans on settings save and product update.
+We’ll add/confirm invalidation on:
+- Product create/delete
+- Weekly targets save/remove (already invalidates)
+- Any “bulk edit constraints” action (if present)
+
+---
+
+## Implementation sequence (safe, isolated)
+1) Seasoning constraints override + lock seasonings in solver items
+2) Clamp/persist seasonings even when a day fails
+3) Clamp seasonings on copy + add-item flows
+4) Feasibility pre-check + new failure reason(s)
+5) Multi-start wrapper (keep core loop identical)
+6) Product nutrition validation gates
+7) Tests + bulk harness + short test report
+
+---
+
+## Test + Rigorous validation report (non-negotiable deliverable)
+After implementation we will:
+1) Run full existing unit test suite (no skips)
+2) Run bulk harness: 200–1000 scenarios
+3) Add new tests:
+   - seasoning min/max override regression test (prevents your current bug permanently)
+   - seasoning clamp persists even if solve fails
+   - feasibility fail-fast test
+   - multi-start resolves a formerly-stagnant case
+4) Manual checks:
+   - Generate week containing 2026-02-08
+   - Confirm seasoning never shows 100g even on failed days
+   - Confirm failure reasons are “impossible targets” or “stagnation” with clear bounds, not “max iterations exceeded” everywhere
+
+---
+
+## What I need next
+If you want me to proceed implementing this (it will touch solver + hooks + UI dialogs + tests), confirm and I’ll continue in a new request as you asked (no more tool calls in this one).
