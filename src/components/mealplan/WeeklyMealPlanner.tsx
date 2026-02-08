@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Palmtree, Target } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Palmtree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -76,7 +76,7 @@ export function WeeklyMealPlanner() {
     midWeek.setDate(midWeek.getDate() + 3); // Move to Wednesday
     return getWeekStartMonday(midWeek);
   }, [weekRange.start]);
-  const { weeklyTargets, isLoading: weeklyTargetsLoading, deleteWeeklyTargets } = useWeeklyNutritionTargets(weekStartMonday);
+  const { weeklyTargets, isLoading: weeklyTargetsLoading } = useWeeklyNutritionTargets(weekStartMonday);
 
   // Build the weekly override for macro calculations
   const weeklyOverride: WeeklyTargetsOverride | null = useMemo(() => {
@@ -274,32 +274,6 @@ export function WeeklyMealPlanner() {
         <div className="text-xs text-muted-foreground">
           Last calculated: {formatDistanceToNow(lastCalculated, { addSuffix: true })}
         </div>
-      )}
-
-      {/* Weekly Override Indicator */}
-      {weeklyTargets && (
-        <Alert className="bg-primary/10 border-primary/30">
-          <Target className="h-4 w-4 text-primary" />
-          <AlertDescription className="flex items-center justify-between gap-4">
-            <span className="text-sm">
-              This week has custom targets ({weeklyTargets.monday_calories} kcal weekday). 
-              <span className="text-muted-foreground"> Changes in Settings → Nutrition Targets won't affect this week.</span>
-            </span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="shrink-0"
-              onClick={() => {
-                if (confirm("Remove custom targets for this week? The week will use your global settings instead.")) {
-                  // Delete the weekly override
-                  deleteWeeklyTargets.mutate(weeklyTargets.week_start_date);
-                }
-              }}
-            >
-              Use Global Settings
-            </Button>
-          </AlertDescription>
-        </Alert>
       )}
 
       {/* Warnings */}
