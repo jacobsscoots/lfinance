@@ -317,6 +317,31 @@ export default function CheaperBills() {
         onSubmit={handleCreateService}
         isLoading={isCreating}
       />
+      <ServiceFormDialog
+        open={!!editingService}
+        onOpenChange={(open) => !open && setEditingService(null)}
+        onSubmit={(data) => {
+          updateService({
+            id: editingService.id,
+            ...data,
+            contract_start_date: data.contract_start_date?.toISOString().split("T")[0],
+            contract_end_date: data.contract_end_date?.toISOString().split("T")[0],
+          });
+          setEditingService(null);
+        }}
+        isLoading={false}
+        mode="edit"
+        defaultValues={editingService ? {
+          service_type: editingService.service_type,
+          provider: editingService.provider,
+          plan_name: editingService.plan_name || "",
+          monthly_cost: editingService.monthly_cost,
+          contract_start_date: editingService.contract_start_date ? new Date(editingService.contract_start_date) : undefined,
+          contract_end_date: editingService.contract_end_date ? new Date(editingService.contract_end_date) : undefined,
+          exit_fee: editingService.exit_fee || 0,
+          notes: editingService.notes || "",
+        } : undefined}
+      />
       <TariffFormDialog
         open={tariffDialogOpen}
         onOpenChange={setTariffDialogOpen}
