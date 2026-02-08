@@ -469,6 +469,354 @@ export type Database = {
           },
         ]
       }
+      deal_notifications: {
+        Row: {
+          created_at: string
+          deal_id: string | null
+          id: string
+          is_read: boolean | null
+          message: string | null
+          notification_type: string | null
+          rule_id: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deal_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          notification_type?: string | null
+          rule_id?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deal_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          notification_type?: string | null
+          rule_id?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_notifications_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_notifications_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "deal_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_price_history: {
+        Row: {
+          deal_id: string
+          id: string
+          price: number
+          recorded_at: string
+          user_id: string
+        }
+        Insert: {
+          deal_id: string
+          id?: string
+          price: number
+          recorded_at?: string
+          user_id: string
+        }
+        Update: {
+          deal_id?: string
+          id?: string
+          price?: number
+          recorded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_price_history_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_rules: {
+        Row: {
+          alert_cooldown_minutes: number | null
+          category: string | null
+          created_at: string
+          enabled: boolean | null
+          id: string
+          keywords_exclude: string[] | null
+          keywords_include: string[] | null
+          last_notified_at: string | null
+          location_filter: string | null
+          max_price: number | null
+          min_discount_percent: number | null
+          min_price: number | null
+          name: string
+          notify_email: boolean | null
+          notify_in_app: boolean | null
+          shipping_filter: string | null
+          store_blacklist: string[] | null
+          store_whitelist: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alert_cooldown_minutes?: number | null
+          category?: string | null
+          created_at?: string
+          enabled?: boolean | null
+          id?: string
+          keywords_exclude?: string[] | null
+          keywords_include?: string[] | null
+          last_notified_at?: string | null
+          location_filter?: string | null
+          max_price?: number | null
+          min_discount_percent?: number | null
+          min_price?: number | null
+          name: string
+          notify_email?: boolean | null
+          notify_in_app?: boolean | null
+          shipping_filter?: string | null
+          store_blacklist?: string[] | null
+          store_whitelist?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alert_cooldown_minutes?: number | null
+          category?: string | null
+          created_at?: string
+          enabled?: boolean | null
+          id?: string
+          keywords_exclude?: string[] | null
+          keywords_include?: string[] | null
+          last_notified_at?: string | null
+          location_filter?: string | null
+          max_price?: number | null
+          min_discount_percent?: number | null
+          min_price?: number | null
+          name?: string
+          notify_email?: boolean | null
+          notify_in_app?: boolean | null
+          shipping_filter?: string | null
+          store_blacklist?: string[] | null
+          store_whitelist?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      deal_scan_logs: {
+        Row: {
+          created_at: string
+          deals_found: number | null
+          deals_inserted: number | null
+          deals_updated: number | null
+          ended_at: string | null
+          error_message: string | null
+          id: string
+          request_time_ms: number | null
+          source_id: string | null
+          started_at: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deals_found?: number | null
+          deals_inserted?: number | null
+          deals_updated?: number | null
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          request_time_ms?: number | null
+          source_id?: string | null
+          started_at?: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deals_found?: number | null
+          deals_inserted?: number | null
+          deals_updated?: number | null
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          request_time_ms?: number | null
+          source_id?: string | null
+          started_at?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_scan_logs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "deal_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_sources: {
+        Row: {
+          base_url: string
+          config: Json | null
+          created_at: string
+          enabled: boolean | null
+          etag: string | null
+          id: string
+          last_error: string | null
+          last_modified: string | null
+          last_scan_at: string | null
+          last_scan_status: string | null
+          max_pages: number | null
+          name: string
+          rate_limit_ms: number | null
+          scan_frequency_minutes: number | null
+          scan_url: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          base_url: string
+          config?: Json | null
+          created_at?: string
+          enabled?: boolean | null
+          etag?: string | null
+          id?: string
+          last_error?: string | null
+          last_modified?: string | null
+          last_scan_at?: string | null
+          last_scan_status?: string | null
+          max_pages?: number | null
+          name: string
+          rate_limit_ms?: number | null
+          scan_frequency_minutes?: number | null
+          scan_url: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          base_url?: string
+          config?: Json | null
+          created_at?: string
+          enabled?: boolean | null
+          etag?: string | null
+          id?: string
+          last_error?: string | null
+          last_modified?: string | null
+          last_scan_at?: string | null
+          last_scan_status?: string | null
+          max_pages?: number | null
+          name?: string
+          rate_limit_ms?: number | null
+          scan_frequency_minutes?: number | null
+          scan_url?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      deals: {
+        Row: {
+          category: string | null
+          created_at: string
+          currency: string | null
+          description_snippet: string | null
+          discount_percent: number | null
+          first_seen_at: string
+          hash: string
+          id: string
+          image_url: string | null
+          is_new: boolean | null
+          last_seen_at: string
+          old_price: number | null
+          price: number
+          price_dropped: boolean | null
+          source_id: string | null
+          source_name: string
+          store: string | null
+          title: string
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          currency?: string | null
+          description_snippet?: string | null
+          discount_percent?: number | null
+          first_seen_at?: string
+          hash: string
+          id?: string
+          image_url?: string | null
+          is_new?: boolean | null
+          last_seen_at?: string
+          old_price?: number | null
+          price: number
+          price_dropped?: boolean | null
+          source_id?: string | null
+          source_name: string
+          store?: string | null
+          title: string
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          currency?: string | null
+          description_snippet?: string | null
+          discount_percent?: number | null
+          first_seen_at?: string
+          hash?: string
+          id?: string
+          image_url?: string | null
+          is_new?: boolean | null
+          last_seen_at?: string
+          old_price?: number | null
+          price?: number
+          price_dropped?: boolean | null
+          source_id?: string | null
+          source_name?: string
+          store?: string | null
+          title?: string
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deals_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "deal_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       energy_readings: {
         Row: {
           consumption_kwh: number | null
