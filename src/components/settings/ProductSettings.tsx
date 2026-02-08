@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Trash2, Package, Scale, Copy, Upload, Search, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Scale, Copy, Upload, Search, Info, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -54,6 +54,14 @@ const productSchema = z.object({
   // Meal planning
   meal_eligibility: z.array(z.enum(["breakfast", "lunch", "dinner", "snack"])),
   food_type: z.enum(["protein", "carb", "fat", "veg", "fruit", "dairy", "sauce", "treat", "other"]),
+  // V2 Portioning fields
+  editable_mode: z.enum(["LOCKED", "BOUNDED", "FREE"]),
+  min_portion_grams: z.coerce.number().min(0).nullable().optional(),
+  max_portion_grams: z.coerce.number().min(0).nullable().optional(),
+  portion_step_grams: z.coerce.number().min(1).optional(),
+  rounding_rule: z.enum(["nearest_1g", "nearest_5g", "nearest_10g", "whole_unit_only"]),
+  eaten_factor: z.coerce.number().min(0).max(1).optional(),
+  seasoning_rate_per_100g: z.coerce.number().min(0).nullable().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -96,6 +104,14 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
     storage_notes: "",
     meal_eligibility: ["breakfast", "lunch", "dinner", "snack"] as MealEligibility[],
     food_type: "other" as FoodType,
+    // V2 Portioning defaults
+    editable_mode: "FREE" as const,
+    min_portion_grams: null,
+    max_portion_grams: null,
+    portion_step_grams: 1,
+    rounding_rule: "nearest_1g" as const,
+    eaten_factor: 1,
+    seasoning_rate_per_100g: null,
   }), []);
 
   const form = useForm<ProductFormValues>({
@@ -133,6 +149,14 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
         storage_notes: product.storage_notes || "",
         meal_eligibility: product.meal_eligibility || ["breakfast", "lunch", "dinner", "snack"],
         food_type: (product.food_type as FoodType) || "other",
+        // V2 Portioning fields
+        editable_mode: (product.editable_mode as "LOCKED" | "BOUNDED" | "FREE") || "FREE",
+        min_portion_grams: product.min_portion_grams || null,
+        max_portion_grams: product.max_portion_grams || null,
+        portion_step_grams: product.portion_step_grams || 1,
+        rounding_rule: (product.rounding_rule as "nearest_1g" | "nearest_5g" | "nearest_10g" | "whole_unit_only") || "nearest_1g",
+        eaten_factor: product.eaten_factor ?? 1,
+        seasoning_rate_per_100g: product.seasoning_rate_per_100g || null,
       });
     } else {
       form.reset(getDefaultValues());
@@ -253,6 +277,14 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
       storage_notes: values.storage_notes || null,
       meal_eligibility: values.meal_eligibility,
       food_type: values.food_type,
+      // V2 Portioning fields
+      editable_mode: values.editable_mode,
+      min_portion_grams: values.min_portion_grams || null,
+      max_portion_grams: values.max_portion_grams || null,
+      portion_step_grams: values.portion_step_grams || 1,
+      rounding_rule: values.rounding_rule,
+      eaten_factor: values.eaten_factor ?? 1,
+      seasoning_rate_per_100g: values.seasoning_rate_per_100g || null,
     };
 
     if (isEditing) {
@@ -818,6 +850,167 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                     </FormItem>
                   )}
                 />
+              </div>
+
+              <Separator />
+
+              {/* V2 Portioning Settings */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  Portioning Settings
+                </h4>
+                
+                <FormField
+                  control={form.control}
+                  name="editable_mode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Editable Mode</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="FREE">Free (adjustable)</SelectItem>
+                          <SelectItem value="BOUNDED">Bounded (min/max limits)</SelectItem>
+                          <SelectItem value="LOCKED">Locked (fixed grams)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {field.value === "LOCKED" 
+                          ? "Portion will never be changed by the solver" 
+                          : field.value === "BOUNDED"
+                          ? "Portion will stay within min/max bounds"
+                          : "Portion can be freely adjusted to hit targets"}
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch("editable_mode") !== "LOCKED" && (
+                  <>
+                    <div className="grid grid-cols-3 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="min_portion_grams"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Min (g)</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="1" placeholder="10" {...field} value={field.value ?? ""} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="max_portion_grams"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Max (g)</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="1" placeholder="300" {...field} value={field.value ?? ""} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="portion_step_grams"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Step (g)</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="1" placeholder="1" {...field} value={field.value ?? 1} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="rounding_rule"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Rounding</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="nearest_1g">Nearest 1g</SelectItem>
+                                <SelectItem value="nearest_5g">Nearest 5g</SelectItem>
+                                <SelectItem value="nearest_10g">Nearest 10g</SelectItem>
+                                <SelectItem value="whole_unit_only">Whole unit only</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="eaten_factor"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1">
+                              Eaten Factor
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Info className="h-3 w-3 text-muted-foreground" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Fraction actually consumed (e.g. 0.95 = 95%)</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </FormLabel>
+                            <FormControl>
+                              <Input type="number" step="0.01" min="0" max="1" {...field} value={field.value ?? 1} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {form.watch("food_type") === "sauce" && (
+                  <FormField
+                    control={form.control}
+                    name="seasoning_rate_per_100g"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          Seasoning Rate (g per 100g protein)
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-3 w-3 text-muted-foreground" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Auto-scale with paired protein (e.g. 3 = 3g per 100g chicken)</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" placeholder="e.g. 3" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <FormDescription>
+                          Seasoning will automatically scale when protein portion changes
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-4">

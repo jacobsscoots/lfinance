@@ -1,5 +1,5 @@
 import { format, parse } from "date-fns";
-import { AlertTriangle, Settings2 } from "lucide-react";
+import { AlertTriangle, Settings2, ChevronDown, ChevronUp, Bug } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { MealPlan, MealType } from "@/hooks/useMealPlanItems";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { 
@@ -21,8 +22,8 @@ import { getDailyTargets, computeTotals, MacroTotals, WeeklyTargetsOverride } fr
 import { MealBreakdownList } from "./MealBreakdownList";
 import { DayMacroSummary } from "./DayMacroSummary";
 import { cn } from "@/lib/utils";
-import { logPortioningUiComparison, PortioningDebugItem, PortioningDebugTotals } from "@/lib/portioningDebug";
-import { useEffect } from "react";
+import { logPortioningUiComparison, PortioningDebugItem, PortioningDebugTotals, readPortioningSolverDebug, PortioningSolverDebugPayload } from "@/lib/portioningDebug";
+import { useEffect, useState } from "react";
 
 
 interface DayDetailModalProps {
@@ -57,6 +58,10 @@ export function DayDetailModal({
   onEdit,
   weeklyOverride 
 }: DayDetailModalProps) {
+  // State for debug panel
+  const [debugPanelOpen, setDebugPanelOpen] = useState(false);
+  const [solverDebug, setSolverDebug] = useState<PortioningSolverDebugPayload | null>(null);
+  
   // Parse as local date to avoid UTC-shift issues
   const date = parse(plan.meal_date, "yyyy-MM-dd", new Date());
   const isTargetMode = settings?.mode === "target_based";
@@ -107,9 +112,14 @@ export function DayDetailModal({
     tolerance: settings?.target_tolerance_percent || 2,
   };
 
-  // DEV ONLY: log comparison with solver totals when modal opens
+  // DEV ONLY: log comparison with solver totals when modal opens and load debug data
   useEffect(() => {
     if (!open) return;
+    
+    // Load solver debug data for this date
+    const debugData = readPortioningSolverDebug(plan.meal_date);
+    setSolverDebug(debugData);
+    
     // Build UI item list
     const uiItems: PortioningDebugItem[] = items.map(item => {
       const p = item.product;
@@ -324,6 +334,97 @@ export function DayDetailModal({
               </ul>
             </div>
           </>
+        )}
+
+        {/* Solver Debug Panel (Collapsible) */}
+        {isTargetMode && (
+          <Collapsible open={debugPanelOpen} onOpenChange={setDebugPanelOpen}>
+            <Separator />
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-muted-foreground hover:text-foreground">
+                <span className="flex items-center gap-2">
+                  <Bug className="h-3 w-3" />
+                  Solver Debug Panel
+                </span>
+                {debugPanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-2">
+              {solverDebug ? (
+                <>
+                  {/* Solver Targets vs Achieved */}
+                  <div className="rounded-md border p-3 text-xs space-y-2">
+                    <h5 className="font-semibold text-muted-foreground">Solver Output</h5>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      <div className="text-muted-foreground">Solver Targets:</div>
+                      <div className="font-mono">
+                        {solverDebug.targets.calories} kcal | {Math.round(solverDebug.targets.protein)}P | {Math.round(solverDebug.targets.carbs)}C | {Math.round(solverDebug.targets.fat)}F
+                      </div>
+                      <div className="text-muted-foreground">Solver Achieved:</div>
+                      <div className="font-mono">
+                        {Math.round(solverDebug.achieved.calories)} kcal | {Math.round(solverDebug.achieved.protein)}P | {Math.round(solverDebug.achieved.carbs)}C | {Math.round(solverDebug.achieved.fat)}F
+                      </div>
+                    </div>
+                    
+                    {/* Delta Comparison */}
+                    <div className="pt-2 border-t border-dashed">
+                      <div className="text-muted-foreground mb-1">Delta (Solver - Target):</div>
+                      <div className="font-mono flex gap-2 flex-wrap">
+                        <Badge variant={Math.abs(solverDebug.achieved.calories - solverDebug.targets.calories) <= 50 ? "secondary" : "destructive"} className="text-xs">
+                          Δ {Math.round(solverDebug.achieved.calories - solverDebug.targets.calories)} kcal
+                        </Badge>
+                        <Badge variant={Math.abs(solverDebug.achieved.protein - solverDebug.targets.protein) <= 2 ? "secondary" : "destructive"} className="text-xs">
+                          Δ {(solverDebug.achieved.protein - solverDebug.targets.protein).toFixed(1)}g P
+                        </Badge>
+                        <Badge variant={Math.abs(solverDebug.achieved.carbs - solverDebug.targets.carbs) <= 2 ? "secondary" : "destructive"} className="text-xs">
+                          Δ {(solverDebug.achieved.carbs - solverDebug.targets.carbs).toFixed(1)}g C
+                        </Badge>
+                        <Badge variant={Math.abs(solverDebug.achieved.fat - solverDebug.targets.fat) <= 2 ? "secondary" : "destructive"} className="text-xs">
+                          Δ {(solverDebug.achieved.fat - solverDebug.targets.fat).toFixed(1)}g F
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Warnings */}
+                    {solverDebug.warnings.length > 0 && (
+                      <div className="pt-2 border-t border-dashed">
+                        <div className="text-muted-foreground mb-1">Solver Warnings:</div>
+                        <ul className="list-disc list-inside text-amber-600 dark:text-amber-400">
+                          {solverDebug.warnings.map((w, i) => (
+                            <li key={i}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Item Breakdown */}
+                    <div className="pt-2 border-t border-dashed">
+                      <div className="text-muted-foreground mb-1">Item Portions:</div>
+                      <div className="space-y-1">
+                        {solverDebug.items.map(item => (
+                          <div key={item.itemId} className="flex items-center gap-2 text-xs">
+                            <span className="truncate flex-1">{item.name}</span>
+                            <span className="font-mono w-12 text-right">{item.grams}g</span>
+                            <span className="font-mono w-16 text-right text-muted-foreground">{Math.round(item.contribution.calories)}kcal</span>
+                            {item.flags.locked && <Badge variant="outline" className="text-[10px] px-1">🔒</Badge>}
+                            {item.flags.fixed && <Badge variant="outline" className="text-[10px] px-1">📌</Badge>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-muted-foreground p-3 border rounded-md bg-muted/30">
+                  No solver debug data available. Enable debug mode by running:
+                  <code className="block mt-1 bg-muted px-2 py-1 rounded text-[10px]">
+                    localStorage.setItem('debug_portioning', '1')
+                  </code>
+                  Then click "Generate Portions" to capture solver output.
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         {/* Footer */}
