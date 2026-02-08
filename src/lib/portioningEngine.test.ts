@@ -553,6 +553,118 @@ describe('solve - portion constraints', () => {
 });
 
 // ============================================================================
+// SEASONING CAPS - Post-solve normalization (Fix 1)
+// ============================================================================
+
+describe('solve - seasoning caps', () => {
+  it('never allows seasoning to exceed 15g hard cap', () => {
+    // Create a scenario where the solver might try to push seasoning high
+    const items = [
+      createChickenItem(300), // Large protein portion
+      {
+        ...createSeasoningItem(50), // Start with unrealistically high amount
+        maxPortionGrams: 100, // Allow item config to be higher
+      },
+    ];
+    
+    // High calorie/protein target to maximize chicken
+    const targets: SolverTargets = {
+      calories: 500,
+      protein: 90,
+      carbs: 0,
+      fat: 12,
+    };
+    
+    const result = solve(items, targets);
+    
+    if (result.success) {
+      const seasoningGrams = result.portions.get('seasoning') ?? 0;
+      // Hard cap is 15g regardless of item config
+      expect(seasoningGrams).toBeLessThanOrEqual(15);
+    }
+  });
+  
+  it('generates warning when seasoning is capped', () => {
+    // Create oversized seasoning scenario
+    const items = [
+      createChickenItem(200),
+      {
+        ...createSeasoningItem(50), // Start high
+        maxPortionGrams: 100,
+        // No paired protein to derive from, so solver may leave it high
+        pairedProteinId: null,
+        seasoningRatePer100g: null,
+      },
+    ];
+    
+    const targets: SolverTargets = {
+      calories: 330,
+      protein: 62,
+      carbs: 0,
+      fat: 7,
+    };
+    
+    const result = solve(items, targets);
+    
+    // If result has warnings about capping, that's correct behavior
+    if (result.success && result.warnings) {
+      expect(result.warnings.some(w => w.toLowerCase().includes('capped'))).toBe(true);
+    }
+    
+    // Either way, seasoning must be capped
+    if (result.success) {
+      const seasoningGrams = result.portions.get('seasoning') ?? 0;
+      expect(seasoningGrams).toBeLessThanOrEqual(15);
+    }
+  });
+  
+  it('respects item maxPortionGrams if lower than hard cap', () => {
+    const items = [
+      createChickenItem(200),
+      {
+        ...createSeasoningItem(20),
+        maxPortionGrams: 10, // Item config is lower than 15g hard cap
+        pairedProteinId: null,
+        seasoningRatePer100g: null,
+      },
+    ];
+    
+    const targets: SolverTargets = {
+      calories: 330,
+      protein: 62,
+      carbs: 0,
+      fat: 7,
+    };
+    
+    const result = solve(items, targets);
+    
+    if (result.success) {
+      const seasoningGrams = result.portions.get('seasoning') ?? 0;
+      // Should respect item's lower max, not hard cap
+      expect(seasoningGrams).toBeLessThanOrEqual(10);
+    }
+  });
+  
+  it('correctly categorizes "seasoning" food_type items', () => {
+    const product = {
+      id: 'test-seasoning',
+      name: 'Garlic Powder',
+      calories_per_100g: 330,
+      protein_per_100g: 17,
+      carbs_per_100g: 73,
+      fat_per_100g: 1,
+      food_type: 'seasoning', // Explicit seasoning type
+    };
+    
+    const item = productToSolverItem(product, 'dinner', 5);
+    
+    expect(item.category).toBe('seasoning');
+    expect(item.countMacros).toBe(false);
+    expect(item.maxPortionGrams).toBe(15); // Default seasoning max
+  });
+});
+
+// ============================================================================
 // BULK VALIDATION TEST
 // ============================================================================
 

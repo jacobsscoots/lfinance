@@ -166,6 +166,9 @@ export function useNutritionSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["nutrition-settings"] });
+      // Cross-invalidate so meal planner re-renders with new targets immediately
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["weekly-nutrition-targets"] });
       toast.success("Settings saved");
     },
     onError: (error) => {
