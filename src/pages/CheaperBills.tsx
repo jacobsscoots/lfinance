@@ -3,12 +3,13 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Zap, Wifi, Smartphone, Settings, Upload } from "lucide-react";
+import { Plus, Zap, Wifi, Smartphone, Settings } from "lucide-react";
 import { useTrackedServices } from "@/hooks/useTrackedServices";
 import { useEnergyReadings } from "@/hooks/useEnergyReadings";
 import { useEnergyTariffs } from "@/hooks/useEnergyTariffs";
 import { useBillsScanner } from "@/hooks/useBillsScanner";
 import { useCheaperBillsSettings } from "@/hooks/useCheaperBillsSettings";
+import { useComparisonResults } from "@/hooks/useComparisonResults";
 import { SavingsOverviewCard } from "@/components/cheaper-bills/SavingsOverviewCard";
 import { NextContractCard } from "@/components/cheaper-bills/NextContractCard";
 import { LastScanCard } from "@/components/cheaper-bills/LastScanCard";
@@ -34,6 +35,7 @@ export default function CheaperBills() {
   const { electricityTariff, gasTariff, createTariff, isCreating: isCreatingTariff } = useEnergyTariffs();
   const { scanAllServices, scanService, isScanning, scanProgress } = useBillsScanner();
   const { settings } = useCheaperBillsSettings();
+  const { results: comparisonResults, bestOffers } = useComparisonResults();
 
   // Calculate total potential savings
   const totalSavings = useMemo(() => {
@@ -169,6 +171,7 @@ export default function CheaperBills() {
             lastScanDate={lastScan.date}
             recommendation={lastScan.recommendation}
             recommendationReason={lastScan.reason}
+            bestOffer={bestOffers[0] || null}
             onScan={services.length > 0 ? handleScanAll : undefined}
             isScanning={isScanning}
             scanProgress={scanProgress}
@@ -253,6 +256,10 @@ export default function CheaperBills() {
                   <ServiceCard
                     key={service.id}
                     service={service}
+                    comparisonResults={comparisonResults.filter(r => 
+                      r.tracked_service_id === service.id || 
+                      (r.service_type === 'energy' && !r.tracked_service_id)
+                    )}
                     onEdit={() => setEditingService(service)}
                     onDelete={() => deleteService(service.id)}
                     onToggleTracking={(enabled) =>
@@ -293,6 +300,10 @@ export default function CheaperBills() {
                 <ServiceCard
                   key={service.id}
                   service={service}
+                  comparisonResults={comparisonResults.filter(r => 
+                    r.tracked_service_id === service.id || 
+                    (r.service_type === 'broadband' && !r.tracked_service_id)
+                  )}
                   onEdit={() => setEditingService(service)}
                   onDelete={() => deleteService(service.id)}
                   onToggleTracking={(enabled) =>
@@ -326,6 +337,10 @@ export default function CheaperBills() {
                 <ServiceCard
                   key={service.id}
                   service={service}
+                  comparisonResults={comparisonResults.filter(r => 
+                    r.tracked_service_id === service.id || 
+                    (r.service_type === 'mobile' && !r.tracked_service_id)
+                  )}
                   onEdit={() => setEditingService(service)}
                   onDelete={() => deleteService(service.id)}
                   onToggleTracking={(enabled) =>
@@ -359,6 +374,9 @@ export default function CheaperBills() {
                 <ServiceCard
                   key={service.id}
                   service={service}
+                  comparisonResults={comparisonResults.filter(r => 
+                    r.tracked_service_id === service.id
+                  )}
                   onEdit={() => setEditingService(service)}
                   onDelete={() => deleteService(service.id)}
                   onToggleTracking={(enabled) =>
