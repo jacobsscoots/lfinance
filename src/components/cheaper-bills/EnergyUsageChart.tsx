@@ -27,28 +27,58 @@ function getSourceBreakdown(readings: EnergyReading[]) {
 
 export function EnergyUsageChart({ readings, days = 30 }: EnergyUsageChartProps) {
   const chartData = useMemo(() => {
-    // Create a map of readings by date
-    const readingsByDate = new Map<string, { electricity: number; gas: number }>();
+    // Sort readings by date ascending to calculate consumption differences
+    const sortedReadings = [...readings].sort(
+      (a, b) => new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+    );
 
-    readings.forEach((r) => {
-      const existing = readingsByDate.get(r.reading_date) || { electricity: 0, gas: 0 };
-      if (r.fuel_type === "electricity") {
-        existing.electricity = Number(r.consumption_kwh);
-      } else if (r.fuel_type === "gas") {
-        existing.gas = Number(r.consumption_kwh);
+    // Check if readings look like cumulative meter readings (values > 1000)
+    const isCumulative = sortedReadings.some((r) => Number(r.consumption_kwh) > 1000);
+
+    // Create a map of daily consumption by date
+    const consumptionByDate = new Map<string, { electricity: number; gas: number }>();
+
+    if (isCumulative && sortedReadings.length > 1) {
+      // Calculate consumption as difference between consecutive readings
+      for (let i = 1; i < sortedReadings.length; i++) {
+        const prev = sortedReadings[i - 1];
+        const curr = sortedReadings[i];
+        
+        if (prev.fuel_type === curr.fuel_type) {
+          const consumption = Number(curr.consumption_kwh) - Number(prev.consumption_kwh);
+          if (consumption >= 0) {
+            const existing = consumptionByDate.get(curr.reading_date) || { electricity: 0, gas: 0 };
+            if (curr.fuel_type === "electricity") {
+              existing.electricity = consumption;
+            } else if (curr.fuel_type === "gas") {
+              existing.gas = consumption;
+            }
+            consumptionByDate.set(curr.reading_date, existing);
+          }
+        }
       }
-      readingsByDate.set(r.reading_date, existing);
-    });
+    } else {
+      // Use values as-is (already consumption values)
+      readings.forEach((r) => {
+        const existing = consumptionByDate.get(r.reading_date) || { electricity: 0, gas: 0 };
+        if (r.fuel_type === "electricity") {
+          existing.electricity = Number(r.consumption_kwh);
+        } else if (r.fuel_type === "gas") {
+          existing.gas = Number(r.consumption_kwh);
+        }
+        consumptionByDate.set(r.reading_date, existing);
+      });
+    }
 
-    // Fill in missing dates
+    // Fill in the date range
     const data = [];
     for (let i = days - 1; i >= 0; i--) {
       const date = format(subDays(new Date(), i), "yyyy-MM-dd");
-      const reading = readingsByDate.get(date) || { electricity: 0, gas: 0 };
+      const consumption = consumptionByDate.get(date) || { electricity: 0, gas: 0 };
       data.push({
         date,
-        electricity: reading.electricity,
-        gas: reading.gas,
+        electricity: consumption.electricity,
+        gas: consumption.gas,
       });
     }
 
