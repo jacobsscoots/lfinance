@@ -21,6 +21,7 @@ import {
   PortioningSettings,
   DEFAULT_PORTIONING_SETTINGS 
 } from "@/lib/autoPortioning";
+import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
 
 interface MealItemDialogProps {
   open: boolean;
@@ -51,6 +52,11 @@ export function MealItemDialog({
   const { settings, isTargetMode, getTargetsForDate } = useNutritionSettings();
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
+  
+  // Check if product is a seasoning
+  const isSeasoning = selectedProduct
+    ? shouldCapAsSeasoning(selectedProduct.food_type, selectedProduct.name, selectedProduct.food_type)
+    : false;
   
   // Check if product is allowed for this meal
   const isAllowedForMeal = selectedProduct 
@@ -86,20 +92,24 @@ export function MealItemDialog({
   }, [selectedProduct, isTargetMode, mealType, existingItems, dailyTargets, portioningSettings]);
 
   // In target mode, default to 0g (will be calculated later via Generate)
-  // In manual mode, default to 100g
+  // In manual mode, default to 100g (or 5g for seasonings)
   useEffect(() => {
     if (selectedProduct && isTargetMode && !manualOverride) {
       // For fixed products, use their fixed portion
       if (selectedProduct.product_type === "fixed" && selectedProduct.fixed_portion_grams) {
         setQuantity(String(selectedProduct.fixed_portion_grams));
+      } else if (isSeasoning) {
+        // Seasonings default to fallback grams (5g) in target mode
+        setQuantity(String(DEFAULT_SEASONING_FALLBACK_GRAMS));
       } else {
         // Otherwise default to 0 - will be calculated via Generate button
         setQuantity("0");
       }
     } else if (selectedProduct && !isTargetMode && !manualOverride) {
-      setQuantity("100");
+      // Manual mode: seasonings get 5g, others get 100g
+      setQuantity(isSeasoning ? String(DEFAULT_SEASONING_FALLBACK_GRAMS) : "100");
     }
-  }, [selectedProduct, isTargetMode, manualOverride]);
+  }, [selectedProduct, isTargetMode, manualOverride, isSeasoning]);
 
   // Reset state when dialog opens/closes or product changes
   useEffect(() => {
@@ -128,7 +138,12 @@ export function MealItemDialog({
   } : null;
 
   const handleQuantityChange = (value: string) => {
-    setQuantity(value);
+    let numValue = parseFloat(value) || 0;
+    // Clamp seasonings to max (Fix B3)
+    if (isSeasoning && numValue > DEFAULT_SEASONING_MAX_GRAMS) {
+      numValue = DEFAULT_SEASONING_MAX_GRAMS;
+    }
+    setQuantity(String(numValue));
     if (isTargetMode) {
       setManualOverride(true);
     }

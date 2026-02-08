@@ -12,6 +12,7 @@ import { PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPorti
 // V2 portioning engine (new)
 import { solve, productToSolverItem } from "@/lib/portioningEngine";
 import { SolverItem, SolverTargets, DEFAULT_SOLVER_OPTIONS, MealType as SolverMealType, SolverFailed } from "@/lib/portioningTypes";
+import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type MealStatus = "planned" | "skipped" | "eating_out";
@@ -215,15 +216,29 @@ export function useMealPlanItems(weekStart: Date) {
         throw new Error("Next day plan not found");
       }
 
-      // Create copies of all items
-      const newItems = sourcePlan.items.map(item => ({
-        user_id: user.id,
-        meal_plan_id: targetPlan.id,
-        product_id: item.product_id,
-        meal_type: item.meal_type,
-        quantity_grams: item.quantity_grams,
-        // Don't copy is_locked status
-      }));
+      // Create copies of all items, clamping seasonings (Fix B2)
+      const newItems = sourcePlan.items.map(item => {
+        let quantity = item.quantity_grams;
+        
+        // Clamp seasonings to max 15g during copy to prevent 100g propagation
+        const isSeasoning = item.product && shouldCapAsSeasoning(
+          item.product.food_type,
+          item.product.name,
+          item.product.food_type
+        );
+        if (isSeasoning && quantity > DEFAULT_SEASONING_MAX_GRAMS) {
+          quantity = DEFAULT_SEASONING_MAX_GRAMS;
+        }
+        
+        return {
+          user_id: user.id,
+          meal_plan_id: targetPlan.id,
+          product_id: item.product_id,
+          meal_type: item.meal_type,
+          quantity_grams: quantity,
+          // Don't copy is_locked status
+        };
+      });
 
       const { data, error } = await supabase
         .from("meal_plan_items")
@@ -403,7 +418,7 @@ export function useMealPlanItems(weekStart: Date) {
       const prevPlanIds = prevPlans.map(p => p.id);
       const { data: prevItems, error: itemsError } = await supabase
         .from("meal_plan_items")
-        .select("*")
+        .select("*, product:products(*)")
         .in("meal_plan_id", prevPlanIds);
       
       if (itemsError) throw itemsError;
@@ -415,7 +430,7 @@ export function useMealPlanItems(weekStart: Date) {
       // Get current week plans
       const currentPlansByDate = new Map(mealPlans.map(p => [p.meal_date, p]));
 
-      // Copy items
+      // Copy items, clamping seasonings (Fix B2)
       const newItems = (prevItems || []).map(item => {
         const prevDate = prevPlanToDate.get(item.meal_plan_id);
         const newDate = prevDate ? dateMap.get(prevDate) : null;
@@ -423,12 +438,26 @@ export function useMealPlanItems(weekStart: Date) {
         
         if (!newPlan) return null;
         
+        // Clamp seasonings during copy
+        let quantity = item.quantity_grams;
+        const product = item.product as Product | null;
+        if (product) {
+          const isSeasoning = shouldCapAsSeasoning(
+            product.food_type,
+            product.name,
+            product.food_type
+          );
+          if (isSeasoning && quantity > DEFAULT_SEASONING_MAX_GRAMS) {
+            quantity = DEFAULT_SEASONING_MAX_GRAMS;
+          }
+        }
+        
         return {
           user_id: user.id,
           meal_plan_id: newPlan.id,
           product_id: item.product_id,
           meal_type: item.meal_type,
-          quantity_grams: item.quantity_grams,
+          quantity_grams: quantity,
           is_locked: item.is_locked,
         };
       }).filter(Boolean);
@@ -560,13 +589,34 @@ export function useMealPlanItems(weekStart: Date) {
         debugMode: false,
       });
 
+      // ================================================================
+      // FIX B1: Even if solve fails, clamp seasonings to safe values
+      // ================================================================
+      let seasoningsClamped = 0;
+      for (const item of items) {
+        if (!item.product) continue;
+        const isSeasoning = shouldCapAsSeasoning(
+          item.product.food_type,
+          item.product.name,
+          item.product.food_type
+        );
+        if (isSeasoning && item.quantity_grams > DEFAULT_SEASONING_MAX_GRAMS) {
+          const { error } = await supabase
+            .from("meal_plan_items")
+            .update({ quantity_grams: DEFAULT_SEASONING_MAX_GRAMS })
+            .eq("id", item.id)
+            .eq("user_id", user.id);
+          if (!error) seasoningsClamped++;
+        }
+      }
+
       if (!result.success) {
         const failedResult = result as SolverFailed;
         const failure = failedResult.failure;
         const blockerDetails = failure.blockers.slice(0, 2).map(b => b.detail || `${b.itemName}: ${b.constraint}`);
         return { 
           success: false as const, 
-          updated: 0, 
+          updated: seasoningsClamped, 
           warnings: [
             `${failure.reason.replace(/_/g, ' ')}: ${blockerDetails.join('; ')}`,
             `Closest: ${failure.closestTotals.calories}kcal, ${failure.closestTotals.protein}g P`,
@@ -692,6 +742,26 @@ export function useMealPlanItems(weekStart: Date) {
             iterations: failure.iterationsRun,
             reason: failure.reason,
           });
+          
+          // ================================================================
+          // FIX B1: Even if solve fails, clamp seasonings to safe values
+          // ================================================================
+          for (const item of items) {
+            if (!item.product) continue;
+            const isSeasoning = shouldCapAsSeasoning(
+              item.product.food_type,
+              item.product.name,
+              item.product.food_type
+            );
+            if (isSeasoning && item.quantity_grams > DEFAULT_SEASONING_MAX_GRAMS) {
+              const { error } = await supabase
+                .from("meal_plan_items")
+                .update({ quantity_grams: DEFAULT_SEASONING_MAX_GRAMS })
+                .eq("id", item.id)
+                .eq("user_id", user.id);
+              if (!error) totalUpdated++;
+            }
+          }
           
           failedCount++;
           const blockerDetails = failure.blockers.slice(0, 2).map(b => b.detail || `${b.itemName}: ${b.constraint}`);

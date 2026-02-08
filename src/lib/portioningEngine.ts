@@ -468,6 +468,224 @@ function collectBlockers(
   return blockers;
 }
 
+// ============================================================================
+// FEASIBILITY PRE-CHECK (Fix A1)
+// ============================================================================
+
+interface FeasibilityBounds {
+  minTotals: MacroTotals;
+  maxTotals: MacroTotals;
+}
+
+/**
+ * Compute min/max achievable totals given current items and constraints
+ */
+function computeFeasibilityBounds(
+  items: SolverItem[],
+  seasoningsCountMacros: boolean
+): FeasibilityBounds {
+  const minTotals: MacroTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const maxTotals: MacroTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  
+  for (const item of items) {
+    // Skip seasonings unless counting them
+    if (item.category === 'seasoning' && !seasoningsCountMacros && !item.countMacros) {
+      continue;
+    }
+    
+    // Determine min/max grams for this item
+    let minGrams: number;
+    let maxGrams: number;
+    
+    if (item.editableMode === 'LOCKED') {
+      // Locked items contribute fixed amount
+      minGrams = item.currentGrams;
+      maxGrams = item.currentGrams;
+    } else {
+      // Adjustable items have a range
+      minGrams = Math.max(0, item.minPortionGrams);
+      maxGrams = item.maxPortionGrams > 0 ? item.maxPortionGrams : 500;
+    }
+    
+    // Calculate macro contributions at min/max grams
+    const minMacros = calculateMacros(item, minGrams);
+    const maxMacros = calculateMacros(item, maxGrams);
+    
+    minTotals.calories += minMacros.calories;
+    minTotals.protein += minMacros.protein;
+    minTotals.carbs += minMacros.carbs;
+    minTotals.fat += minMacros.fat;
+    
+    maxTotals.calories += maxMacros.calories;
+    maxTotals.protein += maxMacros.protein;
+    maxTotals.carbs += maxMacros.carbs;
+    maxTotals.fat += maxMacros.fat;
+  }
+  
+  return { minTotals: roundMacros(minTotals), maxTotals: roundMacros(maxTotals) };
+}
+
+/**
+ * Check if targets are achievable within feasibility bounds
+ * Returns null if feasible, or a failure reason with blockers if not
+ */
+function checkFeasibility(
+  items: SolverItem[],
+  targets: SolverTargets,
+  tolerances: ToleranceConfig,
+  seasoningsCountMacros: boolean
+): SolverFailure | null {
+  const { minTotals, maxTotals } = computeFeasibilityBounds(items, seasoningsCountMacros);
+  
+  const blockers: Blocker[] = [];
+  
+  // Check each macro - target must be reachable within [min, max + tolerance]
+  // Calories
+  if (maxTotals.calories < targets.calories) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'max_achievable_calories',
+      value: maxTotals.calories,
+      detail: `Max achievable: ${maxTotals.calories} kcal, target: ${targets.calories} kcal`,
+    });
+  }
+  if (minTotals.calories > targets.calories + tolerances.calories.max) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'min_achievable_calories',
+      value: minTotals.calories,
+      detail: `Min achievable: ${minTotals.calories} kcal, target: ${targets.calories} kcal`,
+    });
+  }
+  
+  // Protein
+  if (maxTotals.protein < targets.protein) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'max_achievable_protein',
+      value: maxTotals.protein,
+      detail: `Max achievable: ${maxTotals.protein}g protein, target: ${targets.protein}g`,
+    });
+  }
+  if (minTotals.protein > targets.protein + tolerances.protein.max) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'min_achievable_protein',
+      value: minTotals.protein,
+      detail: `Min achievable: ${minTotals.protein}g protein, target: ${targets.protein}g`,
+    });
+  }
+  
+  // Carbs
+  if (maxTotals.carbs < targets.carbs) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'max_achievable_carbs',
+      value: maxTotals.carbs,
+      detail: `Max achievable: ${maxTotals.carbs}g carbs, target: ${targets.carbs}g`,
+    });
+  }
+  if (minTotals.carbs > targets.carbs + tolerances.carbs.max) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'min_achievable_carbs',
+      value: minTotals.carbs,
+      detail: `Min achievable: ${minTotals.carbs}g carbs, target: ${targets.carbs}g`,
+    });
+  }
+  
+  // Fat
+  if (maxTotals.fat < targets.fat) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'max_achievable_fat',
+      value: maxTotals.fat,
+      detail: `Max achievable: ${maxTotals.fat}g fat, target: ${targets.fat}g`,
+    });
+  }
+  if (minTotals.fat > targets.fat + tolerances.fat.max) {
+    blockers.push({
+      itemName: 'All items',
+      constraint: 'min_achievable_fat',
+      value: minTotals.fat,
+      detail: `Min achievable: ${minTotals.fat}g fat, target: ${targets.fat}g`,
+    });
+  }
+  
+  if (blockers.length > 0) {
+    return {
+      reason: 'impossible_targets',
+      blockers,
+      closestTotals: maxTotals, // Best we can do is max
+      targetDelta: calculateDelta(maxTotals, targets),
+      iterationsRun: 0,
+    };
+  }
+  
+  return null;
+}
+
+// ============================================================================
+// MULTI-START INITIALIZATION STRATEGIES (Fix A2)
+// ============================================================================
+
+type InitStrategy = 'current' | 'midpoint' | 'protein_heavy' | 'carb_heavy';
+
+function initializePortionsWithStrategy(
+  items: SolverItem[],
+  strategy: InitStrategy
+): Map<string, number> {
+  const portions = new Map<string, number>();
+  
+  for (const item of items) {
+    let grams: number;
+    
+    if (item.editableMode === 'LOCKED') {
+      grams = item.currentGrams;
+    } else {
+      const min = item.minPortionGrams;
+      const max = item.maxPortionGrams > 0 ? item.maxPortionGrams : 500;
+      
+      switch (strategy) {
+        case 'current':
+          grams = item.currentGrams;
+          break;
+        case 'midpoint':
+          grams = Math.round((min + max) / 2);
+          break;
+        case 'protein_heavy':
+          // Proteins at 75% of max, carbs at 25% of range
+          if (item.category === 'protein') {
+            grams = Math.round(min + (max - min) * 0.75);
+          } else if (item.category === 'carb') {
+            grams = Math.round(min + (max - min) * 0.25);
+          } else {
+            grams = Math.round((min + max) / 2);
+          }
+          break;
+        case 'carb_heavy':
+          // Carbs at 75% of max, proteins at 25% of range
+          if (item.category === 'carb') {
+            grams = Math.round(min + (max - min) * 0.75);
+          } else if (item.category === 'protein') {
+            grams = Math.round(min + (max - min) * 0.25);
+          } else {
+            grams = Math.round((min + max) / 2);
+          }
+          break;
+        default:
+          grams = item.currentGrams;
+      }
+      
+      grams = clampToConstraints(grams, item);
+    }
+    
+    portions.set(item.id, grams);
+  }
+  
+  return portions;
+}
+
 /**
  * Main solver function
  */
@@ -478,6 +696,14 @@ export function solve(
 ): SolverResult {
   const opts: SolverOptions = { ...DEFAULT_SOLVER_OPTIONS, ...options };
   const { maxIterations, tolerances, seasoningsCountMacros } = opts;
+  
+  // ============================================================
+  // FIX A1: Feasibility pre-check - fail fast if impossible
+  // ============================================================
+  const feasibilityFailure = checkFeasibility(items, targets, tolerances, seasoningsCountMacros);
+  if (feasibilityFailure) {
+    return { success: false, failure: feasibilityFailure };
+  }
   
   // Early exit: no adjustable items
   if (!hasAdjustableItems(items)) {
@@ -508,8 +734,100 @@ export function solve(
     };
   }
   
-  // Initialize portions
-  let portions = initializePortions(items);
+  // ============================================================
+  // FIX A2: Multi-start solver with deterministic strategies
+  // ============================================================
+  const strategies: InitStrategy[] = ['current', 'midpoint', 'protein_heavy', 'carb_heavy'];
+  const iterationsPerAttempt = Math.ceil(maxIterations / strategies.length);
+  
+  let bestResult: SolverResult | null = null;
+  let totalIterations = 0;
+  let lastFailureReason: 'max_iterations_exceeded' | 'stagnation' = 'max_iterations_exceeded';
+  
+  for (const strategy of strategies) {
+    const result = runSingleSolve(
+      items,
+      targets,
+      tolerances,
+      seasoningsCountMacros,
+      iterationsPerAttempt,
+      strategy,
+      opts.debugMode
+    );
+    
+    totalIterations += result.iterationsRun;
+    
+    if (result.success) {
+      // Found a valid solution - return it
+      return result;
+    }
+    
+    // Track best failed result (by score/closeness)
+    if (!bestResult || !bestResult.success) {
+      const currentFailure = (result as { success: false; failure: SolverFailure }).failure;
+      const currentScore = Math.abs(currentFailure.targetDelta.calories) + 
+        Math.abs(currentFailure.targetDelta.protein) * 10;
+      
+      if (!bestResult) {
+        bestResult = result;
+        lastFailureReason = currentFailure.reason as 'max_iterations_exceeded' | 'stagnation';
+      } else {
+        const bestFailure = (bestResult as { success: false; failure: SolverFailure }).failure;
+        const bestScore = Math.abs(bestFailure.targetDelta.calories) + 
+          Math.abs(bestFailure.targetDelta.protein) * 10;
+        
+        if (currentScore < bestScore) {
+          bestResult = result;
+          lastFailureReason = currentFailure.reason as 'max_iterations_exceeded' | 'stagnation';
+        }
+      }
+    }
+  }
+  
+  // All strategies failed - return best attempt with accurate reason
+  if (bestResult && !bestResult.success) {
+    const failure = (bestResult as { success: false; failure: SolverFailure }).failure;
+    return {
+      success: false,
+      failure: {
+        ...failure,
+        reason: lastFailureReason,
+        iterationsRun: totalIterations,
+      },
+    };
+  }
+  
+  // Fallback (shouldn't reach here)
+  const portions = initializePortions(items);
+  const totals = sumMacros(items, portions, seasoningsCountMacros);
+  return {
+    success: false,
+    failure: {
+      reason: 'max_iterations_exceeded',
+      blockers: collectBlockers(items, portions, targets, tolerances),
+      closestTotals: roundMacros(totals),
+      targetDelta: calculateDelta(totals, targets),
+      iterationsRun: totalIterations,
+    },
+  };
+}
+
+/**
+ * Single solve attempt with given strategy
+ */
+function runSingleSolve(
+  items: SolverItem[],
+  targets: SolverTargets,
+  tolerances: ToleranceConfig,
+  seasoningsCountMacros: boolean,
+  maxIterations: number,
+  strategy: InitStrategy,
+  debugMode: boolean
+): SolverResult & { iterationsRun: number } {
+  let iterationsRun = 0;
+  
+  // Initialize portions with strategy
+  let portions = initializePortionsWithStrategy(items, strategy);
   scaleSeasonings(items, portions);
   
   // Track best valid candidate
@@ -526,7 +844,7 @@ export function solve(
     item.editableMode !== 'LOCKED' && item.category !== 'seasoning'
   );
   
-  for (let iteration = 0; iteration < maxIterations; iteration++) {
+  for (let iteration = 0; iteration < maxIterations; iteration++, iterationsRun++) {
     // Calculate current totals
     const totals = sumMacros(items, portions, seasoningsCountMacros);
     const delta = calculateDelta(totals, targets);
@@ -579,7 +897,7 @@ export function solve(
       bestScore = bestAdjustment.error;
       
       // Debug logging
-      if (opts.debugMode) {
+      if (debugMode) {
         debugLogs.push({
           iteration,
           currentTotals: roundMacros(totals),
@@ -628,24 +946,26 @@ export function solve(
       portions: normalizedPortions,
       totals: best.totals,
       score: best.score,
-      iterationsRun: candidates.length,
+      iterationsRun,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
   
-  // No valid solution found
+  // No valid solution found - check if it was stagnation or just out of iterations
   const finalTotals = sumMacros(items, portions, seasoningsCountMacros);
   const finalDelta = calculateDelta(finalTotals, targets);
+  const failureReason = stagnationCount >= STAGNATION_LIMIT ? 'stagnation' : 'max_iterations_exceeded';
   
   return {
     success: false,
     failure: {
-      reason: 'max_iterations_exceeded',
+      reason: failureReason,
       blockers: collectBlockers(items, portions, targets, tolerances),
       closestTotals: roundMacros(finalTotals),
       targetDelta: finalDelta,
-      iterationsRun: maxIterations,
+      iterationsRun,
     },
+    iterationsRun,
   };
 }
 
@@ -710,7 +1030,7 @@ export function productToSolverItem(
     dairy: { min: 100, max: 350 },
     fruit: { min: 50, max: 300 },
     veg: { min: 50, max: 200 },
-    seasoning: { min: 1, max: 15 },
+    seasoning: { min: 0, max: 15 }, // Updated: min=0 for seasonings (hard cap override)
     snack: { min: 20, max: 100 },
     fat: { min: 5, max: 50 },
     other: { min: 10, max: 300 },
@@ -724,6 +1044,26 @@ export function productToSolverItem(
     effectiveInitialGrams = DEFAULT_SEASONING_FALLBACK_GRAMS;
   }
   
+  // ============================================================
+  // FIX B0: Seasoning constraints OVERRIDE product constraints
+  // This prevents contradictory min/max (e.g., min=100, max=15)
+  // ============================================================
+  const isSeasoning = category === 'seasoning';
+  
+  // For seasonings: FORCE safe constraints regardless of product settings
+  const minPortion = isSeasoning 
+    ? 0 
+    : (product.min_portion_grams ?? defaults.min);
+  
+  const maxPortion = isSeasoning 
+    ? DEFAULT_SEASONING_MAX_GRAMS 
+    : Math.min(product.max_portion_grams ?? defaults.max, 9999);
+  
+  // Seasonings are LOCKED (not optimization variables) and don't count macros
+  const editableMode = isSeasoning 
+    ? 'LOCKED' as const
+    : ((product.editable_mode as SolverItem['editableMode']) ?? 'FREE');
+  
   return {
     id: product.id,
     name: product.name,
@@ -735,17 +1075,19 @@ export function productToSolverItem(
       carbs: product.carbs_per_100g,
       fat: product.fat_per_100g,
     },
-    editableMode: (product.editable_mode as SolverItem['editableMode']) ?? 'FREE',
-    minPortionGrams: product.min_portion_grams ?? defaults.min,
-    maxPortionGrams: Math.min(product.max_portion_grams ?? defaults.max, category === 'seasoning' ? DEFAULT_SEASONING_MAX_GRAMS : 9999),
-    portionStepGrams: product.portion_step_grams ?? 1,
-    roundingRule: (product.rounding_rule as RoundingRule) ?? 'nearest_1g',
+    editableMode,
+    minPortionGrams: minPortion,
+    maxPortionGrams: maxPortion,
+    portionStepGrams: isSeasoning ? 1 : (product.portion_step_grams ?? 1),
+    roundingRule: isSeasoning ? 'nearest_1g' : ((product.rounding_rule as RoundingRule) ?? 'nearest_1g'),
     unitType: (product.default_unit_type as SolverItem['unitType']) ?? 'grams',
     unitSizeGrams: product.unit_size_g ?? null,
     eatenFactor: product.eaten_factor ?? 1,
     seasoningRatePer100g: product.seasoning_rate_per_100g ?? null,
     pairedProteinId: pairedProteinId ?? null,
-    currentGrams: product.fixed_portion_grams ?? effectiveInitialGrams,
-    countMacros: category !== 'seasoning',
+    currentGrams: isSeasoning 
+      ? Math.min(product.fixed_portion_grams ?? effectiveInitialGrams, DEFAULT_SEASONING_MAX_GRAMS)
+      : (product.fixed_portion_grams ?? effectiveInitialGrams),
+    countMacros: !isSeasoning,
   };
 }
