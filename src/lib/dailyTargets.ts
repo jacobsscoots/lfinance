@@ -70,18 +70,29 @@ export function getDailyTargets(
       // Use weekly override schedule for calories
       targetCalories = getCaloriesForDate(date, weeklyOverride.schedule);
 
-      // Protein and carbs come from weekly override (or global), BUT:
-      // if the schedule varies by day, we scale protein+carbs in proportion to calories
-      // (keeping the same macro % split), then DERIVE fat from remaining calories.
-      const baseProtein = weeklyOverride.protein ?? globalSettings.protein_target_grams ?? 150;
-      const baseCarbs = weeklyOverride.carbs ?? globalSettings.carbs_target_grams ?? 200;
-
-      // Use Monday as the baseline day for the macro split.
+      // HYBRID behavior: Only use weekly macros if explicitly set (not null/undefined)
+      // Otherwise, fall back to latest global settings
+      // When macros are explicitly set in weekly override, use them directly (no scaling)
+      // When falling back to global, scale by calorie ratio
       const baseCalories = weeklyOverride.schedule.monday;
       const ratio = baseCalories > 0 ? targetCalories / baseCalories : 1;
-
-      targetProtein = Math.max(0, Math.round(baseProtein * ratio));
-      targetCarbs = Math.max(0, Math.round(baseCarbs * ratio));
+      
+      // Use weekly-stored values if explicitly set, otherwise use scaled global settings
+      if (weeklyOverride.protein != null) {
+        // Explicit weekly protein - use directly without scaling
+        targetProtein = weeklyOverride.protein;
+      } else {
+        // Fall back to global, scaled by calorie ratio
+        targetProtein = Math.max(0, Math.round((globalSettings.protein_target_grams ?? 150) * ratio));
+      }
+      
+      if (weeklyOverride.carbs != null) {
+        // Explicit weekly carbs - use directly without scaling
+        targetCarbs = weeklyOverride.carbs;
+      } else {
+        // Fall back to global, scaled by calorie ratio
+        targetCarbs = Math.max(0, Math.round((globalSettings.carbs_target_grams ?? 200) * ratio));
+      }
 
       // DERIVE fat from remaining calories (ignore stored fat value)
       const derivedFat = deriveFatFromCalories(targetCalories, targetProtein, targetCarbs);

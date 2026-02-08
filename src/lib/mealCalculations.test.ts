@@ -70,6 +70,7 @@ describe("getTargetsForDate", () => {
       const targets = getTargetsForDate(saturday, mockGlobalSettings, weeklyOverride);
       
       expect(targets.calories).toBe(2101);
+      // Protein is explicitly set at 160, used directly without scaling
       expect(targets.protein).toBe(160);
     });
 
