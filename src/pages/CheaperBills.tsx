@@ -7,6 +7,8 @@ import { Plus, Search, Zap, Wifi, Smartphone, Settings, Upload } from "lucide-re
 import { useTrackedServices } from "@/hooks/useTrackedServices";
 import { useEnergyReadings } from "@/hooks/useEnergyReadings";
 import { useEnergyTariffs } from "@/hooks/useEnergyTariffs";
+import { useBillsScanner } from "@/hooks/useBillsScanner";
+import { useCheaperBillsSettings } from "@/hooks/useCheaperBillsSettings";
 import { SavingsOverviewCard } from "@/components/cheaper-bills/SavingsOverviewCard";
 import { NextContractCard } from "@/components/cheaper-bills/NextContractCard";
 import { LastScanCard } from "@/components/cheaper-bills/LastScanCard";
@@ -25,10 +27,13 @@ export default function CheaperBills() {
   const [tariffDialogOpen, setTariffDialogOpen] = useState(false);
   const [readingDialogOpen, setReadingDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
+  const [scanningServiceId, setScanningServiceId] = useState<string | null>(null);
 
   const { services, isLoading, createService, updateService, deleteService, isCreating } = useTrackedServices();
   const { readings, createReading, isCreating: isCreatingReading, totalKwh, totalCost } = useEnergyReadings();
   const { electricityTariff, gasTariff, createTariff, isCreating: isCreatingTariff } = useEnergyTariffs();
+  const { scanAllServices, scanService, isScanning, scanProgress } = useBillsScanner();
+  const { settings } = useCheaperBillsSettings();
 
   // Calculate total potential savings
   const totalSavings = useMemo(() => {
@@ -87,6 +92,53 @@ export default function CheaperBills() {
     setReadingDialogOpen(false);
   };
 
+  // Estimate annual consumption from readings or use UK average
+  const annualConsumptionKwh = useMemo(() => {
+    if (totalKwh && totalKwh > 0) {
+      // If we have readings, extrapolate to annual
+      const readingDays = readings.length > 0 ? 
+        Math.max(1, Math.ceil((Date.now() - new Date(readings[readings.length - 1]?.reading_date || Date.now()).getTime()) / (1000 * 60 * 60 * 24))) 
+        : 30;
+      return Math.round((totalKwh / readingDays) * 365);
+    }
+    return 2900; // UK average
+  }, [totalKwh, readings]);
+
+  const handleScanAll = async () => {
+    const servicesToScan = services.filter(s => s.is_tracking_enabled);
+    if (servicesToScan.length === 0) {
+      return;
+    }
+    
+    await scanAllServices(servicesToScan, {
+      postcode: settings?.postcode || "SN2 1FS",
+      annualConsumptionKwh,
+      currentTariff: electricityTariff ? {
+        unitRate: electricityTariff.unit_rate_kwh,
+        standingCharge: electricityTariff.standing_charge_daily || 0,
+      } : undefined,
+    });
+  };
+
+  const handleScanService = async (service: any) => {
+    setScanningServiceId(service.id);
+    try {
+      await scanService({
+        serviceId: service.id,
+        serviceType: service.service_type,
+        currentMonthlyCost: service.monthly_cost,
+        annualConsumptionKwh: service.service_type === "energy" ? annualConsumptionKwh : undefined,
+        currentTariff: service.service_type === "energy" && electricityTariff ? {
+          unitRate: electricityTariff.unit_rate_kwh,
+          standingCharge: electricityTariff.standing_charge_daily || 0,
+        } : undefined,
+        postcode: settings?.postcode || "SN2 1FS",
+      });
+    } finally {
+      setScanningServiceId(null);
+    }
+  };
+
   const energyServices = services.filter((s) => s.service_type === "energy");
   const broadbandServices = services.filter((s) => s.service_type === "broadband");
   const mobileServices = services.filter((s) => s.service_type === "mobile");
@@ -117,6 +169,9 @@ export default function CheaperBills() {
             lastScanDate={lastScan.date}
             recommendation={lastScan.recommendation}
             recommendationReason={lastScan.reason}
+            onScan={services.length > 0 ? handleScanAll : undefined}
+            isScanning={isScanning}
+            scanProgress={scanProgress}
           />
         </div>
 
@@ -203,6 +258,8 @@ export default function CheaperBills() {
                     onToggleTracking={(enabled) =>
                       updateService({ id: service.id, is_tracking_enabled: enabled })
                     }
+                    onScan={() => handleScanService(service)}
+                    isScanning={scanningServiceId === service.id}
                   />
                 ))}
               </div>
@@ -241,6 +298,8 @@ export default function CheaperBills() {
                   onToggleTracking={(enabled) =>
                     updateService({ id: service.id, is_tracking_enabled: enabled })
                   }
+                  onScan={() => handleScanService(service)}
+                  isScanning={scanningServiceId === service.id}
                 />
               ))
             )}
@@ -272,6 +331,8 @@ export default function CheaperBills() {
                   onToggleTracking={(enabled) =>
                     updateService({ id: service.id, is_tracking_enabled: enabled })
                   }
+                  onScan={() => handleScanService(service)}
+                  isScanning={scanningServiceId === service.id}
                 />
               ))
             )}
@@ -303,6 +364,8 @@ export default function CheaperBills() {
                   onToggleTracking={(enabled) =>
                     updateService({ id: service.id, is_tracking_enabled: enabled })
                   }
+                  onScan={() => handleScanService(service)}
+                  isScanning={scanningServiceId === service.id}
                 />
               ))
             )}

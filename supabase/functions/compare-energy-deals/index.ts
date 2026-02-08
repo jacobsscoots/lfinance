@@ -15,12 +15,250 @@ const OCTOPUS_API_BASE = 'https://api.octopus.energy/v1';
 interface TariffComparison {
   provider: string;
   planName: string;
-  unitRate: number; // p/kWh
-  standingCharge: number; // p/day
-  estimatedMonthlyCost: number;
-  estimatedAnnualCost: number;
-  isFixed: boolean;
+  monthlyCost: number;
+  annualCost: number;
+  savings: number;
+  recommend: boolean;
+  reason: string;
   source: string;
+  features?: Record<string, any>;
+}
+
+// Market data for different service types (updated Feb 2026)
+const BROADBAND_PLANS = [
+  { provider: 'BT', planName: 'Fibre Essential', speed: 36, monthlyCost: 28.99, contract: 24, source: 'market_estimate' },
+  { provider: 'BT', planName: 'Full Fibre 100', speed: 100, monthlyCost: 32.99, contract: 24, source: 'market_estimate' },
+  { provider: 'Sky', planName: 'Superfast', speed: 59, monthlyCost: 27.00, contract: 18, source: 'market_estimate' },
+  { provider: 'Sky', planName: 'Ultrafast', speed: 145, monthlyCost: 33.00, contract: 18, source: 'market_estimate' },
+  { provider: 'Virgin Media', planName: 'M125', speed: 132, monthlyCost: 28.00, contract: 18, source: 'market_estimate' },
+  { provider: 'Virgin Media', planName: 'M250', speed: 264, monthlyCost: 33.00, contract: 18, source: 'market_estimate' },
+  { provider: 'Vodafone', planName: 'Superfast 1', speed: 38, monthlyCost: 25.00, contract: 24, source: 'market_estimate' },
+  { provider: 'Vodafone', planName: 'Pro Xtra', speed: 900, monthlyCost: 42.00, contract: 24, source: 'market_estimate' },
+  { provider: 'Plusnet', planName: 'Unlimited Fibre', speed: 36, monthlyCost: 24.99, contract: 24, source: 'market_estimate' },
+  { provider: 'TalkTalk', planName: 'Fibre 35', speed: 38, monthlyCost: 24.95, contract: 18, source: 'market_estimate' },
+  { provider: 'NOW Broadband', planName: 'Super Fibre', speed: 63, monthlyCost: 24.00, contract: 0, source: 'market_estimate' },
+  { provider: 'Shell Energy', planName: 'Superfast Fibre', speed: 38, monthlyCost: 24.99, contract: 18, source: 'market_estimate' },
+];
+
+const MOBILE_PLANS = [
+  { provider: 'Three', planName: '100GB 5G', data: 100, monthlyCost: 16.00, contract: 24, source: 'market_estimate' },
+  { provider: 'Three', planName: 'Unlimited 5G', data: -1, monthlyCost: 24.00, contract: 24, source: 'market_estimate' },
+  { provider: 'Voxi', planName: 'Unlimited Social', data: 45, monthlyCost: 10.00, contract: 0, source: 'market_estimate' },
+  { provider: 'Voxi', planName: 'Unlimited Everything', data: -1, monthlyCost: 35.00, contract: 0, source: 'market_estimate' },
+  { provider: 'GiffGaff', planName: '35GB Golden', data: 35, monthlyCost: 10.00, contract: 0, source: 'market_estimate' },
+  { provider: 'GiffGaff', planName: 'Unlimited', data: -1, monthlyCost: 25.00, contract: 0, source: 'market_estimate' },
+  { provider: 'EE', planName: '100GB 5G', data: 100, monthlyCost: 22.00, contract: 24, source: 'market_estimate' },
+  { provider: 'EE', planName: 'Unlimited 5G', data: -1, monthlyCost: 34.00, contract: 24, source: 'market_estimate' },
+  { provider: 'O2', planName: '100GB', data: 100, monthlyCost: 20.00, contract: 24, source: 'market_estimate' },
+  { provider: 'O2', planName: 'Unlimited', data: -1, monthlyCost: 30.00, contract: 24, source: 'market_estimate' },
+  { provider: 'Vodafone', planName: '100GB', data: 100, monthlyCost: 18.00, contract: 24, source: 'market_estimate' },
+  { provider: 'Vodafone', planName: 'Unlimited', data: -1, monthlyCost: 28.00, contract: 24, source: 'market_estimate' },
+  { provider: 'iD Mobile', planName: '100GB 5G', data: 100, monthlyCost: 12.00, contract: 24, source: 'market_estimate' },
+  { provider: 'Smarty', planName: 'Unlimited', data: -1, monthlyCost: 20.00, contract: 0, source: 'market_estimate' },
+  { provider: 'Lebara', planName: '25GB', data: 25, monthlyCost: 7.99, contract: 0, source: 'market_estimate' },
+];
+
+const ENERGY_RATES = [
+  { provider: 'British Gas', planName: 'Flexible', unitRate: 24.5, standingCharge: 53.35, isFixed: false },
+  { provider: 'EDF', planName: 'Simply Fixed', unitRate: 23.8, standingCharge: 51.20, isFixed: true },
+  { provider: 'E.ON Next', planName: 'Next Online', unitRate: 24.1, standingCharge: 52.00, isFixed: false },
+  { provider: 'Scottish Power', planName: 'Standard Variable', unitRate: 25.2, standingCharge: 54.10, isFixed: false },
+  { provider: 'Octopus Energy', planName: 'Flexible Octopus', unitRate: 22.8, standingCharge: 49.85, isFixed: false },
+  { provider: 'Octopus Energy', planName: 'Tracker', unitRate: 21.5, standingCharge: 49.85, isFixed: false },
+  { provider: 'Ovo Energy', planName: 'Better Energy', unitRate: 23.5, standingCharge: 50.50, isFixed: true },
+  { provider: 'Shell Energy', planName: 'Flexible', unitRate: 24.8, standingCharge: 52.75, isFixed: false },
+  { provider: 'Utility Warehouse', planName: 'Gold', unitRate: 23.2, standingCharge: 51.00, isFixed: true },
+];
+
+async function scanEnergyDeals(
+  userId: string,
+  serviceId: string | undefined,
+  annualConsumptionKwh: number,
+  currentTariff: { unitRate: number; standingCharge: number } | undefined,
+  savingsThreshold: number,
+  riskPreference: string
+): Promise<TariffComparison[]> {
+  const dailyKwh = annualConsumptionKwh / 365;
+  const comparisons: TariffComparison[] = [];
+
+  // Try fetching from Octopus API first
+  try {
+    const productsResponse = await fetch(
+      `${OCTOPUS_API_BASE}/products/?is_variable=true&is_green=false&is_tracker=false&is_business=false`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (productsResponse.ok) {
+      const products = await productsResponse.json();
+      
+      for (const product of products.results?.slice(0, 3) || []) {
+        try {
+          const ratesResponse = await fetch(
+            `${OCTOPUS_API_BASE}/products/${product.code}/electricity-tariffs/E-1R-${product.code}-C/standard-unit-rates/`,
+            { headers: { 'Accept': 'application/json' } }
+          );
+
+          const standingResponse = await fetch(
+            `${OCTOPUS_API_BASE}/products/${product.code}/electricity-tariffs/E-1R-${product.code}-C/standing-charges/`,
+            { headers: { 'Accept': 'application/json' } }
+          );
+
+          if (ratesResponse.ok && standingResponse.ok) {
+            const rates = await ratesResponse.json();
+            const standing = await standingResponse.json();
+
+            const unitRate = rates.results?.[0]?.value_inc_vat || 0;
+            const standingCharge = standing.results?.[0]?.value_inc_vat || 0;
+
+            const dailyCost = (dailyKwh * unitRate / 100) + (standingCharge / 100);
+            const monthlyCost = dailyCost * 30;
+            const annualCost = dailyCost * 365;
+
+            comparisons.push({
+              provider: 'Octopus Energy',
+              planName: product.display_name || product.code,
+              monthlyCost: Math.round(monthlyCost * 100) / 100,
+              annualCost: Math.round(annualCost * 100) / 100,
+              savings: 0, // calculated later
+              recommend: false,
+              reason: '',
+              source: 'octopus_api',
+              features: { unitRate, standingCharge, isFixed: !product.is_variable },
+            });
+          }
+        } catch (e) {
+          console.log(`Skipping Octopus tariff ${product.code}:`, e);
+        }
+      }
+    }
+  } catch (e) {
+    console.log('Octopus API error, using fallback rates:', e);
+  }
+
+  // Add market estimate rates
+  for (const rate of ENERGY_RATES) {
+    const dailyCost = (dailyKwh * rate.unitRate / 100) + (rate.standingCharge / 100);
+    const monthlyCost = dailyCost * 30;
+    const annualCost = dailyCost * 365;
+
+    // Skip if we already have this provider from API
+    if (comparisons.some(c => c.provider === rate.provider && c.planName === rate.planName)) {
+      continue;
+    }
+
+    comparisons.push({
+      provider: rate.provider,
+      planName: rate.planName,
+      monthlyCost: Math.round(monthlyCost * 100) / 100,
+      annualCost: Math.round(annualCost * 100) / 100,
+      savings: 0,
+      recommend: false,
+      reason: '',
+      source: 'market_estimate',
+      features: { unitRate: rate.unitRate, standingCharge: rate.standingCharge, isFixed: rate.isFixed },
+    });
+  }
+
+  // Calculate current annual cost
+  let currentAnnualCost = 0;
+  if (currentTariff) {
+    const dailyCost = (dailyKwh * currentTariff.unitRate / 100) + (currentTariff.standingCharge / 100);
+    currentAnnualCost = dailyCost * 365;
+  } else {
+    // Use average of all comparisons as baseline
+    currentAnnualCost = comparisons.reduce((sum, c) => sum + c.annualCost, 0) / comparisons.length;
+  }
+
+  // Calculate savings and recommendations
+  for (const comp of comparisons) {
+    comp.savings = Math.round((currentAnnualCost - comp.annualCost) * 100) / 100;
+
+    if (comp.savings < savingsThreshold) {
+      comp.reason = `Net savings (£${comp.savings.toFixed(0)}) below your £${savingsThreshold} threshold`;
+    } else if (riskPreference === 'stable' && !comp.features?.isFixed) {
+      comp.reason = "Variable tariff doesn't match your preference for stable bills";
+    } else if (comp.savings > 0) {
+      comp.recommend = true;
+      comp.reason = `Switch to save £${comp.savings.toFixed(0)}/year`;
+    } else {
+      comp.reason = 'No savings available with this plan';
+    }
+  }
+
+  return comparisons.sort((a, b) => b.savings - a.savings);
+}
+
+function scanBroadbandDeals(
+  currentMonthlyCost: number,
+  savingsThreshold: number
+): TariffComparison[] {
+  const currentAnnualCost = currentMonthlyCost * 12;
+
+  return BROADBAND_PLANS.map(plan => {
+    const annualCost = plan.monthlyCost * 12;
+    const savings = Math.round((currentAnnualCost - annualCost) * 100) / 100;
+
+    let recommend = false;
+    let reason = '';
+
+    if (savings < savingsThreshold) {
+      reason = `Net savings (£${savings.toFixed(0)}) below your £${savingsThreshold} threshold`;
+    } else if (savings > 0) {
+      recommend = true;
+      reason = `Switch to save £${savings.toFixed(0)}/year (${plan.speed}Mbps)`;
+    } else {
+      reason = 'No savings available with this plan';
+    }
+
+    return {
+      provider: plan.provider,
+      planName: plan.planName,
+      monthlyCost: plan.monthlyCost,
+      annualCost,
+      savings,
+      recommend,
+      reason,
+      source: plan.source,
+      features: { speed: plan.speed, contract: plan.contract },
+    };
+  }).sort((a, b) => b.savings - a.savings);
+}
+
+function scanMobileDeals(
+  currentMonthlyCost: number,
+  savingsThreshold: number
+): TariffComparison[] {
+  const currentAnnualCost = currentMonthlyCost * 12;
+
+  return MOBILE_PLANS.map(plan => {
+    const annualCost = plan.monthlyCost * 12;
+    const savings = Math.round((currentAnnualCost - annualCost) * 100) / 100;
+
+    let recommend = false;
+    let reason = '';
+    const dataLabel = plan.data === -1 ? 'Unlimited' : `${plan.data}GB`;
+
+    if (savings < savingsThreshold) {
+      reason = `Net savings (£${savings.toFixed(0)}) below your £${savingsThreshold} threshold`;
+    } else if (savings > 0) {
+      recommend = true;
+      reason = `Switch to save £${savings.toFixed(0)}/year (${dataLabel} data)`;
+    } else {
+      reason = 'No savings available with this plan';
+    }
+
+    return {
+      provider: plan.provider,
+      planName: plan.planName,
+      monthlyCost: plan.monthlyCost,
+      annualCost,
+      savings,
+      recommend,
+      reason,
+      source: plan.source,
+      features: { data: plan.data, contract: plan.contract },
+    };
+  }).sort((a, b) => b.savings - a.savings);
 }
 
 serve(async (req) => {
@@ -44,104 +282,19 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { annualConsumptionKwh, currentTariff, serviceId } = await req.json();
+    const body = await req.json();
+    const {
+      serviceId,
+      serviceType,
+      currentMonthlyCost,
+      annualConsumptionKwh = 2900, // UK average
+      currentTariff,
+      postcode,
+    } = body;
 
-    // Calculate daily and monthly consumption
-    const dailyKwh = annualConsumptionKwh / 365;
-    const monthlyKwh = annualConsumptionKwh / 12;
+    console.log(`Scanning ${serviceType} deals for user ${user.id}, postcode: ${postcode}`);
 
-    // Fetch Octopus Energy tariffs (public API)
-    const comparisons: TariffComparison[] = [];
-
-    try {
-      // Fetch available products from Octopus
-      const productsResponse = await fetch(
-        `${OCTOPUS_API_BASE}/products/?is_variable=true&is_green=false&is_tracker=false&is_business=false`,
-        { headers: { 'Accept': 'application/json' } }
-      );
-
-      if (productsResponse.ok) {
-        const products = await productsResponse.json();
-        
-        // Get standard variable tariff (SVT) rates
-        for (const product of products.results?.slice(0, 5) || []) {
-          try {
-            // Fetch electricity rates for a sample region (London - _C)
-            const ratesResponse = await fetch(
-              `${OCTOPUS_API_BASE}/products/${product.code}/electricity-tariffs/E-1R-${product.code}-C/standard-unit-rates/`,
-              { headers: { 'Accept': 'application/json' } }
-            );
-
-            const standingResponse = await fetch(
-              `${OCTOPUS_API_BASE}/products/${product.code}/electricity-tariffs/E-1R-${product.code}-C/standing-charges/`,
-              { headers: { 'Accept': 'application/json' } }
-            );
-
-            if (ratesResponse.ok && standingResponse.ok) {
-              const rates = await ratesResponse.json();
-              const standing = await standingResponse.json();
-
-              const unitRate = rates.results?.[0]?.value_inc_vat || 0;
-              const standingCharge = standing.results?.[0]?.value_inc_vat || 0;
-
-              // Calculate costs
-              const dailyCost = (dailyKwh * unitRate / 100) + (standingCharge / 100);
-              const monthlyCost = dailyCost * 30;
-              const annualCost = dailyCost * 365;
-
-              comparisons.push({
-                provider: 'Octopus Energy',
-                planName: product.display_name || product.code,
-                unitRate,
-                standingCharge,
-                estimatedMonthlyCost: Math.round(monthlyCost * 100) / 100,
-                estimatedAnnualCost: Math.round(annualCost * 100) / 100,
-                isFixed: !product.is_variable,
-                source: 'octopus_api',
-              });
-            }
-          } catch (e) {
-            // Skip this tariff if we can't get rates
-            console.log(`Skipping tariff ${product.code}:`, e);
-          }
-        }
-      }
-    } catch (e) {
-      console.log('Octopus API error, using fallback rates:', e);
-    }
-
-    // Add some typical market rates as fallback/comparison
-    const typicalRates = [
-      { provider: 'British Gas', planName: 'Flexible', unitRate: 24.5, standingCharge: 53.35, isFixed: false },
-      { provider: 'EDF', planName: 'Simply Fixed', unitRate: 23.8, standingCharge: 51.20, isFixed: true },
-      { provider: 'E.ON Next', planName: 'Next Online', unitRate: 24.1, standingCharge: 52.00, isFixed: false },
-      { provider: 'Scottish Power', planName: 'Standard Variable', unitRate: 25.2, standingCharge: 54.10, isFixed: false },
-    ];
-
-    for (const rate of typicalRates) {
-      const dailyCost = (dailyKwh * rate.unitRate / 100) + (rate.standingCharge / 100);
-      const monthlyCost = dailyCost * 30;
-      const annualCost = dailyCost * 365;
-
-      comparisons.push({
-        ...rate,
-        estimatedMonthlyCost: Math.round(monthlyCost * 100) / 100,
-        estimatedAnnualCost: Math.round(annualCost * 100) / 100,
-        source: 'market_estimate',
-      });
-    }
-
-    // Sort by annual cost
-    comparisons.sort((a, b) => a.estimatedAnnualCost - b.estimatedAnnualCost);
-
-    // Calculate current cost
-    let currentAnnualCost = 0;
-    if (currentTariff) {
-      const dailyCost = (dailyKwh * currentTariff.unitRate / 100) + (currentTariff.standingCharge / 100);
-      currentAnnualCost = dailyCost * 365;
-    }
-
-    // Get user settings for recommendation
+    // Get user settings
     const { data: settings } = await supabase
       .from('cheaper_bills_settings')
       .select('*')
@@ -151,49 +304,65 @@ serve(async (req) => {
     const savingsThreshold = settings?.savings_threshold || 50;
     const riskPreference = settings?.risk_preference || 'balanced';
 
-    // Generate recommendations
-    const recommendations = comparisons.map(comp => {
-      const grossSavings = currentAnnualCost - comp.estimatedAnnualCost;
-      const netSavings = grossSavings; // Would subtract exit fee if known
+    // Update postcode if provided
+    if (postcode && postcode !== settings?.postcode) {
+      await supabase
+        .from('cheaper_bills_settings')
+        .upsert({
+          user_id: user.id,
+          postcode,
+          savings_threshold: savingsThreshold,
+          risk_preference: riskPreference,
+        }, { onConflict: 'user_id' });
+    }
 
-      let recommend = false;
-      let reason = '';
+    let comparisons: TariffComparison[] = [];
 
-      if (netSavings < savingsThreshold) {
-        reason = `Net savings (£${netSavings.toFixed(0)}) below your £${savingsThreshold} threshold`;
-      } else if (riskPreference === 'stable' && !comp.isFixed) {
-        reason = "Variable tariff doesn't match your preference for stable bills";
-      } else {
-        recommend = true;
-        reason = `Switch to save £${netSavings.toFixed(0)}/year`;
-      }
-
-      return {
-        ...comp,
-        savings: Math.round(grossSavings * 100) / 100,
-        recommend,
-        reason,
-      };
-    });
+    switch (serviceType) {
+      case 'energy':
+        comparisons = await scanEnergyDeals(
+          user.id,
+          serviceId,
+          annualConsumptionKwh,
+          currentTariff,
+          savingsThreshold,
+          riskPreference
+        );
+        break;
+      case 'broadband':
+        comparisons = scanBroadbandDeals(currentMonthlyCost, savingsThreshold);
+        break;
+      case 'mobile':
+        comparisons = scanMobileDeals(currentMonthlyCost, savingsThreshold);
+        break;
+      default:
+        // Generic comparison based on monthly cost
+        comparisons = [{
+          provider: 'Market Average',
+          planName: 'Comparison',
+          monthlyCost: currentMonthlyCost * 0.9,
+          annualCost: currentMonthlyCost * 0.9 * 12,
+          savings: currentMonthlyCost * 0.1 * 12,
+          recommend: currentMonthlyCost * 0.1 * 12 >= savingsThreshold,
+          reason: 'Review market for potential 10% savings',
+          source: 'estimate',
+        }];
+    }
 
     // Store top results in database
-    const bestOffers = recommendations.slice(0, 5);
+    const bestOffers = comparisons.slice(0, 5);
     for (const offer of bestOffers) {
       await supabase
         .from('comparison_results')
         .upsert({
           user_id: user.id,
           tracked_service_id: serviceId || null,
-          service_type: 'energy',
+          service_type: serviceType,
           provider: offer.provider,
           plan_name: offer.planName,
-          monthly_cost: offer.estimatedMonthlyCost,
-          annual_cost: offer.estimatedAnnualCost,
-          features: {
-            unitRate: offer.unitRate,
-            standingCharge: offer.standingCharge,
-            isFixed: offer.isFixed,
-          },
+          monthly_cost: offer.monthlyCost,
+          annual_cost: offer.annualCost,
+          features: offer.features || {},
           source: offer.source,
           scanned_at: new Date().toISOString(),
           is_best_offer: offer === bestOffers[0],
@@ -217,18 +386,25 @@ serve(async (req) => {
         .eq('id', serviceId);
     }
 
+    const bestOffer = bestOffers[0] || null;
+
     return new Response(
       JSON.stringify({
         success: true,
-        currentAnnualCost: Math.round(currentAnnualCost * 100) / 100,
-        comparisons: recommendations,
-        bestOffer: recommendations[0],
+        serviceType,
+        comparisons: bestOffers,
+        bestOffer: bestOffer ? {
+          provider: bestOffer.provider,
+          planName: bestOffer.planName,
+          savings: bestOffer.savings,
+          recommend: bestOffer.recommend,
+        } : null,
         scannedAt: new Date().toISOString(),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Compare energy deals error:', error);
+    console.error('Compare deals error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
