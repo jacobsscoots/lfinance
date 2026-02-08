@@ -552,9 +552,11 @@ export function useMealPlanItems(weekStart: Date) {
     });
   }, []);
 
-  // Generate portions for a single day using V2 engine
-  // ALWAYS populates portions: uses solver result if within tolerance,
-  // otherwise uses best-effort portions so the UI never shows 0g blanks.
+  // Generate portions for a single day using V2 engine.
+  //
+  // STRICT MODE: Only writes to DB when solver returns success=true
+  // (all macros within ±1g, calories within ±50 kcal).
+  // On failure: returns diagnostics but does NOT overwrite saved plan.
   const recalculateDay = useMutation({
     mutationFn: async ({
       planId,
@@ -575,14 +577,10 @@ export function useMealPlanItems(weekStart: Date) {
       const items = plan.items || [];
       if (items.length === 0) throw new Error("No items to generate");
 
-      // Parse as local date to avoid UTC-shift target mismatches.
       const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
       const targets = getDailyTargets(dayDate, settings, weeklyOverride);
 
-      // Convert items to V2 solver items
       const solverItems = convertToSolverItems(items);
-
-      // V2 solver targets
       const solverTargets: SolverTargets = {
         calories: targets.calories,
         protein: targets.protein,
@@ -590,28 +588,56 @@ export function useMealPlanItems(weekStart: Date) {
         fat: targets.fat,
       };
 
-      // Run V2 solver — count seasoning macros so UI and solver agree
       const result = solve(solverItems, solverTargets, {
         ...DEFAULT_SOLVER_OPTIONS,
         seasoningsCountMacros: true,
         debugMode: false,
       });
 
-      // Determine which portions to use: solver success → solver portions,
-      // solver failure → best-effort portions (closest plan found)
-      const portionsToUse: Map<string, number> = result.success
-        ? result.portions
-        : ((result as SolverFailed).bestEffortPortions ?? new Map());
+      // ==============================================================
+      // STRICT MODE: On failure, return diagnostics. Do NOT write to DB.
+      // ==============================================================
+      if (!result.success) {
+        const failedResult = result as SolverFailed;
+        const failure = failedResult.failure;
+        const t = failure.closestTotals;
+        const d = failure.targetDelta;
 
+        const diagnostics: string[] = [];
+        if (failure.reason === 'impossible_targets') {
+          diagnostics.push("Can't solve with current foods: targets are impossible with these items and constraints.");
+        } else if (failure.reason === 'no_adjustable_items') {
+          diagnostics.push("Can't solve: all items are fixed/locked — no adjustable portions.");
+        } else {
+          diagnostics.push("Can't solve: could not find portions within tolerance (±1g macros, ±50 kcal).");
+        }
+        diagnostics.push(
+          `Closest achievable: ${t.calories}kcal, ${t.protein}g P, ${t.carbs}g C, ${t.fat}g F`
+        );
+        diagnostics.push(
+          `Off by: P ${d.protein > 0 ? '+' : ''}${d.protein}g, C ${d.carbs > 0 ? '+' : ''}${d.carbs}g, F ${d.fat > 0 ? '+' : ''}${d.fat}g, Cal ${d.calories > 0 ? '+' : ''}${d.calories}`
+        );
+        if (failure.blockers.length > 0) {
+          diagnostics.push(
+            "Blockers: " + failure.blockers.slice(0, 3).map(b => b.detail || `${b.itemName}: ${b.constraint}`).join("; ")
+          );
+        }
+
+        // Return failure WITHOUT writing anything to DB.
+        return {
+          success: false as const,
+          updated: 0,
+          warnings: diagnostics,
+        };
+      }
+
+      // SUCCESS: write solver portions to DB (skip fixed/locked items — they are constants)
       let updated = 0;
-      const warnings: string[] = [];
-
       for (const item of items) {
         if (item.is_locked) continue;
         if (item.product?.product_type === "fixed") continue;
 
-        const newGrams = portionsToUse.get(item.id);
-
+        const newGrams = result.portions.get(item.id);
         if (newGrams !== undefined && newGrams > 0) {
           const { error } = await supabase
             .from("meal_plan_items")
@@ -624,35 +650,23 @@ export function useMealPlanItems(weekStart: Date) {
         }
       }
 
-      if (!result.success) {
-        const failedResult = result as SolverFailed;
-        const failure = failedResult.failure;
-        const t = failure.closestTotals;
-        warnings.push(
-          `Best-effort: ${t.calories}kcal, ${t.protein}g P, ${t.carbs}g C, ${t.fat}g F`
-        );
-      }
-      if (result.success && result.warnings) {
-        warnings.push(...result.warnings);
-      }
-
       return {
-        success: result.success as boolean,
+        success: true as const,
         updated,
-        warnings,
-        bestEffort: !result.success,
+        warnings: result.warnings ?? [],
       };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
-      setLastCalculated(new Date());
-
       if (result.success) {
-        toast.success(`Generated portions (${result.updated} items)`);
-      } else if (result.bestEffort && result.updated > 0) {
-        toast.warning(`Best-effort: ${result.updated} items set (targets not fully met). ${result.warnings?.[0] ?? ''}`);
+        queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+        setLastCalculated(new Date());
+        toast.success(`Generated portions (${result.updated} items within tolerance)`);
       } else {
-        toast.error(result.warnings?.[0] ?? "Could not generate portions.");
+        // FAIL: Nothing was written to DB. Show clear error.
+        toast.error(result.warnings?.[0] ?? "Can't solve with current foods.");
+        if (result.warnings && result.warnings.length > 1) {
+          toast.info(result.warnings.slice(1, 3).join(" | "), { duration: 8000 });
+        }
       }
     },
     onError: (error) => {
@@ -660,18 +674,22 @@ export function useMealPlanItems(weekStart: Date) {
     },
   });
 
+  // Generate portions for ALL days using V2 engine.
+  //
+  // STRICT MODE: Only writes to DB for days where solver returns success=true.
+  // Failed days are skipped (no DB write) and reported as diagnostics.
   const recalculateAll = useMutation({
-    mutationFn: async ({ 
-      settings, 
+    mutationFn: async ({
+      settings,
       portioningSettings = DEFAULT_PORTIONING_SETTINGS,
       weeklyOverride
-    }: { 
-      settings: NutritionSettings; 
+    }: {
+      settings: NutritionSettings;
       portioningSettings?: PortioningSettings;
       weeklyOverride?: WeeklyTargetsOverride | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
-      
+
       let totalUpdated = 0;
       let successCount = 0;
       let failedCount = 0;
@@ -701,32 +719,35 @@ export function useMealPlanItems(weekStart: Date) {
           debugMode: false,
         });
 
-        // Determine portions: solver success → solver portions,
-        // failure → best-effort (closest plan)
-        const portionsToUse: Map<string, number> = result.success
-          ? result.portions
-          : ((result as SolverFailed).bestEffortPortions ?? new Map());
-
-        if (result.success) {
-          successCount++;
-        } else {
+        // ==============================================================
+        // STRICT MODE: On failure, skip DB write for this day.
+        // ==============================================================
+        if (!result.success) {
           failedCount++;
           const failure = (result as SolverFailed).failure;
+          const t = failure.closestTotals;
+          const d = failure.targetDelta;
           dayWarnings.push({
             date: plan.meal_date,
             warnings: [
-              `Best-effort: ${failure.closestTotals.calories}kcal, ${failure.closestTotals.protein}g P, ${failure.closestTotals.fat}g F`,
+              `Can't solve: P ${d.protein > 0 ? '+' : ''}${d.protein}g, ` +
+              `C ${d.carbs > 0 ? '+' : ''}${d.carbs}g, ` +
+              `F ${d.fat > 0 ? '+' : ''}${d.fat}g, ` +
+              `Cal ${d.calories > 0 ? '+' : ''}${d.calories}`,
+              `Closest: ${t.calories}kcal, ${t.protein}g P, ${t.carbs}g C, ${t.fat}g F`,
             ],
             failed: true,
           });
+          continue; // SKIP DB write for failed days
         }
 
-        // Persist portions to DB (both success and best-effort)
+        // SUCCESS: write solver portions to DB (skip fixed/locked — they are constants)
+        successCount++;
         for (const item of items) {
           if (item.is_locked) continue;
           if (item.product?.product_type === 'fixed') continue;
 
-          const newGrams = portionsToUse.get(item.id);
+          const newGrams = result.portions.get(item.id);
           if (newGrams !== undefined && newGrams > 0) {
             const { error } = await supabase
               .from("meal_plan_items")
@@ -749,11 +770,15 @@ export function useMealPlanItems(weekStart: Date) {
       };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
-      setLastCalculated(new Date());
+      if (result.daysSucceeded > 0) {
+        queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+        setLastCalculated(new Date());
+      }
 
       const firstFail = result.dayWarnings?.[0];
-      const failureHint = firstFail ? ` ${firstFail.date}: ${firstFail.warnings[0]}` : "";
+      const failureHint = firstFail
+        ? ` | ${firstFail.date}: ${firstFail.warnings[0]}`
+        : "";
 
       if (result.totalDays === 0) {
         toast.info("No meal plans with items to generate.");
@@ -761,14 +786,14 @@ export function useMealPlanItems(weekStart: Date) {
         toast.success(`Generated portions for all ${result.daysSucceeded} days (${result.updated} items)`);
       } else if (result.daysSucceeded > 0) {
         toast.warning(
-          `Generated ${result.daysSucceeded}/${result.totalDays} days exactly, ` +
-          `${result.daysFailed} day(s) best-effort (${result.updated} items total).` +
+          `Generated ${result.daysSucceeded}/${result.totalDays} days. ` +
+          `${result.daysFailed} day(s) failed (not saved).` +
           failureHint
         );
       } else {
-        toast.warning(
-          `All ${result.totalDays} days set to best-effort (${result.updated} items). ` +
-          `Exact targets not achievable with current items.` +
+        toast.error(
+          `All ${result.totalDays} days failed — no portions saved. ` +
+          `Targets not achievable with current items.` +
           failureHint
         );
       }

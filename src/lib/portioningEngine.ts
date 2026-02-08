@@ -706,6 +706,47 @@ function initializePortionsWithStrategy(
  * UI never shows 0g blanks. The `success` flag distinguishes "within
  * tolerance" (true) from "best-effort" (false).
  */
+
+// Minimum calories per meal type — safety net against obviously broken results
+// (e.g., a 19 kcal lunch). Snack meals are exempt.
+const MEAL_CALORIE_MINIMUMS: Record<string, number> = {
+  breakfast: 100,
+  lunch: 100,
+  dinner: 100,
+};
+
+/**
+ * Post-solve validation: each active meal (with items) must meet a minimum
+ * calorie floor. Returns null if valid, or a list of failing meals.
+ */
+function validateMealMinimums(
+  items: SolverItem[],
+  portions: Map<string, number>,
+  countSeasonings: boolean
+): { meal: string; calories: number; minimum: number }[] | null {
+  const mealCalories: Record<string, number> = {};
+  const mealHasItems: Record<string, boolean> = {};
+
+  for (const item of items) {
+    const grams = portions.get(item.id) ?? 0;
+    if (grams <= 0) continue;
+    if (!countSeasonings && item.category === 'seasoning') continue;
+
+    const macros = calculateMacros(item, grams);
+    mealCalories[item.mealType] = (mealCalories[item.mealType] ?? 0) + macros.calories;
+    mealHasItems[item.mealType] = true;
+  }
+
+  const failures: { meal: string; calories: number; minimum: number }[] = [];
+  for (const [meal, minimum] of Object.entries(MEAL_CALORIE_MINIMUMS)) {
+    if (mealHasItems[meal] && (mealCalories[meal] ?? 0) < minimum) {
+      failures.push({ meal, calories: Math.round(mealCalories[meal] ?? 0), minimum });
+    }
+  }
+
+  return failures.length > 0 ? failures : null;
+}
+
 export function solve(
   items: SolverItem[],
   targets: SolverTargets,
@@ -726,7 +767,8 @@ export function solve(
     const totals = sumMacros(items, portions, seasoningsCountMacros);
     const delta = calculateDelta(totals, targets);
 
-    if (isWithinTolerance(totals, targets, tolerances)) {
+    const mealFailures = validateMealMinimums(items, portions, seasoningsCountMacros);
+    if (isWithinTolerance(totals, targets, tolerances) && !mealFailures) {
       return {
         success: true,
         portions,
@@ -779,8 +821,41 @@ export function solve(
     totalIterations += result.iterationsRun;
 
     if (result.success) {
-      // Found a valid solution - return it
-      return result;
+      // Post-validation: check meal-level calorie minimums
+      const mealFailures = validateMealMinimums(items, result.portions, seasoningsCountMacros);
+      if (mealFailures) {
+        // Macro targets met, but a meal is below minimum calories — treat as failure
+        const totals = sumMacros(items, result.portions, seasoningsCountMacros);
+        const delta = calculateDelta(totals, targets);
+        const blockerDetails = mealFailures.map(f =>
+          `${f.meal} has only ${f.calories} kcal (min ${f.minimum})`
+        );
+        // Track as failed and try other strategies
+        const mealFailResult = {
+          success: false,
+          failure: {
+            reason: 'impossible_targets' as const,
+            blockers: mealFailures.map(f => ({
+              itemName: f.meal,
+              constraint: `meal_minimum`,
+              detail: `${f.meal} has only ${f.calories} kcal (min ${f.minimum})`,
+            })),
+            closestTotals: roundMacros(totals),
+            targetDelta: delta,
+            iterationsRun: totalIterations,
+          },
+          bestEffortPortions: result.portions,
+        } as SolverResult;
+
+        if (!bestResult) {
+          bestResult = mealFailResult;
+          bestFailedPortions = result.portions;
+        }
+        continue; // Skip to next strategy — don't fall through to failed-result tracking
+      } else {
+        // Found a valid solution - return it
+        return result;
+      }
     }
 
     // Track best failed result (by weighted error closeness)
@@ -1053,6 +1128,7 @@ export function productToSolverItem(
     seasoning: 'seasoning', // Explicit mapping for 'seasoning' food_type
     treat: 'snack',
     fat: 'fat',
+    premade: 'premade',
     other: 'other',
   };
   
@@ -1066,15 +1142,17 @@ export function productToSolverItem(
   }
   
   // Default portion constraints based on category
+  // User rules: fruit 50-150g, granola/snack 20-80g, yoghurt/dairy 100-500g, seasoning ≤15g
   const defaultConstraints: Record<string, { min: number; max: number }> = {
     protein: { min: 100, max: 300 },
     carb: { min: 50, max: 250 },
-    dairy: { min: 100, max: 350 },
-    fruit: { min: 50, max: 300 },
+    dairy: { min: 100, max: 500 },
+    fruit: { min: 50, max: 150 },
     veg: { min: 50, max: 200 },
-    seasoning: { min: 0, max: 15 }, // Updated: min=0 for seasonings (hard cap override)
-    snack: { min: 20, max: 100 },
+    seasoning: { min: 0, max: 15 },
+    snack: { min: 20, max: 80 },
     fat: { min: 5, max: 50 },
+    premade: { min: 100, max: 500 },
     other: { min: 10, max: 300 },
   };
   
@@ -1127,9 +1205,12 @@ export function productToSolverItem(
     eatenFactor: product.eaten_factor ?? 1,
     seasoningRatePer100g: product.seasoning_rate_per_100g ?? null,
     pairedProteinId: pairedProteinId ?? null,
-    currentGrams: isSeasoning 
-      ? Math.min(product.fixed_portion_grams ?? effectiveInitialGrams, DEFAULT_SEASONING_MAX_GRAMS)
-      : (product.fixed_portion_grams ?? effectiveInitialGrams),
+    // FIX B: For locked/fixed items, initialGrams comes from the actual DB
+    // item.quantity_grams (the user-set value). Use it as the authoritative source.
+    // Only fall back to product.fixed_portion_grams when initialGrams is 0 (FREE items).
+    currentGrams: isSeasoning
+      ? Math.min(effectiveInitialGrams || (product.fixed_portion_grams ?? DEFAULT_SEASONING_FALLBACK_GRAMS), DEFAULT_SEASONING_MAX_GRAMS)
+      : (initialGrams > 0 ? initialGrams : (product.fixed_portion_grams ?? effectiveInitialGrams)),
     countMacros: !isSeasoning,
   };
 }

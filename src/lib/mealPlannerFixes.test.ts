@@ -8,6 +8,11 @@
  *  4. UI totals match solver totals (eaten_factor, seasoning consistency)
  *  5. Timezone regression for date string conversions
  *  6. Meal structure heuristics (balanced dinner, breakfast)
+ *  7. Portion sanity checks
+ *  8. STRICT MODE: solver failure → no DB write (tolerance gating)
+ *  9. FIXED ITEM IMMUTABILITY: fixed/locked items keep their grams
+ * 10. PORTION CAPS: fruit ≤150g, snack ≤80g, seasoning ≤15g
+ * 11. MEAL-LEVEL MINIMUMS: no sub-100 kcal meals
  */
 
 import { describe, it, expect } from "vitest";
@@ -28,6 +33,7 @@ import {
 import {
   SolverItem,
   SolverTargets,
+  SolverFailed,
   MacroTotals,
   DEFAULT_TOLERANCES,
   DEFAULT_SOLVER_OPTIONS,
@@ -711,6 +717,7 @@ describe("Portion sanity: no insane grams", () => {
       createSolverItem({
         id: "yoghurt",
         category: "dairy",
+        mealType: "snack", // Use snack to avoid 100 kcal meal minimum
         nutritionPer100g: { calories: 97, protein: 9, carbs: 3.6, fat: 5 },
         currentGrams: 0,
         minPortionGrams: 100,
@@ -782,5 +789,486 @@ describe("Portion sanity: no insane grams", () => {
       : ((result as any).bestEffortPortions?.get("paprika") ?? 0);
 
     expect(seasoningGrams).toBeLessThanOrEqual(15);
+  });
+});
+
+// ============================================================================
+// 8. STRICT MODE — Solver failure returns success: false (tolerance gating)
+// ============================================================================
+
+describe("Strict mode: solver failure returns success=false", () => {
+  it("returns success=false when macros can't be hit within tolerance", () => {
+    // Only one protein item — can't hit carb/fat targets
+    const items: SolverItem[] = [
+      createSolverItem({
+        id: "chicken",
+        category: "protein",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+        currentGrams: 0,
+        minPortionGrams: 100,
+        maxPortionGrams: 300,
+      }),
+    ];
+
+    const targets: SolverTargets = {
+      calories: 800,
+      protein: 50,
+      carbs: 80,  // Impossible — chicken has 0g carbs
+      fat: 30,
+    };
+
+    const result = solve(items, targets, { maxIterations: 200 });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const failed = result as SolverFailed;
+      expect(failed.failure).toBeDefined();
+      expect(failed.failure.closestTotals).toBeDefined();
+      expect(failed.failure.targetDelta).toBeDefined();
+    }
+  });
+
+  it("returns success=true only when ALL macros within ±1g and calories ±50 kcal", () => {
+    const items: SolverItem[] = [
+      createSolverItem({
+        id: "chicken",
+        category: "protein",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 300,
+        portionStepGrams: 10, roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "rice",
+        category: "carb",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+        currentGrams: 0, minPortionGrams: 80, maxPortionGrams: 250,
+        portionStepGrams: 10, roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "oil",
+        category: "fat",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 884, protein: 0, carbs: 0, fat: 100 },
+        currentGrams: 0, minPortionGrams: 5, maxPortionGrams: 30,
+      }),
+    ];
+
+    const targets: SolverTargets = { calories: 500, protein: 50, carbs: 40, fat: 15 };
+    const result = solve(items, targets, { maxIterations: 500 });
+
+    if (result.success) {
+      // Verify all macros are actually within tolerance
+      expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
+      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("failure result includes diagnostic info (closestTotals, targetDelta, blockers)", () => {
+    const items: SolverItem[] = [
+      createSolverItem({
+        id: "item-a",
+        category: "protein",
+        mealType: "lunch",
+        nutritionPer100g: { calories: 100, protein: 30, carbs: 0, fat: 1 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 200,
+      }),
+    ];
+
+    const targets: SolverTargets = { calories: 500, protein: 30, carbs: 50, fat: 20 };
+    const result = solve(items, targets, { maxIterations: 200 });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const failed = result as SolverFailed;
+      expect(failed.failure.closestTotals.calories).toBeGreaterThan(0);
+      expect(typeof failed.failure.targetDelta.protein).toBe("number");
+      expect(typeof failed.failure.targetDelta.carbs).toBe("number");
+      expect(typeof failed.failure.targetDelta.fat).toBe("number");
+      expect(typeof failed.failure.targetDelta.calories).toBe("number");
+    }
+  });
+});
+
+// ============================================================================
+// 9. FIXED ITEM IMMUTABILITY — productToSolverItem uses actual DB grams
+// ============================================================================
+
+describe("Fixed item immutability: solver uses actual DB grams", () => {
+  it("productToSolverItem uses initialGrams (DB value) over product.fixed_portion_grams", () => {
+    // Product has fixed_portion_grams=15 (a default), but DB says 250g
+    const result = productToSolverItem(
+      {
+        id: "premade-pasta",
+        name: "Hunters BBQ Chicken Pasta",
+        calories_per_100g: 150,
+        protein_per_100g: 10,
+        carbs_per_100g: 20,
+        fat_per_100g: 5,
+        food_type: "premade",
+        editable_mode: "LOCKED",
+        fixed_portion_grams: 15,  // Product-level default (WRONG if DB has 250)
+      },
+      "lunch",
+      250  // initialGrams from DB item.quantity_grams (the CORRECT value)
+    );
+
+    // Must use the DB value (250g), NOT product.fixed_portion_grams (15g)
+    expect(result.currentGrams).toBe(250);
+    expect(result.editableMode).toBe("LOCKED");
+  });
+
+  it("productToSolverItem falls back to fixed_portion_grams when initialGrams is 0 (FREE item)", () => {
+    const result = productToSolverItem(
+      {
+        id: "new-item",
+        name: "Some Item",
+        calories_per_100g: 200,
+        protein_per_100g: 20,
+        carbs_per_100g: 10,
+        fat_per_100g: 8,
+        food_type: "protein",
+        editable_mode: "FREE",
+        fixed_portion_grams: 150,
+      },
+      "dinner",
+      0  // initialGrams=0 means solver should use fallback
+    );
+
+    // When initialGrams is 0, fall back to fixed_portion_grams
+    expect(result.currentGrams).toBe(150);
+  });
+
+  it("locked items retain their grams through solver", () => {
+    // Two items: one locked at 200g, one free
+    const items: SolverItem[] = [
+      createSolverItem({
+        id: "locked-chicken",
+        category: "protein",
+        mealType: "dinner",
+        editableMode: "LOCKED",
+        nutritionPer100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+        currentGrams: 200,  // User set this — solver MUST NOT change it
+        minPortionGrams: 100,
+        maxPortionGrams: 300,
+      }),
+      createSolverItem({
+        id: "free-rice",
+        category: "carb",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+        currentGrams: 0,
+        minPortionGrams: 80,
+        maxPortionGrams: 250,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "oil",
+        category: "fat",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 884, protein: 0, carbs: 0, fat: 100 },
+        currentGrams: 0,
+        minPortionGrams: 5,
+        maxPortionGrams: 30,
+      }),
+    ];
+
+    const targets: SolverTargets = { calories: 600, protein: 62, carbs: 50, fat: 20 };
+    const result = solve(items, targets, { maxIterations: 500 });
+
+    // Locked item must ALWAYS keep its grams
+    const lockedGrams = result.success
+      ? result.portions.get("locked-chicken")
+      : ((result as any).bestEffortPortions?.get("locked-chicken"));
+
+    expect(lockedGrams).toBe(200);
+  });
+});
+
+// ============================================================================
+// 10. PORTION SANITY CAPS — fruit ≤150g, snack ≤80g, dairy ≤500g
+// ============================================================================
+
+describe("Portion sanity caps: no insane portions", () => {
+  it("fruit portions must not exceed 150g (no 300g fruit topper)", () => {
+    const items: SolverItem[] = [
+      createSolverItem({
+        id: "fruit-topper",
+        name: "Breakfast Fruit Topper",
+        category: "fruit",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 43, protein: 1, carbs: 10, fat: 0.3 },
+        currentGrams: 0,
+        minPortionGrams: 50,
+        maxPortionGrams: 150,  // Category cap enforced
+      }),
+      createSolverItem({
+        id: "yoghurt",
+        category: "dairy",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 97, protein: 9, carbs: 3.6, fat: 5 },
+        currentGrams: 0,
+        minPortionGrams: 100,
+        maxPortionGrams: 500,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "granola",
+        category: "snack",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 450, protein: 10, carbs: 60, fat: 18 },
+        currentGrams: 0,
+        minPortionGrams: 20,
+        maxPortionGrams: 80,  // Category cap enforced
+        portionStepGrams: 5,
+        roundingRule: "nearest_5g",
+      }),
+    ];
+
+    const targets: SolverTargets = { calories: 400, protein: 25, carbs: 40, fat: 15 };
+    const result = solve(items, targets, { maxIterations: 500 });
+
+    const fruitGrams = result.success
+      ? result.portions.get("fruit-topper")!
+      : ((result as any).bestEffortPortions?.get("fruit-topper") ?? 0);
+
+    const granolaGrams = result.success
+      ? result.portions.get("granola")!
+      : ((result as any).bestEffortPortions?.get("granola") ?? 0);
+
+    expect(fruitGrams).toBeLessThanOrEqual(150);
+    expect(granolaGrams).toBeLessThanOrEqual(80);
+  });
+
+  it("productToSolverItem applies category default caps (fruit max 150)", () => {
+    const result = productToSolverItem(
+      {
+        id: "fruit",
+        name: "Mixed Berries",
+        calories_per_100g: 43,
+        protein_per_100g: 1,
+        carbs_per_100g: 10,
+        fat_per_100g: 0.3,
+        food_type: "fruit",
+        // No explicit min/max — should use category defaults
+      },
+      "breakfast",
+      0
+    );
+
+    expect(result.maxPortionGrams).toBe(150);
+    expect(result.minPortionGrams).toBe(50);
+  });
+
+  it("productToSolverItem applies snack/treat category default caps (max 80)", () => {
+    const result = productToSolverItem(
+      {
+        id: "granola",
+        name: "Granola",
+        calories_per_100g: 450,
+        protein_per_100g: 10,
+        carbs_per_100g: 60,
+        fat_per_100g: 18,
+        food_type: "treat",  // maps to 'snack' category
+      },
+      "breakfast",
+      0
+    );
+
+    expect(result.maxPortionGrams).toBe(80);
+    expect(result.minPortionGrams).toBe(20);
+    expect(result.category).toBe("snack");
+  });
+
+  it("productToSolverItem applies dairy category default caps (max 500)", () => {
+    const result = productToSolverItem(
+      {
+        id: "yoghurt",
+        name: "Greek Yoghurt",
+        calories_per_100g: 97,
+        protein_per_100g: 9,
+        carbs_per_100g: 3.6,
+        fat_per_100g: 5,
+        food_type: "dairy",
+      },
+      "breakfast",
+      0
+    );
+
+    expect(result.maxPortionGrams).toBe(500);
+    expect(result.minPortionGrams).toBe(100);
+  });
+});
+
+// ============================================================================
+// 11. MEAL-LEVEL MINIMUMS — no sub-100 kcal meals
+// ============================================================================
+
+describe("Meal-level minimums: no obviously broken meals", () => {
+  it("solver rejects solution where a meal has < 100 kcal", () => {
+    // Lunch has only a tiny fixed item (19 kcal) — solver should fail
+    const items: SolverItem[] = [
+      // Lunch: only a tiny item locked at 15g → 22.5 kcal
+      createSolverItem({
+        id: "tiny-lunch",
+        category: "protein",
+        mealType: "lunch",
+        editableMode: "LOCKED",
+        nutritionPer100g: { calories: 150, protein: 10, carbs: 20, fat: 5 },
+        currentGrams: 15,  // Only 15g → ~22 kcal — below 100 kcal minimum
+        minPortionGrams: 15,
+        maxPortionGrams: 15,
+      }),
+      // Dinner: normal food
+      createSolverItem({
+        id: "chicken",
+        category: "protein",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+        currentGrams: 0,
+        minPortionGrams: 100,
+        maxPortionGrams: 300,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "rice",
+        category: "carb",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+        currentGrams: 0,
+        minPortionGrams: 80,
+        maxPortionGrams: 250,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "oil",
+        category: "fat",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 884, protein: 0, carbs: 0, fat: 100 },
+        currentGrams: 0,
+        minPortionGrams: 5,
+        maxPortionGrams: 30,
+      }),
+    ];
+
+    const targets: SolverTargets = { calories: 600, protein: 50, carbs: 45, fat: 18 };
+    const result = solve(items, targets, { maxIterations: 500 });
+
+    // The solver might technically hit day-level macros, but lunch is < 100 kcal
+    // so the result should be marked as failure
+    expect(result.success).toBe(false);
+  });
+
+  it("solver succeeds when all meals have >= 100 kcal", () => {
+    const items: SolverItem[] = [
+      // Breakfast: yoghurt + granola (all FREE, will get >100 kcal)
+      createSolverItem({
+        id: "yoghurt",
+        category: "dairy",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 97, protein: 9, carbs: 3.6, fat: 5 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 400,
+        portionStepGrams: 10, roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "granola",
+        category: "snack",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 450, protein: 10, carbs: 60, fat: 18 },
+        currentGrams: 0, minPortionGrams: 20, maxPortionGrams: 80,
+        portionStepGrams: 5, roundingRule: "nearest_5g",
+      }),
+      // Dinner: chicken + rice + oil
+      createSolverItem({
+        id: "chicken",
+        category: "protein",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 300,
+        portionStepGrams: 10, roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "rice",
+        category: "carb",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+        currentGrams: 0, minPortionGrams: 80, maxPortionGrams: 250,
+        portionStepGrams: 10, roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "oil",
+        category: "fat",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 884, protein: 0, carbs: 0, fat: 100 },
+        currentGrams: 0, minPortionGrams: 5, maxPortionGrams: 30,
+      }),
+    ];
+
+    // Targets computed from achievable portions:
+    // yoghurt 200g: 194cal, 18P, 7.2C, 10F | granola 45g: 202cal, 4.5P, 27C, 8.1F
+    // chicken 130g: 215cal, 40P, 0C, 4.7F | rice 130g: 169cal, 3.5P, 36.4C, 0.4F | oil 7g: 62cal, 0P, 0C, 7F
+    // Total: ~842cal, ~66P, ~70.6C, ~30.2F
+    const targets: SolverTargets = { calories: 840, protein: 66, carbs: 70, fat: 30 };
+    const result = solve(items, targets, { maxIterations: 500 });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Verify all macros within tolerance
+      expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
+      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("snack meals are exempt from the 100 kcal minimum", () => {
+    // A small snack (50 kcal) should not trigger the meal minimum check
+    const items: SolverItem[] = [
+      createSolverItem({
+        id: "small-snack",
+        category: "snack",
+        mealType: "snack",
+        editableMode: "LOCKED",
+        nutritionPer100g: { calories: 100, protein: 5, carbs: 15, fat: 2 },
+        currentGrams: 50,  // 50 kcal — below 100, but it's a snack
+      }),
+      createSolverItem({
+        id: "chicken",
+        category: "protein",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 300,
+        portionStepGrams: 10, roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "rice",
+        category: "carb",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+        currentGrams: 0, minPortionGrams: 80, maxPortionGrams: 250,
+        portionStepGrams: 10, roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "oil",
+        category: "fat",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 884, protein: 0, carbs: 0, fat: 100 },
+        currentGrams: 0, minPortionGrams: 5, maxPortionGrams: 30,
+      }),
+    ];
+
+    const targets: SolverTargets = { calories: 550, protein: 50, carbs: 45, fat: 17 };
+    const result = solve(items, targets, { maxIterations: 500 });
+
+    // Should succeed — the snack at 50 kcal should not cause a failure
+    expect(result.success).toBe(true);
   });
 });
