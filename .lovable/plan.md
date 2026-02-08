@@ -1,579 +1,193 @@
-Build Debt Tracker Module (Full Spec + Implementation Plan)
+Combined Lovable Prompt (audit + remove Deal Scanner + responsive + security + cleanup)
 
-Build a new Debt Tracker module inside my LifeHub web app. It must track debts, balances, payments, attachable transactions, balance snapshots, reminders/alerts, payoff planning (Avalanche/Snowball), graphs, CSV import/export, and a printable report. Keep UI modern, clean, fast, and consistent with existing patterns in the app.
+You are working on my existing web app codebase. Your job is to audit the entire website end-to-end, fix what you find, and leave it stable, responsive, and secure.
 
-Core Goals
+0) Rules for this work
 
-Track multiple debts (credit cards, loans, overdraft, BNPL, other)
+Do not rewrite the whole app or change core features unless required to fix bugs/security.
 
-Log payments and automatically reflect balance changes
+Prefer small, safe refactors over big rewrites.
 
-Attach and match transactions to payments (with CSV import + suggested matches)
+Every change must compile and run.
 
-Correct/confirm balances using snapshots (statement-based accuracy)
+After fixes, do a quick pass to confirm nothing broke (basic smoke test steps).
 
-Visualize progress with charts and projections
+When removing features, remove routes/nav/access, then remove code safely (no broken imports).
 
-Plan payoff order and debt-free date using strategies
+1) Remove Deal Scanner (High Priority) — complete removal
 
-Show reminders for due payments, promo expiries, and overdue items
+Completely remove the “Deal Scanner” feature/page so it cannot be accessed:
 
-1) Navigation + Page Structure
+Code removals (follow this exact list)
 
-Add a new sidebar item: Debt Tracker (Wallet2 icon).
+Delete src/pages/Deals.tsx
 
-Use a single route with tabs (like existing Bills/Investments), to keep it clean:
+Delete src/components/deals/ directory
 
-Overview (Dashboard)
+Remove src/hooks/useDeal*.ts hooks (Sources, Rules, Logs, Notifications)
 
-Debts
+Delete supabase/functions/scan-deals/
 
-Payments
+Update src/App.tsx routes to remove Deals route
 
-Transactions
+Update src/components/layout/AppSidebar.tsx navigation to remove Deals link
 
-Reports (Payoff plan + exports + printable report)
+Clean up related types, constants, feature flags/config (only if exclusive to Deal Scanner)
 
-Route:
+Remove any related API endpoints / background jobs / cron tasks / DB tables/columns only if strictly exclusive to Deal Scanner (if shared, leave intact)
 
-/debt-tracker
+Ensure the build passes and no imports reference deleted files
 
-2) Database Schema (must implement)
+Deliverable:
 
-Create these tables/collections with user scoping.
+Confirm Deals is fully gone (no route, no nav link, no leftover imports, no functions referencing it)
 
-Table: debts
+2) Full codebase audit (bugs + loose ends + unused code)
 
-id uuid PK
+Scan the entire repo for:
 
-user_id uuid (RLS)
+Runtime errors, broken UI actions, missing/null checks, unhandled promise rejections
 
-creditor_name text (required)
+State issues (stale caches, incorrect invalidations, race conditions)
 
-debt_type text enum: credit_card | loan | overdraft | bnpl | other
+Bad date logic, off-by-ones, timezone handling, edge cases
 
-starting_balance numeric (required)
+Dead/unused code: unused components, unused hooks, unused API calls, unused utils, unused imports, unused CSS/classes
 
-current_balance numeric (required)
+Duplicated logic that can be shared safely (only if it reduces bugs)
 
-apr numeric nullable
+Performance issues: unnecessary re-renders, expensive loops, duplicated fetches, over-fetching
 
-interest_type text enum: apr | fixed | none
+Also include the areas you already identified:
 
-promo_end_date date nullable (for 0% ending)
+Remove unused hooks like incomplete parts of useGmailReceipts.ts
 
-min_payment numeric nullable
+Optimize heavy calculations in Investments.tsx (memoize properly, avoid blocking main thread)
 
-due_day integer nullable (1–31) OR due_date date nullable (support both if easy)
+Standardize mutation error handling across hooks
 
-status text enum: open | closed
+Deliverables:
 
-opened_date date nullable
+“Audit Summary” grouped by severity (High / Medium / Low)
 
-closed_date date nullable
+Implement fixes, removing dead code and cleaning up as you go
 
-notes text nullable
+3) Responsive UI overhaul (mobile + resizing + embedded window sizing)
 
-created_at timestamptz default now()
+Make the UI work cleanly on:
 
-updated_at timestamptz default now()
+Mobile (small widths)
 
-Table: debt_payments
+Tablets
 
-id uuid PK
+Desktop
 
-user_id uuid (RLS)
+Ultra-wide
 
-debt_id uuid FK -> debts.id
+Resizing the browser window / embedded frame (no layout breaks)
 
-payment_date date (required)
+Requirements (global)
 
-amount numeric (required)
+Flexible layouts: proper wrapping, no fixed widths that break
 
-category text enum: normal | extra | fee | refund | adjustment
+No horizontal scrolling on mobile unless inside a deliberate scroll container
 
-principal_amount numeric nullable
+Tap targets are finger-friendly
 
-interest_amount numeric nullable
+Forms/modals work on small screens (scrollable modal body, sticky actions if helpful)
 
-fee_amount numeric nullable
+Navigation adapts to small screens (collapse/drawer/hamburger)
 
-notes text nullable
+Standardize responsive breakpoints + spacing across the app
 
-created_at timestamptz
+Fix “window framing” issues: viewport changes must not break layout
 
-updated_at timestamptz
+Specific checks (your plan)
 
-Table: debt_transactions
+Navigation: verify AppSidebar collapses correctly on tablets; ensure MobileNav works
 
-Standalone transactions (manual or CSV import):
+Transactions: ensure filter sidebar collapses on mobile, table adapts
 
-id uuid PK
+Investments & Cheaper Bills: convert complex grids to stack on mobile (ex: grid-cols-1 → md:grid-cols-2 etc)
 
-user_id uuid (RLS)
+Tables (Transactions, Bills, etc.): wrap in overflow-x-auto containers OR switch to mobile card views if needed
 
-transaction_date date
+Deliverables:
 
-amount numeric
+Update styles/components so every page is responsive
 
-description text
+Any tables must be usable on mobile (scroll container or card fallback)
 
-reference text nullable
+4) Security scan + fix all security issues you find (do not skip)
 
-account_name text nullable
+Audit for and fix:
 
-created_at timestamptz
+Auth/session handling mistakes
 
-Table: debt_payment_transactions (many-to-many link)
+IDOR (insecure direct object references)
 
-id uuid PK
+Missing authorization checks on server routes
 
-user_id uuid (RLS)
+XSS risks (dangerouslySetInnerHTML, unsanitized inputs, rendering user content)
 
-payment_id uuid FK -> debt_payments.id
+CSRF concerns (if cookies/sessions used)
 
-transaction_id uuid FK -> debt_transactions.id
+Injection risks (SQL/NoSQL/template injection)
 
-created_at timestamptz
-Add unique constraint on (payment_id, transaction_id).
+Secrets handling (keys in client code, leaking env vars)
 
-Table: debt_balance_snapshots
+CORS misconfig
 
-Manual balance corrections:
+Rate limiting / abuse protection for sensitive endpoints
 
-id uuid PK
+File upload validation (type/size/path) if uploads exist
 
-user_id uuid (RLS)
+Dependency vulnerabilities: review packages and update safely
 
-debt_id uuid FK -> debts.id
+Specific items you already flagged
 
-snapshot_date date
+XSS: refactor src/components/ui/chart.tsx to avoid dangerouslySetInnerHTML OR sanitize inputs safely
 
-balance numeric
+Auth race condition: improve useAuth.tsx initial session check so it’s robust
 
-source text enum: manual | statement | import
+Edge Functions: review compare-energy-deals and any other functions for:
 
-notes text nullable
+input validation
 
-created_at timestamptz
+safe error handling (don’t leak internal errors to client)
 
-Table: debt_attachments
+Input validation: verify all form inputs (esp TransactionFormDialog) have strict Zod schemas and server-side validation where applicable
 
-File attachments for debt/payment/transaction:
+Deliverables:
 
-id uuid PK
+“Security Findings” grouped by severity (High / Medium / Low)
 
-user_id uuid (RLS)
+For each issue: where it was + what you changed to fix it
 
-owner_type text enum: debt | payment | transaction
+Add safe defaults (headers/sanitization/validation) without breaking existing flows
 
-owner_id uuid
+5) Testing + verification (must do)
 
-file_path text
+After all changes:
 
-filename text
+Run lint / typecheck / build
 
-created_at timestamptz
+Fix errors/warnings that indicate real issues
 
-Table: debt_settings
+Provide a short “How I verified” checklist (what pages/actions you tested)
 
-User prefs:
+Confirm: Deals is removed, responsive works on mobile widths, and no security regressions found
 
-id uuid PK
+6) Output format (your response must follow this)
 
-user_id uuid UNIQUE
+Audit Summary (High / Medium / Low)
 
-monthly_budget numeric nullable
+Security Findings (High / Medium / Low)
 
-preferred_strategy text enum: avalanche | snowball
+List of patches/changes you made (grouped by area: Deals removal / Responsive / Security / Cleanup)
 
-reminder_days_before integer default 3
+How I verified (short checklist)
 
-no_payment_days_threshold integer default 45
+Follow-ups you recommend (optional)
 
-created_at timestamptz
-
-updated_at timestamptz
-
-3) Security (RLS Policies)
-
-Enable RLS on all above tables.
-Policies (standard user-scoped):
-
-SELECT/INSERT/UPDATE/DELETE: auth.uid() = user_id
-
-4) UI Requirements (Modern + Simple)
-Overview Tab (Dashboard)
-
-Top summary cards:
-
-Total remaining balance (sum open debts)
-
-Total minimum payments per month
-
-Next payment due (soonest upcoming due across open debts)
-
-Estimated interest this month (if APR exists)
-
-Estimated debt-free date (projection from monthly budget or payment history)
-
-Graphs with date range filter chips: [1M] [3M] [6M] [1Y] [ALL]
-
-Total Balance Over Time (line)
-
-Balance by Debt (stacked area or multi-line)
-
-Payments per Month (bar)
-
-Interest vs Principal per Month (stacked bar: if split exists, otherwise estimate or hide)
-
-Alerts card:
-
-Payment due soon (within reminder_days_before)
-
-Payment overdue (past due and no payment logged for that month)
-
-Promo ending soon (promo_end_date within 30 days)
-
-No recent payment (no payment in last threshold days)
-
-Quick actions:
-
-Add Debt
-
-Log Payment
-
-Add Transaction / Import CSV
-
-Run Payoff Plan
-
-Debts Tab
-
-List view (cards or table) with filters:
-
-Filters: Status (open/closed), Type, Sort (highest APR, highest balance, next due)
-Each debt shows:
-
-Creditor name + type
-
-Current balance / starting balance
-
-APR (if exists)
-
-Minimum payment + due day/date (if exists)
-
-Progress bar: % paid
-Actions: View, Edit, Log Payment
-
-Debt detail panel/page:
-
-Summary fields + promo info
-
-Notes timeline + attachments
-
-Balance trend chart (this debt)
-
-Payment history table (this debt)
-
-Actions: Log payment / Add fee or adjustment / Add snapshot
-
-Payments Tab
-
-Payments list with filters:
-
-date range
-
-debt
-
-category
-
-matched / unmatched
-Each row shows:
-
-Date, amount, debt, category
-
-Split fields (if entered)
-
-Notes indicator
-
-Attachment indicator
-
-Matched status + linked transaction count
-
-Log Payment dialog:
-Required: debt, date, amount
-Optional: category, notes, principal/interest/fee split, attachments, link transactions
-
-Balance update rules:
-
-Default: subtract payment amount from current_balance
-
-If category is fee or adjustment, allow adding to balance (user chooses +/− or the category defines it)
-
-If category is refund, add back to balance unless user toggles “not applied to debt”
-
-Always allow manual correction via snapshot later
-
-Transactions Tab
-
-Transactions can be:
-
-added manually
-
-imported via CSV (simple parser + mapping step)
-
-Transaction fields:
-
-date, amount, description, reference, account_name, attachments
-
-Matching UI:
-
-Payment can link to 1+ transactions (many-to-many)
-
-Suggested matches logic:
-
-same amount (within £0.01)
-
-date within ±3 days
-
-optional keyword match against creditor name
-
-Status badges:
-
-Matched ✅ (linked)
-
-Needs review ⚠️ (suggested matches exist)
-
-Unmatched ❌ (no links)
-
-Allow manual attach/detach at any time.
-
-Reports Tab
-
-Payoff plan tool + exports.
-
-Payoff plan inputs:
-
-monthly_budget (from settings)
-
-strategy: Avalanche / Snowball
-
-Outputs:
-
-Payoff order list
-
-Estimated payoff date per debt
-
-Debt-free date
-
-Interest saved vs other strategy (if APR data exists)
-
-Monthly schedule table (month + allocation per debt)
-
-Exports:
-
-CSV export of payments + transactions (include matched status)
-
-Printable “Debt Report” view (looks good when printed/saved as PDF): summary + debt list + charts + payoff schedule + payment history
-
-5) Calculations (must be correct)
-Total Balance
-
-sum(current_balance) across open debts.
-
-Progress %
-
-(starting_balance - current_balance) / starting_balance * 100
-Guard divide-by-zero.
-
-Monthly interest estimate
-
-If APR exists:
-current_balance * (apr/100/12) summed across debts.
-
-Balance history for charts
-
-Prefer snapshots for historical points.
-If no snapshot in a range, derive best-effort from:
-starting_balance + adjustments - payments over time.
-
-Debt-free projection
-
-Use:
-
-monthly_budget if set, else average monthly payments from last 90 days.
-Apply minimum payments across all open debts and allocate extra based on selected strategy.
-If APR missing, treat as 0 for projection and show “APR missing – estimate may be low”.
-
-6) Technical Implementation (Files + Hooks + Components)
-
-Create/modify files consistent with existing code patterns.
-
-Page
-
-src/pages/DebtTracker.tsx
-Main tabs page: Overview/Debts/Payments/Transactions/Reports
-
-Hooks (CRUD)
-
-src/hooks/useDebts.ts
-
-src/hooks/useDebtPayments.ts
-
-src/hooks/useDebtTransactions.ts
-
-src/hooks/useDebtPaymentTransactions.ts
-
-src/hooks/useDebtSnapshots.ts
-
-src/hooks/useDebtSettings.ts
-
-src/hooks/useDebtAttachments.ts
-
-Use TanStack Query patterns consistent with existing app, and invalidate caches properly so UI never shows stale totals.
-
-Components
-
-src/components/debt/DebtSummaryCards.tsx
-
-src/components/debt/DebtCharts.tsx
-
-src/components/debt/DebtBalanceChart.tsx
-
-src/components/debt/DebtStackedBalanceChart.tsx
-
-src/components/debt/DebtPaymentsChart.tsx
-
-src/components/debt/DebtInterestChart.tsx
-
-src/components/debt/DebtAlertsCard.tsx
-
-src/components/debt/DebtList.tsx
-
-src/components/debt/DebtCard.tsx
-
-src/components/debt/DebtDetailPanel.tsx
-
-src/components/debt/DebtFormDialog.tsx
-
-src/components/debt/DeleteDebtDialog.tsx
-
-src/components/debt/PaymentList.tsx
-
-src/components/debt/PaymentFormDialog.tsx
-
-src/components/debt/TransactionList.tsx
-
-src/components/debt/TransactionFormDialog.tsx
-
-src/components/debt/TransactionCsvImport.tsx
-
-src/components/debt/TransactionMatcher.tsx
-
-src/components/debt/SnapshotFormDialog.tsx
-
-src/components/debt/PayoffPlanCard.tsx
-
-src/components/debt/DebtFilters.tsx
-
-Utilities
-
-src/lib/debtCalculations.ts
-(progress, interest estimate, projections, payoff schedule)
-
-src/lib/debtCsvParser.ts
-(parse CSV, basic validation, mapping)
-
-Modify
-
-src/App.tsx add route /debt-tracker
-
-src/components/layout/AppSidebar.tsx add nav item
-
-src/components/layout/MobileNav.tsx add nav item
-
-Tech notes:
-
-Charts use Recharts (same pattern as app)
-
-Forms use react-hook-form + zod validation (same pattern)
-
-Date formatting uses date-fns (same pattern)
-
-Attachments stored in Supabase storage bucket: debt-attachments
-
-7) Matching Logic (implementation requirement)
-
-Suggested matches for a payment:
-
-amount matches within £0.01
-
-date within ±3 days
-
-optional keyword match: creditor_name contained in transaction description
-
-Statuses:
-
-Matched: linked transactions exist
-
-Needs review: at least 1 suggested match exists but not linked
-
-Unmatched: no linked transactions and no suggestions
-
-8) Validation + UX polish
-
-Prevent accidental negative balances unless user confirms (allow if it’s a credit balance)
-
-Empty states on all tabs
-
-Tooltips where needed (APR, projection assumptions, snapshot priority)
-
-Fast modals, clean spacing, consistent styling
-
-All charts and totals update immediately after any CRUD action
-
-9) Implementation Order (build in this sequence)
-
-DB migrations + RLS
-
-Hooks (debts/payments/settings)
-
-Base UI (route + tabs + layout)
-
-Debts CRUD + Debts tab
-
-Payments logging + balance update rules
-
-Overview summary cards
-
-Core charts (balance trend + payments/month)
-
-Transactions CRUD + CSV import
-
-Matching UI + status logic
-
-Balance snapshots + historical preference
-
-Payoff planner + reports + exports
-
-Alerts logic + final polish
-
-10) Testing Checklist (must do)
-
-Create sample data (3–5 debts, 10+ payments, 10+ transactions, a few snapshots) and verify:
-
-Dashboard totals match sums
-
-Balances update correctly per payment categories
-
-Snapshots override history points correctly
-
-Matching suggestions appear and can be overridden
-
-Charts update after edits without refresh
-
-Alerts show correctly (due soon/overdue/promo/no recent payment)
-
-Payoff plan produces sensible payoff schedule and debt-free date
-
-CSV import/export works, printable report looks good
+Start now by scanning the repo structure and listing the highest-risk areas before making changes, then implement the work in the order above.
