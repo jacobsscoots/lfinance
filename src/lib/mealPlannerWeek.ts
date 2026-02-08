@@ -33,26 +33,34 @@ export function getShoppingWeekRange(anchorDate: Date): ShoppingWeekRange {
   // Get day of week: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   const dayOfWeek = getDay(anchor);
   
-  // Calculate days to go back to reach Sunday
-  // If it's Sunday (0), we stay at this day
-  // If it's Monday (1), we go back 1 day to get to the PREVIOUS Sunday, but we want the current cycle
-  // Actually: Sunday is start. If we're on Monday (1), we need to check if we're in the "current" cycle
-  // The cycle is Sun→Mon (9 days). So if today is Mon, we're on day 9 of the cycle that started last Sun
-  // OR we're on day 2 of a new cycle? No - the cycle ENDS on Monday, so Monday is the last day.
-  
-  // Simpler approach: find the most recent Sunday that would make today within Sun→Mon+8
-  // If today is Sunday, start = today
-  // If today is Mon-Sat, start = last Sunday
-  
   let start: Date;
   
   if (dayOfWeek === 0) {
     // It's Sunday - this is the start of a new shopping week
     start = new Date(anchor);
   } else if (dayOfWeek === 1) {
-    // It's Monday - this could be the END of the previous cycle
-    // Go back 8 days to the Sunday that started this cycle
-    start = addDays(anchor, -8);
+    // It's Monday - could be day 2 OR day 9 of a shopping week
+    // 
+    // Shopping week is 9 days: Sun(day1) Mon(day2) Tue Wed Thu Fri Sat Sun(day8) Mon(day9)
+    // 
+    // If yesterday (Sunday) makes sense as a start, use that (we're on day 2)
+    // Otherwise, go back 8 days to find the previous Sunday (we're on day 9)
+    //
+    // Decision rule: We prefer the MORE RECENT Sunday as the start.
+    // - "Day 2 Monday": Yesterday is Sunday → start = yesterday
+    // - "Day 9 Monday": Yesterday is Sunday, but that Sunday is day 8 of the PREVIOUS cycle
+    //   that started 7 days before it.
+    //
+    // The key insight: a Monday is day 2 if the previous Sunday is a "fresh" week start,
+    // or day 9 if that previous Sunday is day 8 of an earlier cycle.
+    //
+    // Since we have overlapping weeks by design (weeks share 2 days: Sun + Mon),
+    // we need to pick ONE interpretation. The most intuitive for users:
+    // Monday belongs to the week that started the PREVIOUS day (Sunday).
+    // This means Monday is always "day 2" of the current week.
+    //
+    // FIX: Start from yesterday (Sunday), making this Monday day 2.
+    start = addDays(anchor, -1);
   } else {
     // Tue-Sat: go back to the previous Sunday
     start = addDays(anchor, -dayOfWeek);
