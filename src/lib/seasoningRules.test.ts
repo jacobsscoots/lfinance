@@ -1,15 +1,19 @@
 /**
  * Seasoning Rules - Test Suite
  * 
- * Tests for the post-solve seasoning normalization and hard caps.
+ * Tests for the post-solve seasoning normalization, hard caps, and name-based detection.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
   isSeasoning,
+  isSeasoningByName,
+  shouldCapAsSeasoning,
   computeSeasoningGrams,
   normalizeSeasoningPortions,
+  validateProductNutrition,
   DEFAULT_SEASONING_MAX_GRAMS,
+  DEFAULT_SEASONING_FALLBACK_GRAMS,
 } from './seasoningRules';
 
 describe('isSeasoning', () => {
@@ -44,6 +48,52 @@ describe('isSeasoning', () => {
 
   it('returns false for empty string', () => {
     expect(isSeasoning('')).toBe(false);
+  });
+});
+
+describe('isSeasoningByName', () => {
+  it('detects seasoning keywords', () => {
+    expect(isSeasoningByName('Schwartz Paprika Seasoning')).toBe(true);
+    expect(isSeasoningByName('Cajun Spice Rub')).toBe(true);
+    expect(isSeasoningByName('Garlic Powder')).toBe(true);
+    expect(isSeasoningByName('Mixed Herbs')).toBe(true);
+  });
+
+  it('detects sauce keywords', () => {
+    expect(isSeasoningByName('Soy Sauce')).toBe(true);
+    expect(isSeasoningByName('Teriyaki Marinade')).toBe(true);
+    expect(isSeasoningByName('BBQ Sauce')).toBe(true);
+    expect(isSeasoningByName('Caesar Dressing')).toBe(true);
+  });
+
+  it('returns false for regular foods', () => {
+    expect(isSeasoningByName('Chicken Breast')).toBe(false);
+    expect(isSeasoningByName('Basmati Rice')).toBe(false);
+    expect(isSeasoningByName('Greek Yogurt')).toBe(false);
+    expect(isSeasoningByName('Mixed Berries')).toBe(false);
+  });
+
+  it('handles null/undefined', () => {
+    expect(isSeasoningByName(null)).toBe(false);
+    expect(isSeasoningByName(undefined)).toBe(false);
+  });
+});
+
+describe('shouldCapAsSeasoning', () => {
+  it('returns true for category=seasoning', () => {
+    expect(shouldCapAsSeasoning('seasoning', 'Random Name', 'other')).toBe(true);
+  });
+
+  it('returns true for foodType=sauce', () => {
+    expect(shouldCapAsSeasoning('other', 'Random Name', 'sauce')).toBe(true);
+  });
+
+  it('returns true for seasoning-like name even with category=other', () => {
+    expect(shouldCapAsSeasoning('other', 'Schwartz Paprika Seasoning', 'other')).toBe(true);
+  });
+
+  it('returns false for regular protein', () => {
+    expect(shouldCapAsSeasoning('protein', 'Chicken Breast', 'protein')).toBe(false);
   });
 });
 
@@ -179,5 +229,104 @@ describe('normalizeSeasoningPortions', () => {
     
     // Should use default of 15
     expect(result.get('s1')).toBe(DEFAULT_SEASONING_MAX_GRAMS);
+  });
+
+  it('detects seasonings by name when category is other', () => {
+    const portions = new Map([
+      ['paprika', 100],
+      ['chicken', 200],
+    ]);
+    const items = [
+      { id: 'paprika', category: 'other', maxPortionGrams: 50, name: 'Schwartz Paprika Seasoning', foodType: 'other' },
+      { id: 'chicken', category: 'protein', maxPortionGrams: 300, name: 'Chicken Breast', foodType: 'protein' },
+    ];
+    
+    const { portions: result, capped } = normalizeSeasoningPortions(portions, items, 15);
+    
+    // Paprika should be capped due to name detection
+    expect(result.get('paprika')).toBe(15);
+    expect(capped).toContain('paprika');
+    // Chicken should remain unchanged
+    expect(result.get('chicken')).toBe(200);
+  });
+
+  it('detects seasonings by foodType=sauce', () => {
+    const portions = new Map([['soy', 50]]);
+    const items = [
+      { id: 'soy', category: 'other', maxPortionGrams: 50, name: 'Soy Sauce', foodType: 'sauce' },
+    ];
+    
+    const { portions: result, capped } = normalizeSeasoningPortions(portions, items, 15);
+    
+    expect(result.get('soy')).toBe(15);
+    expect(capped).toContain('soy');
+  });
+});
+
+describe('validateProductNutrition', () => {
+  it('returns null for valid nutrition', () => {
+    const result = validateProductNutrition({
+      name: 'Chicken',
+      calories_per_100g: 165,
+      protein_per_100g: 31,
+      carbs_per_100g: 0,
+      fat_per_100g: 3.6,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('catches protein exceeding 100g per 100g', () => {
+    const result = validateProductNutrition({
+      name: 'Bad Product',
+      calories_per_100g: 165,
+      protein_per_100g: 700, // Invalid: probably entered per pack instead of per 100g
+      carbs_per_100g: 0,
+      fat_per_100g: 3.6,
+    });
+    expect(result).toContain('protein_per_100g');
+    expect(result).toContain('outside valid range');
+  });
+
+  it('catches total macros exceeding 100g', () => {
+    const result = validateProductNutrition({
+      name: 'Overpacked Product',
+      calories_per_100g: 400,
+      protein_per_100g: 50,
+      carbs_per_100g: 40,
+      fat_per_100g: 20, // Total = 110g > 100g
+    });
+    expect(result).toContain('total macros');
+    expect(result).toContain('exceed');
+  });
+
+  it('catches unrealistic calories', () => {
+    const result = validateProductNutrition({
+      name: 'Super Dense Food',
+      calories_per_100g: 1000, // Too high
+      protein_per_100g: 20,
+      carbs_per_100g: 30,
+      fat_per_100g: 10,
+    });
+    expect(result).toContain('calories_per_100g');
+    expect(result).toContain('outside valid range');
+  });
+
+  it('catches negative values', () => {
+    const result = validateProductNutrition({
+      name: 'Negative Product',
+      calories_per_100g: 165,
+      protein_per_100g: -5,
+      carbs_per_100g: 10,
+      fat_per_100g: 5,
+    });
+    expect(result).toContain('protein_per_100g');
+    expect(result).toContain('outside valid range');
+  });
+});
+
+describe('DEFAULT_SEASONING_FALLBACK_GRAMS', () => {
+  it('is a sensible small value', () => {
+    expect(DEFAULT_SEASONING_FALLBACK_GRAMS).toBe(5);
+    expect(DEFAULT_SEASONING_FALLBACK_GRAMS).toBeLessThanOrEqual(DEFAULT_SEASONING_MAX_GRAMS);
   });
 });

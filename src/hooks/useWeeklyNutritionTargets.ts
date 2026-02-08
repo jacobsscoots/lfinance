@@ -104,6 +104,8 @@ export function useWeeklyNutritionTargets(weekStartDate?: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["weekly-nutrition-targets"] });
+      // Cross-invalidate meal plans so they re-render with new targets
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       toast.success("Weekly targets saved");
     },
     onError: (error) => {

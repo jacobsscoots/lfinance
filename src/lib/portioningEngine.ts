@@ -28,7 +28,13 @@ import {
   RoundingRule,
   MealType,
 } from './portioningTypes';
-import { normalizeSeasoningPortions, DEFAULT_SEASONING_MAX_GRAMS } from './seasoningRules';
+import { 
+  normalizeSeasoningPortions, 
+  DEFAULT_SEASONING_MAX_GRAMS,
+  shouldCapAsSeasoning,
+  validateProductNutrition,
+  DEFAULT_SEASONING_FALLBACK_GRAMS,
+} from './seasoningRules';
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -251,20 +257,45 @@ export function scorePlan(
 // ============================================================================
 
 /**
- * Scale seasonings based on their paired protein grams
+ * Scale seasonings based on their paired protein grams.
+ * Enhanced to handle seasonings without explicit pairing by using a default fallback.
  */
 export function scaleSeasonings(items: SolverItem[], portions: Map<string, number>): void {
+  // Find all proteins in the meal for fallback pairing
+  const proteinItems = items.filter(i => i.category === 'protein');
+  const totalProteinGrams = proteinItems.reduce(
+    (sum, p) => sum + (portions.get(p.id) ?? p.currentGrams), 
+    0
+  );
+  
   for (const item of items) {
-    if (item.category !== 'seasoning' || !item.seasoningRatePer100g || !item.pairedProteinId) {
+    if (item.category !== 'seasoning') continue;
+    
+    // If explicitly paired, use that protein
+    if (item.seasoningRatePer100g && item.pairedProteinId) {
+      const proteinGrams = portions.get(item.pairedProteinId);
+      if (proteinGrams !== undefined) {
+        const seasoningGrams = Math.round(proteinGrams * item.seasoningRatePer100g / 100);
+        const clamped = clampToConstraints(seasoningGrams, item);
+        portions.set(item.id, clamped);
+        continue;
+      }
+    }
+    
+    // If has rate but no paired ID, use total protein as basis
+    if (item.seasoningRatePer100g && !item.pairedProteinId && totalProteinGrams > 0) {
+      const seasoningGrams = Math.round(totalProteinGrams * item.seasoningRatePer100g / 100);
+      const clamped = clampToConstraints(seasoningGrams, item);
+      portions.set(item.id, clamped);
       continue;
     }
     
-    const proteinGrams = portions.get(item.pairedProteinId);
-    if (proteinGrams === undefined) continue;
-    
-    const seasoningGrams = Math.round(proteinGrams * item.seasoningRatePer100g / 100);
-    const clamped = clampToConstraints(seasoningGrams, item);
-    portions.set(item.id, clamped);
+    // No pairing info: use default fallback grams (already clamped in init)
+    // Just ensure it doesn't exceed hard cap
+    const current = portions.get(item.id) ?? item.currentGrams;
+    if (current > DEFAULT_SEASONING_MAX_GRAMS) {
+      portions.set(item.id, DEFAULT_SEASONING_MAX_GRAMS);
+    }
   }
 }
 
@@ -572,9 +603,18 @@ export function solve(
     const best = candidates[0];
     
     // Post-solve: enforce seasoning hard caps (isolated patch)
+    // Enhanced: pass item name and foodType for fallback detection
+    const itemsWithMeta = items.map(item => ({
+      id: item.id,
+      category: item.category,
+      maxPortionGrams: item.maxPortionGrams,
+      name: item.name,
+      foodType: item.category === 'seasoning' ? 'seasoning' : undefined,
+    }));
+    
     const { portions: normalizedPortions, capped } = normalizeSeasoningPortions(
       best.portions,
-      items,
+      itemsWithMeta,
       DEFAULT_SEASONING_MAX_GRAMS
     );
     
@@ -654,7 +694,14 @@ export function productToSolverItem(
     other: 'other',
   };
   
-  const category = categoryMap[product.food_type ?? 'other'] ?? 'other';
+  // Check for seasoning by name if food_type is 'other' or missing
+  const foodType = product.food_type ?? 'other';
+  let category = categoryMap[foodType] ?? 'other';
+  
+  // Fallback: detect seasonings by name patterns if categorized as 'other'
+  if (category === 'other' && shouldCapAsSeasoning('other', product.name, foodType)) {
+    category = 'seasoning';
+  }
   
   // Default portion constraints based on category
   const defaultConstraints: Record<string, { min: number; max: number }> = {
@@ -671,6 +718,12 @@ export function productToSolverItem(
   
   const defaults = defaultConstraints[category] ?? defaultConstraints.other;
   
+  // For seasonings, use sensible initial grams if not specified
+  let effectiveInitialGrams = initialGrams;
+  if (category === 'seasoning' && initialGrams === 0) {
+    effectiveInitialGrams = DEFAULT_SEASONING_FALLBACK_GRAMS;
+  }
+  
   return {
     id: product.id,
     name: product.name,
@@ -684,7 +737,7 @@ export function productToSolverItem(
     },
     editableMode: (product.editable_mode as SolverItem['editableMode']) ?? 'FREE',
     minPortionGrams: product.min_portion_grams ?? defaults.min,
-    maxPortionGrams: product.max_portion_grams ?? defaults.max,
+    maxPortionGrams: Math.min(product.max_portion_grams ?? defaults.max, category === 'seasoning' ? DEFAULT_SEASONING_MAX_GRAMS : 9999),
     portionStepGrams: product.portion_step_grams ?? 1,
     roundingRule: (product.rounding_rule as RoundingRule) ?? 'nearest_1g',
     unitType: (product.default_unit_type as SolverItem['unitType']) ?? 'grams',
@@ -692,7 +745,7 @@ export function productToSolverItem(
     eatenFactor: product.eaten_factor ?? 1,
     seasoningRatePer100g: product.seasoning_rate_per_100g ?? null,
     pairedProteinId: pairedProteinId ?? null,
-    currentGrams: product.fixed_portion_grams ?? initialGrams,
+    currentGrams: product.fixed_portion_grams ?? effectiveInitialGrams,
     countMacros: category !== 'seasoning',
   };
 }

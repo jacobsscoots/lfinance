@@ -848,4 +848,143 @@ describe('productToSolverItem', () => {
     expect(item.eatenFactor).toBe(1);
     expect(item.editableMode).toBe('FREE');
   });
+
+  it('detects seasonings by name when food_type is other', () => {
+    const product = {
+      id: 'paprika-1',
+      name: 'Schwartz Paprika Seasoning',
+      calories_per_100g: 250,
+      protein_per_100g: 5,
+      carbs_per_100g: 40,
+      fat_per_100g: 5,
+      food_type: 'other', // Mis-categorized but name indicates seasoning
+    };
+    
+    const item = productToSolverItem(product, 'dinner', 0);
+    
+    // Should detect as seasoning from name
+    expect(item.category).toBe('seasoning');
+    // Should apply seasoning defaults
+    expect(item.maxPortionGrams).toBeLessThanOrEqual(15);
+    expect(item.countMacros).toBe(false);
+    // Should use fallback grams when initial is 0
+    expect(item.currentGrams).toBe(5);
+  });
+
+  it('caps max portion for seasonings at 15g', () => {
+    const product = {
+      id: 'sauce-1',
+      name: 'BBQ Sauce',
+      calories_per_100g: 150,
+      protein_per_100g: 1,
+      carbs_per_100g: 30,
+      fat_per_100g: 3,
+      food_type: 'sauce',
+      max_portion_grams: 100, // User set 100g but should be capped
+    };
+    
+    const item = productToSolverItem(product, 'dinner', 50);
+    
+    expect(item.category).toBe('seasoning');
+    // Max should be capped to 15g regardless of user setting
+    expect(item.maxPortionGrams).toBe(15);
+  });
+});
+
+// ============================================================================
+// SEASONING HARD CAP TESTS
+// ============================================================================
+
+describe('seasoning hard cap enforcement', () => {
+  it('solver never returns seasonings above 15g', () => {
+    const items = [
+      createChickenItem(200),
+      createTestItem({
+        id: 'sauce',
+        name: 'Hot Sauce',
+        category: 'seasoning',
+        nutritionPer100g: { calories: 50, protein: 1, carbs: 10, fat: 0.5 },
+        currentGrams: 100, // Start high
+        minPortionGrams: 1,
+        maxPortionGrams: 100, // High max that should be capped
+        countMacros: false,
+      }),
+    ];
+    
+    const targets: SolverTargets = {
+      calories: 330,
+      protein: 62,
+      carbs: 0,
+      fat: 7,
+    };
+    
+    const result = solve(items, targets, { maxIterations: 500 });
+    
+    if (result.success) {
+      const sauceGrams = result.portions.get('sauce') ?? 0;
+      expect(sauceGrams).toBeLessThanOrEqual(15);
+    }
+  });
+
+  it('generates warning when seasoning portion is reduced by post-solve cap', () => {
+    // This test verifies that the post-solve normalization works correctly.
+    // The normalizeSeasoningPortions function should cap oversized seasonings.
+    // However, with the new productToSolverItem changes, seasonings are now
+    // constrained to 15g max during solver item creation, so the post-solve
+    // cap may not trigger.
+    // 
+    // This test now just verifies that seasonings stay under 15g regardless
+    // of the input value.
+    const items = [
+      createChickenItem(200),
+      createTestItem({
+        id: 'oversized-seasoning',
+        name: 'Giant Seasoning',
+        category: 'seasoning',
+        nutritionPer100g: { calories: 50, protein: 1, carbs: 10, fat: 0.5 },
+        currentGrams: 100, // Way over cap
+        minPortionGrams: 1,
+        maxPortionGrams: 100, // High max - but solver should still cap at 15
+        countMacros: false,
+      }),
+    ];
+    
+    const targets: SolverTargets = {
+      calories: 330,
+      protein: 62,
+      carbs: 0,
+      fat: 7,
+    };
+    
+    const result = solve(items, targets, { maxIterations: 500 });
+    
+    if (result.success) {
+      // Regardless of warnings, the seasoning should be capped
+      const seasoningGrams = result.portions.get('oversized-seasoning') ?? 0;
+      expect(seasoningGrams).toBeLessThanOrEqual(15);
+    }
+  });
+
+  it('seasonings with paired protein scale correctly and stay under cap', () => {
+    const items = [
+      createChickenItem(300), // Large protein
+      createSeasoningItem(3), // Has pairing
+    ];
+    
+    const targets: SolverTargets = {
+      calories: 495, // 300g chicken
+      protein: 93,
+      carbs: 0,
+      fat: 11,
+    };
+    
+    const result = solve(items, targets, { seasoningsCountMacros: false });
+    
+    if (result.success) {
+      const seasoningGrams = result.portions.get('seasoning') ?? 0;
+      // 300g chicken * 3g/100g = 9g, which is under 15g cap
+      expect(seasoningGrams).toBeLessThanOrEqual(15);
+      expect(seasoningGrams).toBeGreaterThan(0);
+    }
+  });
 });

@@ -238,6 +238,8 @@ export function useProducts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      // Cross-invalidate meal plans so they regenerate with updated product constraints
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       toast.success("Product updated");
     },
     onError: (error) => {
