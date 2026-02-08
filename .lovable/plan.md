@@ -1,79 +1,133 @@
 
-# Fix Bank Account Deletion
+# Show Cheaper Deal Providers with Website Links
 
-## Problem Summary
-Bank accounts appear to not be deletable, but they ARE being soft-deleted correctly. The issue is that soft-deleted accounts continue to appear in the UI due to:
-1. Conflicting RLS policies on the SELECT operation
-2. Missing client-side filter for `deleted_at`
-
-## Solution Overview
-Update both the database RLS policies and the frontend query to properly exclude soft-deleted accounts from view while preserving the historical relationship with bills.
+## Overview
+Enhance the scan results to display which providers are offering cheaper deals, along with clickable links to their websites. This involves:
+1. Adding a `website_url` field to store provider links
+2. Updating the edge function to include provider URLs
+3. Creating a new UI component to display comparison results
+4. Adding a collapsible section on each ServiceCard to show cheaper alternatives
 
 ---
 
 ## Implementation Steps
 
-### Step 1: Clean Up RLS Policies
-Remove the permissive `Users can view own accounts` policy that's overriding the active-only policy.
+### Step 1: Add Database Column
+Add a `website_url` column to the `comparison_results` table to store provider sign-up links.
 
 ```sql
--- Drop the overly permissive policy
-DROP POLICY IF EXISTS "Users can view own accounts" ON bank_accounts;
-
--- Keep only the policy that filters soft-deleted records
--- "Users can view their own active accounts" already exists with:
--- USING (auth.uid() = user_id AND deleted_at IS NULL)
+ALTER TABLE comparison_results 
+ADD COLUMN website_url TEXT;
 ```
 
-### Step 2: Update Frontend Query (Safety Net)
-Add a client-side filter as a defensive measure in `useAccounts.ts`:
+### Step 2: Update Edge Function with Provider URLs
+Update `compare-energy-deals/index.ts` to include website URLs for each provider in the market data:
 
-```typescript
-// In the query function
-const { data, error } = await supabase
-  .from('bank_accounts')
-  .select('*')
-  .is('deleted_at', null)  // Explicitly filter soft-deleted
-  .order('is_primary', { ascending: false })
-  .order('name');
-```
+**Provider URL Mappings:**
+- Energy: Octopus, British Gas, EDF, E.ON, Scottish Power, Ovo, Shell, Utility Warehouse
+- Broadband: BT, Sky, Virgin Media, Vodafone, Plusnet, TalkTalk, NOW Broadband, Shell Energy
+- Mobile: Three, Voxi, GiffGaff, EE, O2, Vodafone, iD Mobile, Smarty, Lebara
 
-### Step 3: Preserve Bills Relationship
-The existing architecture already handles this correctly:
-- Bills table has `account_id` as nullable
-- Bills remain intact when accounts are soft-deleted
-- Bills can display historical account names through the join
+The function will populate the `website_url` field when storing results.
 
-No changes needed for bills - the soft-delete strategy preserves the relationship.
+### Step 3: Update Types and Hooks
+Update `useComparisonResults.ts` to include the new `website_url` field in the `ComparisonResult` interface.
 
-### Step 4: Update Bill Form Dialog (Optional Enhancement)
-Ensure the account dropdown in bill forms only shows active accounts by filtering the accounts list (this should already work once Step 1/2 are complete).
+### Step 4: Create Comparison Results Panel Component
+Create a new `ScanResultsPanel.tsx` component that displays:
+- List of cheaper providers found
+- Provider name, plan, monthly cost, annual savings
+- "View Deal" button that opens the provider website in a new tab
+- Sorted by savings (highest first)
+
+### Step 5: Update ServiceCard to Show Scan Results
+Enhance `ServiceCard.tsx` to:
+- Show an expandable section when scan results exist
+- Display the top 3-5 cheaper alternatives
+- Include external link icons with "View Deal" buttons
+- Use a collapsible/accordion pattern for clean UI
+
+### Step 6: Update LastScanCard for Quick Access
+Enhance `LastScanCard.tsx` to show the best offer found with a direct link when recommendation is "switch".
 
 ---
 
 ## Technical Details
 
-### Why Soft Delete?
-The project uses soft delete (`deleted_at` timestamp) instead of hard delete to:
-- Preserve historical data integrity
-- Keep bills linked to deleted accounts for reporting
-- Allow potential account recovery
+### Provider Website URLs (Examples)
+```typescript
+const PROVIDER_URLS = {
+  // Energy
+  'Octopus Energy': 'https://octopus.energy/dashboard/new-quote/',
+  'British Gas': 'https://www.britishgas.co.uk/energy.html',
+  'EDF': 'https://www.edfenergy.com/gas-electricity',
+  'E.ON Next': 'https://www.eonnext.com/',
+  
+  // Broadband
+  'BT': 'https://www.bt.com/broadband/',
+  'Sky': 'https://www.sky.com/broadband/',
+  'Virgin Media': 'https://www.virginmedia.com/broadband/',
+  
+  // Mobile
+  'Three': 'https://www.three.co.uk/plans/',
+  'Voxi': 'https://www.voxi.co.uk/plans/',
+  'GiffGaff': 'https://www.giffgaff.com/sim-only-plans/',
+};
+```
 
-### RLS Policy Conflict Explained
-PostgreSQL RLS combines permissive policies with OR logic:
-- Policy A: `user_id = auth.uid()` (all user accounts)
-- Policy B: `user_id = auth.uid() AND deleted_at IS NULL` (active only)
+### New ScanResultsPanel Props
+```typescript
+interface ScanResultsPanelProps {
+  results: ComparisonResult[];
+  serviceType: string;
+  isLoading?: boolean;
+}
+```
 
-Result: A OR B = A (the broader policy wins)
-
-### Files to Modify
-1. `supabase/migrations/` - New migration to drop conflicting RLS policy
-2. `src/hooks/useAccounts.ts` - Add `.is('deleted_at', null)` filter
+### ServiceCard Enhancement
+```tsx
+// Add collapsible section showing alternatives
+{hasResults && (
+  <Collapsible>
+    <CollapsibleTrigger>
+      <span>View {results.length} cheaper alternatives</span>
+    </CollapsibleTrigger>
+    <CollapsibleContent>
+      {results.map(result => (
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{result.provider}</p>
+            <p className="text-sm text-muted-foreground">{result.plan_name}</p>
+            <p className="text-success">Save £{savings}/year</p>
+          </div>
+          <Button asChild size="sm">
+            <a href={result.website_url} target="_blank" rel="noopener noreferrer">
+              View Deal <ExternalLink className="h-3 w-3 ml-1" />
+            </a>
+          </Button>
+        </div>
+      ))}
+    </CollapsibleContent>
+  </Collapsible>
+)}
+```
 
 ---
 
-## Verification Steps
-1. Delete an account from the Accounts page
-2. Confirm the account disappears from the UI
-3. Verify bills linked to that account still display correctly
-4. Confirm the historical account name is still visible on those bills
+## Files to Modify
+1. `supabase/migrations/` - New migration to add `website_url` column
+2. `supabase/functions/compare-energy-deals/index.ts` - Add provider URL mappings
+3. `src/hooks/useComparisonResults.ts` - Add `website_url` to interface
+4. `src/components/cheaper-bills/ScanResultsPanel.tsx` - **New component**
+5. `src/components/cheaper-bills/ServiceCard.tsx` - Add collapsible results section
+6. `src/components/cheaper-bills/LastScanCard.tsx` - Add best offer link
+
+---
+
+## User Experience
+After scanning:
+1. The ServiceCard shows "View 5 cheaper alternatives" link
+2. Expanding reveals a list of providers sorted by savings
+3. Each row shows: Provider name, plan, monthly cost, annual savings, "View Deal" button
+4. Clicking "View Deal" opens the provider's website in a new tab
+5. The LastScanCard also shows a quick link to the best offer when recommendation is "switch"
