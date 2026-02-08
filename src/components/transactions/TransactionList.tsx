@@ -15,10 +15,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { MoreVertical, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Receipt, Paperclip, Upload, Eye } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Receipt, Paperclip, Upload, Eye, Link } from "lucide-react";
 import { Transaction } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
 import { ReceiptPreviewDialog } from "./ReceiptPreviewDialog";
+import { LinkTransactionDialog } from "./LinkTransactionDialog";
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -74,10 +75,12 @@ interface TransactionRowProps {
 
 function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) {
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   
   const amount = Number(transaction.amount);
   const isIncome = transaction.type === "income";
   const hasReceipt = !!transaction.receipt_path;
+  const hasLinks = !!(transaction.bill || transaction.investment);
 
   return (
     <>
@@ -122,6 +125,12 @@ function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) 
                   {transaction.bill.name}
                 </Badge>
               )}
+              {transaction.investment && (
+                <Badge variant="outline" className="text-xs py-0 gap-1 border-primary/50">
+                  <Link className="h-3 w-3" />
+                  {transaction.investment.name}
+                </Badge>
+              )}
               {transaction.category && (
                 <Badge
                   variant="outline"
@@ -157,6 +166,10 @@ function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) 
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setLinkDialogOpen(true)}>
+                <Link className="h-4 w-4 mr-2" />
+                Link to...
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setReceiptDialogOpen(true)}>
                 {hasReceipt ? (
                   <>
@@ -193,6 +206,12 @@ function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) 
         transactionId={transaction.id}
         transactionDescription={transaction.description}
         receiptPath={transaction.receipt_path}
+      />
+
+      <LinkTransactionDialog
+        open={linkDialogOpen}
+        onOpenChange={setLinkDialogOpen}
+        transaction={transaction}
       />
     </>
   );
