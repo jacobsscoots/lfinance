@@ -7,7 +7,11 @@ import { addDays, parse } from "date-fns";
 import { Product, ProductType } from "./useProducts";
 import { NutritionSettings } from "./useNutritionSettings";
 import { getDailyTargets, WeeklyTargetsOverride } from "@/lib/dailyTargets";
-import { calculateMealPortions, PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
+// Legacy import for fallback (deprecated)
+import { PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
+// V2 portioning engine (new)
+import { solve, productToSolverItem } from "@/lib/portioningEngine";
+import { SolverItem, SolverTargets, DEFAULT_SOLVER_OPTIONS, MealType as SolverMealType, SolverFailed } from "@/lib/portioningTypes";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type MealStatus = "planned" | "skipped" | "eating_out";
@@ -56,7 +60,7 @@ export interface MealPlanItemFormData {
   is_locked?: boolean;
 }
 
-import { getShoppingWeekRange, getShoppingWeekDateStrings, ShoppingWeekRange } from "@/lib/mealPlannerWeek";
+import { getShoppingWeekRange, getShoppingWeekDateStrings } from "@/lib/mealPlannerWeek";
 
 export function useMealPlanItems(weekStart: Date) {
   const { user } = useAuth();
@@ -450,7 +454,70 @@ export function useMealPlanItems(weekStart: Date) {
   // Track last calculation time
   const [lastCalculated, setLastCalculated] = useState<Date | null>(null);
 
-  // Generate portions for a single day (best-effort compute first; only write to DB on success)
+  // V2: Convert meal plan items to solver items
+  const convertToSolverItems = useCallback((items: MealPlanItem[]): SolverItem[] => {
+    return items.map(item => {
+      const product = item.product;
+      if (!product) {
+        // Fallback for items without product data
+        return {
+          id: item.id,
+          name: 'Unknown',
+          category: 'other' as const,
+          mealType: item.meal_type as SolverMealType,
+          nutritionPer100g: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+          editableMode: item.is_locked ? 'LOCKED' : 'FREE',
+          minPortionGrams: 0,
+          maxPortionGrams: 500,
+          portionStepGrams: 1,
+          roundingRule: 'nearest_1g' as const,
+          unitType: 'grams' as const,
+          unitSizeGrams: null,
+          eatenFactor: 1,
+          seasoningRatePer100g: null,
+          pairedProteinId: null,
+          currentGrams: item.quantity_grams,
+          countMacros: true,
+        };
+      }
+      
+      // Determine editable mode
+      let editableMode: 'LOCKED' | 'BOUNDED' | 'FREE' = 'FREE';
+      if (item.is_locked) {
+        editableMode = 'LOCKED';
+      } else if (product.product_type === 'fixed') {
+        editableMode = 'LOCKED';
+      } else if (product.editable_mode) {
+        editableMode = product.editable_mode as 'LOCKED' | 'BOUNDED' | 'FREE';
+      }
+      
+      return productToSolverItem(
+        {
+          id: item.id, // Use item.id, not product.id, for portion mapping
+          name: product.name,
+          calories_per_100g: product.calories_per_100g,
+          protein_per_100g: product.protein_per_100g,
+          carbs_per_100g: product.carbs_per_100g,
+          fat_per_100g: product.fat_per_100g,
+          food_type: product.food_type,
+          editable_mode: editableMode,
+          min_portion_grams: product.min_portion_grams,
+          max_portion_grams: product.max_portion_grams,
+          portion_step_grams: product.portion_step_grams,
+          rounding_rule: product.rounding_rule,
+          eaten_factor: product.eaten_factor,
+          seasoning_rate_per_100g: product.seasoning_rate_per_100g,
+          default_unit_type: product.default_unit_type,
+          unit_size_g: product.unit_size_g,
+          fixed_portion_grams: product.fixed_portion_grams,
+        },
+        item.meal_type as SolverMealType,
+        item.is_locked || product.product_type === 'fixed' ? item.quantity_grams : 0
+      );
+    });
+  }, []);
+
+  // Generate portions for a single day using V2 engine
   const recalculateDay = useMutation({
     mutationFn: async ({ 
       planId,
@@ -471,30 +538,40 @@ export function useMealPlanItems(weekStart: Date) {
       const items = plan.items || [];
       if (items.length === 0) throw new Error("No items to generate");
       
-      const { calculateDayPortions } = await import("@/lib/autoPortioning");
-      
       // Parse as local date to avoid UTC-shift target mismatches.
       const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
-      // Use unified getDailyTargets for single source of truth
       const targets = getDailyTargets(dayDate, settings, weeklyOverride);
 
-      // Virtualize unlocked editable items as 0g for the solve (regen behavior),
-      // but do NOT write 0g to the DB unless the solve succeeds.
-      const virtualItems = items.map(item => ({
-        ...item,
-        quantity_grams:
-          item.is_locked || item.product?.product_type === "fixed" ? item.quantity_grams : 0,
-      }));
+      // Convert items to V2 solver items
+      const solverItems = convertToSolverItems(items);
       
-      const result = calculateDayPortions(virtualItems, targets, {
-        ...portioningSettings,
-        rounding: 0,
-        tolerancePercent: 0,
-      }, plan.meal_date);
+      // V2 solver targets
+      const solverTargets: SolverTargets = {
+        calories: targets.calories,
+        protein: targets.protein,
+        carbs: targets.carbs,
+        fat: targets.fat,
+      };
+      
+      // Run V2 solver
+      const result = solve(solverItems, solverTargets, {
+        ...DEFAULT_SOLVER_OPTIONS,
+        seasoningsCountMacros: false,
+        debugMode: false,
+      });
 
       if (!result.success) {
-        // Don’t apply a bad solve—return warnings so the UI can show the reason.
-        return { success: false as const, updated: 0, warnings: result.warnings };
+        const failedResult = result as SolverFailed;
+        const failure = failedResult.failure;
+        const blockerDetails = failure.blockers.slice(0, 2).map(b => b.detail || `${b.itemName}: ${b.constraint}`);
+        return { 
+          success: false as const, 
+          updated: 0, 
+          warnings: [
+            `${failure.reason.replace(/_/g, ' ')}: ${blockerDetails.join('; ')}`,
+            `Closest: ${failure.closestTotals.calories}kcal, ${failure.closestTotals.protein}g P`,
+          ]
+        };
       }
       
       let updated = 0;
@@ -502,8 +579,7 @@ export function useMealPlanItems(weekStart: Date) {
         if (item.is_locked) continue;
         if (item.product?.product_type === "fixed") continue;
         
-        const mealResult = result.mealResults.get(item.meal_type as MealType);
-        const newGrams = mealResult?.items.get(item.id);
+        const newGrams = result.portions.get(item.id);
         
         if (newGrams !== undefined) {
           const { error } = await supabase
@@ -534,7 +610,6 @@ export function useMealPlanItems(weekStart: Date) {
     },
   });
 
-
   const recalculateAll = useMutation({
     mutationFn: async ({ 
       settings, 
@@ -547,13 +622,11 @@ export function useMealPlanItems(weekStart: Date) {
     }) => {
       if (!user) throw new Error("Not authenticated");
       
-      const { calculateDayPortions } = await import("@/lib/autoPortioning");
-      
       let totalUpdated = 0;
       let successCount = 0;
-      let nearMatchCount = 0;
+      let failedCount = 0;
       let attemptedDays = 0;
-      const dayWarnings: Array<{ date: string; warnings: string[]; nearMatch: boolean }> = [];
+      const dayWarnings: Array<{ date: string; warnings: string[]; failed: boolean }> = [];
 
       for (const plan of mealPlans) {
         const items = plan.items || [];
@@ -563,49 +636,41 @@ export function useMealPlanItems(weekStart: Date) {
         const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
         // Use unified getDailyTargets for single source of truth
         const targets = getDailyTargets(dayDate, settings, weeklyOverride);
-
-        // Virtualize unlocked editable items as 0g for the solve (regen behavior)
-        // DO NOT write 0g to DB before we know if the solve succeeds
-        const virtualItems = items.map(i => ({
-          ...i,
-          quantity_grams: i.is_locked || i.product?.product_type === "fixed" ? i.quantity_grams : 0,
-        }));
-
-        // Recalculate with fresh zeroed values
-        const result = calculateDayPortions(
-          virtualItems,
-          targets,
-          {
-            ...portioningSettings,
-            rounding: 0,
-            tolerancePercent: 0,
-          },
-          plan.meal_date
-        );
-
-        // Debug: Log solver outcome
-        console.log(`[Solver] ${plan.meal_date}: success=${result.success}, nearMatch=${result.nearMatch}`, {
-          warnings: result.warnings,
-          dayTotals: result.dayTotals,
-          targets,
+        
+        // Convert to V2 solver items
+        const solverItems = convertToSolverItems(items);
+        
+        // V2 solver targets
+        const solverTargets: SolverTargets = {
+          calories: targets.calories,
+          protein: targets.protein,
+          carbs: targets.carbs,
+          fat: targets.fat,
+        };
+        
+        // Run V2 solver
+        const result = solve(solverItems, solverTargets, {
+          ...DEFAULT_SOLVER_OPTIONS,
+          seasoningsCountMacros: false,
+          debugMode: false,
         });
 
-        // Persist if solve succeeded OR is a near-match
-        if (result.success || result.nearMatch) {
-          if (result.success) {
-            successCount++;
-          } else {
-            nearMatchCount++;
-          }
-
+        if (result.success) {
+          // Debug: Log solver outcome
+          console.log(`[Solver V2] ${plan.meal_date}: success=true`, {
+            totals: result.totals,
+            targets: solverTargets,
+            iterations: result.iterationsRun,
+          });
+          
+          successCount++;
+          
           // Persist portions to DB
           for (const item of items) {
             if (item.is_locked) continue;
-            if (item.product?.product_type === "fixed") continue;
+            if (item.product?.product_type === 'fixed') continue;
 
-            const mealResult = result.mealResults.get(item.meal_type);
-            const newGrams = mealResult?.items.get(item.id);
-
+            const newGrams = result.portions.get(item.id);
             if (newGrams !== undefined) {
               const { error } = await supabase
                 .from("meal_plan_items")
@@ -617,32 +682,34 @@ export function useMealPlanItems(weekStart: Date) {
               totalUpdated++;
             }
           }
-          
-          // Track near-match warnings for display
-          if (result.nearMatch && result.warnings && result.warnings.length > 0) {
-            dayWarnings.push({
-              date: plan.meal_date,
-              warnings: result.warnings,
-              nearMatch: true,
-            });
-          }
         } else {
+          // Debug: Log solver outcome - cast to SolverFailed for type safety
+          const failedResult = result as SolverFailed;
+          const failure = failedResult.failure;
+          console.log(`[Solver V2] ${plan.meal_date}: success=false`, {
+            totals: failure.closestTotals,
+            targets: solverTargets,
+            iterations: failure.iterationsRun,
+            reason: failure.reason,
+          });
+          
+          failedCount++;
+          const blockerDetails = failure.blockers.slice(0, 2).map(b => b.detail || `${b.itemName}: ${b.constraint}`);
           dayWarnings.push({
             date: plan.meal_date,
-            warnings:
-              result.warnings && result.warnings.length > 0
-                ? result.warnings
-                : ["Targets not solvable with current fixed/locked items and constraints."],
-            nearMatch: false,
+            warnings: [
+              `${failure.reason.replace(/_/g, ' ')}: ${blockerDetails.join('; ')}`,
+              `Closest: ${failure.closestTotals.calories}kcal, ${failure.closestTotals.protein}g P`,
+            ],
+            failed: true,
           });
-          // If solve failed, do NOT write anything to DB - preserve existing grams
         }
       }
 
       return { 
         updated: totalUpdated, 
         daysSucceeded: successCount, 
-        daysNearMatch: nearMatchCount,
+        daysFailed: failedCount,
         totalDays: attemptedDays, 
         dayWarnings 
       };
@@ -651,38 +718,26 @@ export function useMealPlanItems(weekStart: Date) {
       queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
       setLastCalculated(new Date());
 
-      const firstFail = result.dayWarnings?.find(w => !w.nearMatch);
-      const firstNearMatch = result.dayWarnings?.find(w => w.nearMatch);
-      const failureHint = firstFail ? ` First failure (${firstFail.date}): ${firstFail.warnings[0]}` : "";
-      const nearMatchHint = firstNearMatch ? ` Near-match on ${firstNearMatch.date}: ${firstNearMatch.warnings[0]}` : "";
-      
-      const totalSolved = result.daysSucceeded + result.daysNearMatch;
-      const unsolved = result.totalDays - totalSolved;
+      const firstFail = result.dayWarnings?.[0];
+      const failureHint = firstFail ? ` ${firstFail.date}: ${firstFail.warnings[0]}` : "";
 
       // Provide clear feedback based on success rate
       if (result.totalDays === 0) {
         toast.info("No meal plans with items to generate.");
-      } else if (unsolved === 0 && result.daysNearMatch === 0) {
-        // All perfect solves
+      } else if (result.daysFailed === 0) {
+        // All solved perfectly
         toast.success(`Generated portions for all ${result.daysSucceeded} days (${result.updated} items)`);
-      } else if (unsolved === 0 && result.daysNearMatch > 0) {
-        // All solved, some near-matches
-        toast.success(
-          `Generated portions for all ${result.totalDays} days (${result.updated} items). ` +
-          `${result.daysNearMatch} day(s) have near-match warnings.` +
-          nearMatchHint
-        );
-      } else if (totalSolved > 0) {
-        // Some solved/near-match, some failed
+      } else if (result.daysSucceeded > 0) {
+        // Some solved, some failed
         toast.warning(
-          `Generated portions for ${totalSolved}/${result.totalDays} days (${result.updated} items). ` +
-          `${unsolved} day(s) could not be solved.` +
+          `Generated ${result.daysSucceeded}/${result.totalDays} days (${result.updated} items). ` +
+          `${result.daysFailed} day(s) could not be solved.` +
           failureHint
         );
       } else {
         // All failed
         toast.error(
-          `No days could be solved. Your macro targets may not be achievable with the selected items and constraints.` +
+          `No days could be solved. Your macro targets may not be achievable with the selected items.` +
           failureHint
         );
       }
