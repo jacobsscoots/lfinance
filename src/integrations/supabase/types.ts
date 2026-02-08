@@ -820,6 +820,87 @@ export type Database = {
           },
         ]
       }
+      energy_profiles: {
+        Row: {
+          created_at: string
+          dishwasher_runs_per_week: number | null
+          dryer_runs_per_week: number | null
+          eco_mode_dishwasher: boolean | null
+          eco_mode_washer: boolean | null
+          has_ev: boolean | null
+          has_solar: boolean | null
+          heating_type: string | null
+          home_type: string | null
+          id: string
+          low_temp_washing: boolean | null
+          notes: string | null
+          occupants: number | null
+          peak_time_avoidance: boolean | null
+          shower_minutes_avg: number | null
+          smart_meter: boolean | null
+          smart_thermostat: boolean | null
+          tariff_type: string | null
+          thermostat_temp_c: number | null
+          tumble_dryer_rare: boolean | null
+          updated_at: string
+          user_id: string
+          washer_runs_per_week: number | null
+          work_from_home_days: number | null
+        }
+        Insert: {
+          created_at?: string
+          dishwasher_runs_per_week?: number | null
+          dryer_runs_per_week?: number | null
+          eco_mode_dishwasher?: boolean | null
+          eco_mode_washer?: boolean | null
+          has_ev?: boolean | null
+          has_solar?: boolean | null
+          heating_type?: string | null
+          home_type?: string | null
+          id?: string
+          low_temp_washing?: boolean | null
+          notes?: string | null
+          occupants?: number | null
+          peak_time_avoidance?: boolean | null
+          shower_minutes_avg?: number | null
+          smart_meter?: boolean | null
+          smart_thermostat?: boolean | null
+          tariff_type?: string | null
+          thermostat_temp_c?: number | null
+          tumble_dryer_rare?: boolean | null
+          updated_at?: string
+          user_id: string
+          washer_runs_per_week?: number | null
+          work_from_home_days?: number | null
+        }
+        Update: {
+          created_at?: string
+          dishwasher_runs_per_week?: number | null
+          dryer_runs_per_week?: number | null
+          eco_mode_dishwasher?: boolean | null
+          eco_mode_washer?: boolean | null
+          has_ev?: boolean | null
+          has_solar?: boolean | null
+          heating_type?: string | null
+          home_type?: string | null
+          id?: string
+          low_temp_washing?: boolean | null
+          notes?: string | null
+          occupants?: number | null
+          peak_time_avoidance?: boolean | null
+          shower_minutes_avg?: number | null
+          smart_meter?: boolean | null
+          smart_thermostat?: boolean | null
+          tariff_type?: string | null
+          thermostat_temp_c?: number | null
+          tumble_dryer_rare?: boolean | null
+          updated_at?: string
+          user_id?: string
+          washer_runs_per_week?: number | null
+          work_from_home_days?: number | null
+        }
+        Relationships: []
+      }
       energy_readings: {
         Row: {
           consumption_kwh: number | null
@@ -849,6 +930,30 @@ export type Database = {
           id?: string
           reading_date?: string
           source?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      energy_recommendation_feedback: {
+        Row: {
+          created_at: string
+          id: string
+          recommendation_key: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recommendation_key: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recommendation_key?: string
+          status?: string
           user_id?: string
         }
         Relationships: []
