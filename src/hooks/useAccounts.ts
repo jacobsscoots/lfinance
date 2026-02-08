@@ -125,10 +125,10 @@ export function useAccounts() {
 
   const deleteAccount = useMutation({
     mutationFn: async (id: string) => {
-      // Soft delete - set deleted_at timestamp
+      // Hard delete - cascades to transactions and bills via FK
       const { error } = await supabase
         .from('bank_accounts')
-        .update({ deleted_at: new Date().toISOString() })
+        .delete()
         .eq('id', id);
 
       if (error) throw error;
