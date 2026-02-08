@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,20 +32,29 @@ export default function Accounts() {
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
   const [showHiddenAccounts, setShowHiddenAccounts] = useState(false);
+  
+  // Ref to prevent double-processing of OAuth callback (React StrictMode, browser quirks)
+  const callbackProcessedRef = useRef(false);
 
   // Create a map of connection_id -> status for quick lookup
   const connectionStatusMap = new Map(
     connections.map(conn => [conn.id, conn.status])
   );
 
-  // Handle TrueLayer OAuth callback
+  // Handle TrueLayer OAuth callback - with double-processing prevention
   useEffect(() => {
     const isCallback = searchParams.get('truelayer_callback');
     const code = searchParams.get('code');
     const connectionId = localStorage.getItem('pending_bank_connection_id');
 
-    if (isCallback && code && connectionId && !isProcessingCallback) {
+    // Prevent double-processing: check ref, state, and that we have all required params
+    if (isCallback && code && connectionId && !isProcessingCallback && !callbackProcessedRef.current) {
+      // Mark as processed immediately to prevent re-entry
+      callbackProcessedRef.current = true;
       setIsProcessingCallback(true);
+      
+      // Clear localStorage immediately to prevent re-processing on re-renders
+      localStorage.removeItem('pending_bank_connection_id');
       
       // Clear URL params
       setSearchParams({});
