@@ -21,6 +21,8 @@ import {
   Shield,
   Tv,
   TrendingDown,
+  Search,
+  Loader2,
 } from "lucide-react";
 import { TrackedService } from "@/hooks/useTrackedServices";
 import { daysUntilContractEnd, generateIcsContent } from "@/lib/billsCalculations";
@@ -30,6 +32,8 @@ interface ServiceCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onToggleTracking: (enabled: boolean) => void;
+  onScan?: () => void;
+  isScanning?: boolean;
 }
 
 const serviceIcons: Record<string, any> = {
@@ -40,7 +44,7 @@ const serviceIcons: Record<string, any> = {
   streaming: Tv,
 };
 
-export function ServiceCard({ service, onEdit, onDelete, onToggleTracking }: ServiceCardProps) {
+export function ServiceCard({ service, onEdit, onDelete, onToggleTracking, onScan, isScanning }: ServiceCardProps) {
   const Icon = serviceIcons[service.service_type] || Zap;
   const daysLeft = daysUntilContractEnd(service.contract_end_date);
   const isEnding = daysLeft !== null && daysLeft <= 30;
@@ -94,6 +98,16 @@ export function ServiceCard({ service, onEdit, onDelete, onToggleTracking }: Ser
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {onScan && (
+                <DropdownMenuItem onClick={onScan} disabled={isScanning}>
+                  {isScanning ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4 mr-2" />
+                  )}
+                  {isScanning ? "Scanning..." : "Scan for Deals"}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={onEdit}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Edit
