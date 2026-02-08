@@ -1195,6 +1195,39 @@ export type Database = {
           },
         ]
       }
+      meal_templates: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          meal_type: string
+          name: string
+          slot_definitions: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          meal_type: string
+          name: string
+          slot_definitions?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          meal_type?: string
+          name?: string
+          slot_definitions?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payslips: {
         Row: {
           created_at: string
@@ -1276,6 +1309,9 @@ export type Database = {
           carbs_per_100g: number
           created_at: string
           default_discount_type: string | null
+          default_unit_type: string
+          eaten_factor: number
+          editable_mode: string
           energy_kj_per_100g: number | null
           fat_per_100g: number
           fibre_per_100g: number | null
@@ -1285,12 +1321,15 @@ export type Database = {
           id: string
           ignore_macros: boolean
           image_url: string | null
+          max_portion_grams: number | null
           meal_eligibility: string[] | null
+          min_portion_grams: number | null
           name: string
           offer_label: string | null
           offer_price: number | null
           pack_size_grams: number | null
           packaging_weight_grams: number | null
+          portion_step_grams: number
           price: number
           product_type: string
           protein_per_100g: number
@@ -1298,14 +1337,17 @@ export type Database = {
           quantity_on_hand: number | null
           reorder_threshold: number | null
           retailer: string | null
+          rounding_rule: string
           salt_per_100g: number | null
           saturates_per_100g: number | null
+          seasoning_rate_per_100g: number | null
           serving_basis: string
           serving_size_grams: number | null
           source_url: string | null
           storage_notes: string | null
           sugars_per_100g: number | null
           target_quantity: number | null
+          unit_size_g: number | null
           updated_at: string
           user_id: string
         }
@@ -1315,6 +1357,9 @@ export type Database = {
           carbs_per_100g?: number
           created_at?: string
           default_discount_type?: string | null
+          default_unit_type?: string
+          eaten_factor?: number
+          editable_mode?: string
           energy_kj_per_100g?: number | null
           fat_per_100g?: number
           fibre_per_100g?: number | null
@@ -1324,12 +1369,15 @@ export type Database = {
           id?: string
           ignore_macros?: boolean
           image_url?: string | null
+          max_portion_grams?: number | null
           meal_eligibility?: string[] | null
+          min_portion_grams?: number | null
           name: string
           offer_label?: string | null
           offer_price?: number | null
           pack_size_grams?: number | null
           packaging_weight_grams?: number | null
+          portion_step_grams?: number
           price?: number
           product_type?: string
           protein_per_100g?: number
@@ -1337,14 +1385,17 @@ export type Database = {
           quantity_on_hand?: number | null
           reorder_threshold?: number | null
           retailer?: string | null
+          rounding_rule?: string
           salt_per_100g?: number | null
           saturates_per_100g?: number | null
+          seasoning_rate_per_100g?: number | null
           serving_basis?: string
           serving_size_grams?: number | null
           source_url?: string | null
           storage_notes?: string | null
           sugars_per_100g?: number | null
           target_quantity?: number | null
+          unit_size_g?: number | null
           updated_at?: string
           user_id: string
         }
@@ -1354,6 +1405,9 @@ export type Database = {
           carbs_per_100g?: number
           created_at?: string
           default_discount_type?: string | null
+          default_unit_type?: string
+          eaten_factor?: number
+          editable_mode?: string
           energy_kj_per_100g?: number | null
           fat_per_100g?: number
           fibre_per_100g?: number | null
@@ -1363,12 +1417,15 @@ export type Database = {
           id?: string
           ignore_macros?: boolean
           image_url?: string | null
+          max_portion_grams?: number | null
           meal_eligibility?: string[] | null
+          min_portion_grams?: number | null
           name?: string
           offer_label?: string | null
           offer_price?: number | null
           pack_size_grams?: number | null
           packaging_weight_grams?: number | null
+          portion_step_grams?: number
           price?: number
           product_type?: string
           protein_per_100g?: number
@@ -1376,14 +1433,17 @@ export type Database = {
           quantity_on_hand?: number | null
           reorder_threshold?: number | null
           retailer?: string | null
+          rounding_rule?: string
           salt_per_100g?: number | null
           saturates_per_100g?: number | null
+          seasoning_rate_per_100g?: number | null
           serving_basis?: string
           serving_size_grams?: number | null
           source_url?: string | null
           storage_notes?: string | null
           sugars_per_100g?: number | null
           target_quantity?: number | null
+          unit_size_g?: number | null
           updated_at?: string
           user_id?: string
         }
