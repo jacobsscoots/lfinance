@@ -7,6 +7,9 @@ export type ProductType = "editable" | "fixed";
 export type ServingBasis = "per_100g" | "per_serving" | "as_sold";
 export type FoodType = "protein" | "carb" | "fat" | "veg" | "fruit" | "dairy" | "sauce" | "treat" | "other";
 export type MealEligibility = "breakfast" | "lunch" | "dinner" | "snack";
+export type EditableMode = "LOCKED" | "BOUNDED" | "FREE";
+export type RoundingRule = "nearest_1g" | "nearest_5g" | "nearest_10g" | "whole_unit_only";
+export type UnitType = "grams" | "whole_unit";
 
 export interface Product {
   id: string;
@@ -53,6 +56,16 @@ export interface Product {
   // Grocery tracking
   retailer: string | null;
   default_discount_type: string | null;
+  // Portioning engine fields (V2)
+  editable_mode: EditableMode;
+  min_portion_grams: number | null;
+  max_portion_grams: number | null;
+  portion_step_grams: number;
+  rounding_rule: RoundingRule;
+  eaten_factor: number;
+  seasoning_rate_per_100g: number | null;
+  default_unit_type: UnitType;
+  unit_size_g: number | null;
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -94,6 +107,16 @@ export interface ProductFormData {
   // Meal planning fields
   meal_eligibility?: MealEligibility[];
   food_type?: FoodType;
+  // Portioning engine fields (V2)
+  editable_mode?: EditableMode;
+  min_portion_grams?: number | null;
+  max_portion_grams?: number | null;
+  portion_step_grams?: number;
+  rounding_rule?: RoundingRule;
+  eaten_factor?: number;
+  seasoning_rate_per_100g?: number | null;
+  default_unit_type?: UnitType;
+  unit_size_g?: number | null;
 }
 
 // Conversion helpers
