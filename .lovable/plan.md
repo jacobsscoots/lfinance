@@ -1,504 +1,318 @@
-# Meal Plan Generator Fix Plan (Lovable) — Exact Targets With Realistic Portions
+# Fix Plan: Seasoning Caps & Settings Propagation (Non-Breaking Patch Plan)
 
-## Executive Summary
-Rebuild the meal plan generator so it produces daily plans that match calorie + macro targets **precisely** within strict allowances, using a **deterministic, iterative optimisation loop** that keeps calculating until valid (or returns a clear failure reason). No LLM calls inside the solver loop.
+## Summary
+This plan fixes two issues with **minimal, isolated patches** and **rigorous testing**, without breaking what currently works:
 
-**Tolerances (spec):**
-- Calories: `target ≤ calories ≤ target + 50 kcal`
-- Macros (each): `target ≤ macro ≤ target + 1–2g` (default `+2g`, configurable)
+1. **Fix 1: Seasoning Too High**  
+   Seasonings are sometimes treated as adjustable foods, causing unrealistic amounts (e.g., 100g seasoning).  
+   **Solution:** Add a post-solve seasoning normaliser with a hard cap (15g) and ensure seasoning categorisation/pairing is correct.
 
-**Hard rules:**
-- Must not stop after one attempt — it must keep trying until valid.
-- Must not output unrealistic portions (e.g. **700g yoghurt**).
-- Must respect LOCKED items (veg/cookies/hunters chicken pasta).
-- Must scale seasonings perfectly with chicken grams.
-- Must not change any nutrition info the user provided.
+2. **Fix 2: Settings Changes Not Applying to Week Ahead**  
+   When calorie/macro targets are updated in Settings, the meal planner UI for 9–16 Feb 2026 doesn’t refresh to the new targets.  
+   **Solution:** Add cross-query invalidation when settings are saved (meal plans + weekly targets), and ensure settings are re-read by components.
 
 ---
 
-## Current State Analysis (What exists today)
+# IMPORTANT: Make these fixes WITHOUT breaking what currently works
 
-### Solver Algorithm (existing)
-- **File**: `src/lib/autoPortioning.ts` (~1900 lines)
-- Multi-phase solver: meal-level solving → global fine-tuning → integer rounding → rebalancing
-- Uses heuristics and name matching for food-type detection
-- Tolerances: strict (±1g macros, ±50 kcal) and relaxed (±25g, ±150 kcal)
-- Falls back to “nearMatch” to avoid blank days
+## Non-negotiable instruction
+- **Do NOT refactor or rewrite** the current working solver.
+- **Do NOT change existing behaviour** for normal foods that already solve correctly.
+- Implement only **small, isolated patches** with tests.
 
-### Product Data Model (existing)
-- `products` table has `product_type`: “editable” / “fixed”
-- No explicit `LOCKED/BOUNDED/FREE`
-- No stored min/max/step constraints
-- Constraints inferred from name keywords (yoghurt/granola/etc.)
-
-### Test Coverage (existing)
-- `src/lib/autoPortioning.test.ts` (~1100 lines)
-- Invariants: integer grams, tolerance checks, locked items, topper minimums
-- Property-based randomised scenarios
-- Good foundation to extend for the new engine
+### Safety rules
+- Keep `src/lib/autoPortioning.ts` / current working V2 flow intact as much as possible.
+- Avoid changing the scoring / optimisation flow unless absolutely required.
+- Changes must be limited to:
+  1) seasoning handling (cap + derived scaling + categorisation)
+  2) settings propagation (targets refresh / invalidation)
+- Add unit tests proving:
+  - existing scenarios still pass
+  - only seasoning + settings behaviour changes
 
 ---
 
-## Key Problems to Solve
+## Current State Analysis
 
-| Problem | Impact | Solution |
-|---|---|---|
-| Portion limits inferred from names, not stored | Unpredictable; new products can break | Store `min_g`, `max_g`, `step_g`, `rounding_rule` per product |
-| Solver gives up / falls back after one pass | Produces “nearMatch” and warnings | Multi-iteration loop (up to 500) that keeps trying |
-| No explicit LOCKED products | Can’t lock veg/cookies/pasta reliably | Add `editable_mode`: `LOCKED / BOUNDED / FREE` |
-| Seasonings don’t scale with protein | Wrong seasoning proportions | Add `seasoning_rate_per_100g` and auto-scale |
-| No eaten factor | Doesn’t model real-life waste | Add `eaten_factor` (0–1) for effective totals |
-| No meal templates / balance rules | Unbalanced meals | Template system with slots + constraints |
-| Unrealistic portions possible | “700g yoghurt” type outputs | Hard portion caps per product and per meal |
+### Seasoning Handling (Existing)
+- V2 solver already has `scaleSeasonings()` (line ~255–268) that derives seasoning grams from paired protein.
+- Default constraints in `productToSolverItem()` already set `seasoning: { min: 1, max: 15 }` (line ~650).
+- **Problem A:** Seasonings without a paired protein ID can be treated like adjustable items and grow unrealistically large.
+- **Problem B:** Products not flagged as `food_type: 'sauce'` don’t get seasoning category applied, so they bypass seasoning constraints.
 
----
-
-## Non-Negotiables
-
-### Hard tolerances (must pass)
-- **Calories:** `target ≤ achieved ≤ target + 50`
-- **Protein/Carbs/Fat:** `target ≤ achieved ≤ target + 2g` (or configured)
-
-**Important:**
-- No single-attempt generation. Must keep calculating until it passes.
-- If impossible (due to locked items, portion caps, ratios), return a clear failure reason (not half-valid output).
-
-### Credit-saving requirement
-- **No LLM calls inside the optimisation loop.**
-- Use deterministic maths/logic; allow many iterations without burning credits.
+### Settings Propagation (Existing)
+- `useNutritionSettings` invalidates `["nutrition-settings"]` on save.
+- Meal planner uses separate queries:
+  - `useMealPlanItems` → `["meal-plans"]`
+  - `useWeeklyNutritionTargets` → `["weekly-nutrition-targets"]`
+- **Problem A:** No cross-invalidation - meal planner doesn’t re-render when settings change.
+- **Problem B:** React Query may keep old settings in mounted components until invalidated/refetched.
 
 ---
 
-## Data Model (Do NOT change user nutrition values)
-
-### Products
-Each product must store (solver-facing):
-- `id`
-- `name`
-- `category`: `protein | carb | veg | dairy | fruit | snack | seasoning | premade`
-- `nutrition_per_100g`: `{ calories, protein_g, carbs_g, fat_g }`
-- `default_unit_type`: `grams | whole_unit`
-- `unit_size_g` (optional, for whole unit items like a pot/pack)
-- `editable_mode`: `LOCKED | BOUNDED | FREE`
-- `min_portion_grams` (optional)
-- `max_portion_grams` (optional)
-- `portion_step_grams` (default 1)
-- `rounding_rule`: `nearest_1g | nearest_5g | nearest_10g | whole_unit_only`
-- `eaten_factor` (0–1, default 1.00)
-- `seasoning_rate_per_100g` (optional)
-- `meal_roles_allowed`: `breakfast | lunch | dinner | snack`
-
-### Locked product examples (must be supported)
-These must be truly non-editable:
-- veg → `editable_mode = LOCKED`
-- cookies → `editable_mode = LOCKED`
-- hunters chicken pasta → `editable_mode = LOCKED`
-
----
-
-## Phase 1: Database Schema Updates
-
-### Update `products` table
-```text
-products table additions:
-+-----------------------------+----------+---------+--------------------------------+
-| Column                      | Type     | Default | Purpose                        |
-+-----------------------------+----------+---------+--------------------------------+
-| editable_mode               | text     | 'FREE'  | LOCKED/BOUNDED/FREE            |
-| min_portion_grams           | integer  | NULL    | Minimum grams per serving      |
-| max_portion_grams           | integer  | NULL    | Maximum grams per serving      |
-| portion_step_grams          | integer  | 1       | Step increment (e.g., 5g)      |
-| rounding_rule               | text     | 'nearest_1g' | Rounding behaviour          |
-| eaten_factor                | numeric  | 1.00    | % actually consumed (0-1)      |
-| seasoning_rate_per_100g     | numeric  | NULL    | Grams per 100g protein pairing |
-| category                    | text     | NULL    | protein/carb/veg/dairy/etc     |
-| default_unit_type           | text     | 'grams' | grams or whole_unit            |
-| unit_size_g                 | integer  | NULL    | for whole_unit items           |
-+-----------------------------+----------+---------+--------------------------------+
-New meal_templates table
-meal_templates table:
-+----------------------+----------+---------------------------------+
-| Column               | Type     | Purpose                         |
-+----------------------+----------+---------------------------------+
-| id                   | uuid     | Primary key                     |
-| user_id              | uuid     | Owner                           |
-| name                 | text     | e.g., "Balanced Dinner"         |
-| meal_type            | text     | breakfast/lunch/dinner/snack    |
-| slot_definitions     | jsonb    | Array of slot rules             |
-| created_at           | timestamptz |                              |
-+----------------------+----------+---------------------------------+
-Slot definitions JSON structure example:
-
-[
-  { "role": "protein", "required": true, "minCalorieShare": 0.25, "maxCalorieShare": 0.45 },
-  { "role": "carb", "required": true, "minCalorieShare": 0.30, "maxCalorieShare": 0.50 },
-  { "role": "veg", "required": false, "minGrams": 80, "maxGrams": 200 }
-]
-Calculation Rules (Accurate + Real-Life)
-Effective eating vs weighed grams
-For each item:
-
-weighed grams = grams shown in UI + used in shopping list
-
-effective grams eaten = weighed_grams × eaten_factor
-
-Totals must use effective grams:
-
-nutrition_per_100g × (effective_grams / 100)
-
-Rounding
-Apply rounding rules consistently (nearest_5g, whole_unit_only, etc.)
-
-After rounding, the solver must re-check tolerances and keep iterating if invalid.
-
-Locked vs Editable Rules (Strict)
-LOCKED
-Grams can never change.
-
-If locked items prevent targets, report exactly why.
-
-BOUNDED
-Grams can change only inside [min, max] and must follow step_g + rounding.
-
-FREE
-Grams can change normally (still subject to rounding rules).
-
-Balanced Meals (Eatable + sensible ratios)
-Meal templates + slot constraints
-The solver must build meals using templates so meals stay realistic.
-
-Breakfast template (example)
-required: dairy (yoghurt) + fruit + granola
-
-constraints:
-
-granola max share of breakfast calories (e.g. 40%)
-
-fruit bounded to a realistic range
-
-yoghurt bounded (no huge amounts)
-
-Dinner template (example)
-required: protein (chicken) + carb (rice) + veg
-
-constraints:
-
-minimum protein contribution (e.g. ≥ 40g protein from protein sources)
-
-carbs max share of dinner calories (e.g. 55%)
-
-veg may be LOCKED: treat as compliance check (warn if too low but do not change)
-
-Seasonings Must Scale Perfectly (Chicken proportion rule)
-Seasonings must scale exactly with chicken grams:
-
-Store seasoning products with seasoning_rate_per_100g (grams per 100g chicken)
-
-After protein grams are determined:
-
-seasoning_g = round(chicken_g × seasoning_rate_per_100g / 100)
-
-Seasonings can be configured to:
-
-Count towards macros (default OFF)
-
-Have a max cap (e.g. 15g)
-
-Generate Meal Plan Button (Must Iterate Until It Passes)
-Core behaviour: keep trying until valid
-When user clicks Generate Meal Plan the system must:
-
-Load items + targets + template rules
-
-Classify constraints:
-
-LOCKED: fixed grams
-
-BOUNDED: min/max/step/rounding
-
-FREE: adjustable within limits
-
-Subtract LOCKED contributions from targets
-
-Run a deterministic optimisation loop (max 500 iterations):
-
-adjust FREE/BOUNDED grams only
-
-apply rounding rules
-
-compute totals using eaten_factor
-
-validate tolerances
-
-continue iterating until valid
-
-Replace the current proposed plan with the best valid plan found
-
-Hard rule: Must not give up after one attempt.
-
-Eatable Portion Limits (No unrealistic meal sizes)
-The generator must never output unrealistic portions like “700g yoghurt”.
-
-Every product must support realistic limits:
-
-min_portion_grams, max_portion_grams, portion_step_grams, rounding_rule
-
-Example defaults (configurable):
-
-yoghurt: max per serving 250–300g OR whole_unit_only
-
-fruit: max per meal 200–300g
-
-rice cooked: bounded 150–300g
-
-veg: often LOCKED but still checked for balance rules
-
-The optimiser must respect portion constraints at all times.
-
-Best Result Out of All Attempts (Choose best valid plan)
-The solver must track candidates during the loop and return the best valid result.
-
-Selection ranking
-Lowest calorie overage
-
-Lowest total macro overage
-
-Closest to default portion sizes (avoid weird numbers)
-
-Best meal balance score (slot/ratio constraints satisfied cleanly)
-
-If no valid plan exists after max iterations:
-
-Do not return a near-match plan
-
-Return a failure state with blockers + closest totals
-
-Failure Reporting (Explicit)
-When no valid plan is found after max iterations:
-
-interface SolverFailure {
-  reason: 'locked_conflict' | 'portion_cap' | 'ratio_constraint' | 'rounding_conflict';
-  blockers: { itemName: string; constraint: string; value: number }[];
-  closestTotals: MacroTotals;
-  targetDelta: MacroTotals;
+# Fix 1: Seasoning Too High (Patch Only)
+
+## Problem
+Seasoning is being treated as a normal adjustable food in some cases, causing unrealistic amounts (e.g., 100g seasoning).
+
+## Required behaviour (non-negotiable)
+- Seasoning must **never** be used as a tuning lever to hit calories/macros.
+- Seasoning grams must be **derived from paired protein grams** and **clamped** to a realistic cap.
+- Seasoning must never exceed **15g** (hard cap), regardless of solver behaviour.
+- Keep rice from exploding: rice must remain within **BOUNDED** limits.
+
+## Patch approach (minimal change)
+Implement a **post-solve seasoning normaliser** plus small categorisation fixes, without changing the core solver loop.
+
+### Implementation (minimal)
+
+#### 1) New helper file: `src/lib/seasoningRules.ts`
+Create a pure helper module:
+
+```typescript
+/**
+ * Seasoning Rules - Post-solve normalization and hard caps
+ *
+ * Provides:
+ * - isSeasoning()
+ * - computeSeasoningGrams()
+ * - normalizeSeasoningPortions()
+ */
+
+export const DEFAULT_SEASONING_MAX_GRAMS = 15;
+
+export function isSeasoning(foodType: string | null | undefined): boolean {
+  if (!foodType) return false;
+  const type = foodType.toLowerCase();
+  return type === 'sauce' || type === 'seasoning';
 }
-UI should show explicit messages:
 
-“Could not hit targets because LOCKED cookies contribute 12g fat; remaining fat target is 6g.”
+export function computeSeasoningGrams(
+  proteinGrams: number,
+  ratePer100g: number,
+  maxGrams: number = DEFAULT_SEASONING_MAX_GRAMS
+): number {
+  const derived = Math.round((proteinGrams * ratePer100g) / 100);
+  return Math.min(derived, maxGrams);
+}
 
-“Yoghurt max portion cap prevents reaching protein target.”
+export function normalizeSeasoningPortions(
+  portions: Map<string, number>,
+  items: Array<{ id: string; category: string; maxPortionGrams: number }>,
+  hardCap: number = DEFAULT_SEASONING_MAX_GRAMS
+): { portions: Map<string, number>; capped: string[] } {
+  const result = new Map(portions);
+  const capped: string[] = [];
 
-Phase 2: Solver Algorithm Rewrite
-Replace the heuristic solver with a deterministic constraint-based engine
-Create a new solver implementation and stop using the existing autoPortioning.ts.
+  for (const item of items) {
+    if (item.category !== 'seasoning') continue;
 
-High-level flow:
+    const current = result.get(item.id) ?? 0;
+    const cap = Math.min(item.maxPortionGrams, hardCap);
 
-+---------------------------+
-|  1. Load items + targets  |
-+---------------------------+
-            |
-            v
-+---------------------------+
-|  2. Classify constraints  |
-|     LOCKED: fixed grams   |
-|     BOUNDED: min/max/step |
-|     FREE: within limits   |
-+---------------------------+
-            |
-            v
-+---------------------------+
-|  3. Subtract LOCKED from  |
-|     targets               |
-+---------------------------+
-            |
-            v
-+---------------------------+
-|  4. Optimisation loop     |
-|     (max 500 iterations)  |
-|     - Adjust grams        |
-|     - Apply rounding      |
-|     - Use eaten_factor    |
-|     - Check tolerances    |
-|     - Track best valid    |
-+---------------------------+
-            |
-    +-------+-------+
-    |               |
-    v               v
-+---------+   +-------------+
-| SUCCESS |   | MAX_ITERS   |
-| Return  |   | Return best |
-| best    |   | or failure  |
-+---------+   +-------------+
-Key properties:
+    if (current > cap) {
+      result.set(item.id, cap);
+      capped.push(item.id);
+    }
+  }
 
-Deterministic (same inputs → same outputs)
+  return { portions: result, capped };
+}
+2) Single hook point (post-solve) in src/lib/portioningEngine.ts
+Add ONE call at the return point of a successful solve (no loop changes):
 
-No LLM calls
+import { normalizeSeasoningPortions, DEFAULT_SEASONING_MAX_GRAMS } from './seasoningRules';
 
-Integer grams (or whole units)
+// ... after selecting best candidate:
+const best = candidates[0];
 
-Respects LOCKED/BOUNDED/FREE and portion limits
+const { portions: normalizedPortions, capped } = normalizeSeasoningPortions(
+  best.portions,
+  items,
+  DEFAULT_SEASONING_MAX_GRAMS
+);
 
-Tolerance Configuration (Spec-Compliant)
-Metric	Allowed Range
-Calories	target to target + 50
-Protein	target to target + 2g
-Carbs	target to target + 2g
-Fat	target to target + 2g
-Macros are only allowed to be over target (not under) by default.
-(If you want “allow under” later, make it a setting, but default is strict.)
+const warnings: string[] = [];
+if (capped.length > 0) {
+  warnings.push(`Capped ${capped.length} seasoning(s) to max ${DEFAULT_SEASONING_MAX_GRAMS}g`);
+}
 
-Seasoning Scaling Logic (Implementation detail)
-// After protein grams are determined:
-const chickenGrams = getGrams('chicken');
-const seasoningRate = product.seasoning_rate_per_100g ?? 0;
-const seasoningGrams = Math.round(chickenGrams * seasoningRate / 100);
-Effective Eating Calculation (Implementation detail)
-const effectiveGrams = weighedGrams * (product.eaten_factor ?? 1);
-const macros = calculateMacrosForGrams(product, effectiveGrams);
-UI shows weighed grams, totals use effective grams.
+return {
+  success: true,
+  portions: normalizedPortions,
+  totals: best.totals,
+  score: best.score,
+  iterationsRun: candidates.length,
+  warnings: warnings.length ? warnings : undefined,
+};
+3) Ensure correct seasoning categorisation in productToSolverItem()
+Seasoning must map correctly even if not flagged as sauce:
 
-Best Result Selection (Implementation detail)
-Track valid candidate plans and select best by:
+const categoryMap: Record<string, SolverItem['category']> = {
+  protein: 'protein',
+  carb: 'carb',
+  veg: 'veg',
+  dairy: 'dairy',
+  fruit: 'fruit',
+  sauce: 'seasoning',
+  seasoning: 'seasoning', // add explicit mapping
+  treat: 'snack',
+  fat: 'fat',
+  other: 'other',
+};
+4) Seasoning pairing rule (only if needed)
+If a seasoning doesn’t have a paired protein id:
 
-lowest calorie overage
+Default to a small fixed amount (e.g., 5g)
 
-lowest macro overage
+Still clamp to max 15g
 
-closest to default portion sizes
+Never allow it to grow to meet macros
 
-best balance score
+5) Rice constraint (don’t push rice too high)
+Do NOT change global solver behaviour.
+Instead:
 
-Implementation Phases
-Phase 1: Database Migration
-Add new columns to products
+Add/confirm rice is BOUNDED with sensible min/max/step so solver can’t blow it up
 
-Create meal_templates
+Example config (tuneable in product settings):
 
-Migrate existing data using current heuristics as initial defaults only
+min 60g, max 120g, step 5g (or whatever fits your real portions)
 
-Phase 2: Update Product UI
-Add fields: editable_mode, min/max/step, rounding_rule, eaten_factor, category
+Fix 2: Settings Changes Not Applying to Week Ahead (Patch Only)
+Problem
+When user edits calorie/macro targets in Settings, week 9–16 Feb 2026 still shows/uses old targets.
 
-Add seasoning rate field for seasoning products
+Required behaviour
+Targets displayed and used for generation must reflect the latest Settings.
 
-Phase 3: Rewrite Solver Core
-Create src/lib/portioningEngine.ts
+Meal planner must re-render when settings are saved.
 
-Implement deterministic optimisation loop (max 500 iters)
+Do not delete existing meal items automatically.
 
-Implement strict tolerance checking (target to target+N only)
+Patch approach (minimal)
+Add cross-query invalidation in useNutritionSettings on save.
 
-Add best-result tracking + selection
+Implementation details
+Modify: src/hooks/useNutritionSettings.ts
+In onSuccess:
 
-Phase 4: Integration
-Replace calls to calculateDayPortions with new engine
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["nutrition-settings"] });
 
-Update debug logging
+  // Cross-invalidate so meal planner re-renders with new targets
+  queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+  queryClient.invalidateQueries({ queryKey: ["weekly-nutrition-targets"] });
 
-Wire failure reporting to UI
+  toast.success("Settings saved");
+},
+Optional fallback if still sticky
+Set staleTime: 0 for nutrition settings query so it always refetches when navigating:
 
-Deprecate autoPortioning.ts (keep for reference only)
+staleTime: 0
+Must not break what works
+Existing generated meal items should not be deleted automatically.
 
-Phase 5: Testing
-Update/extend tests for:
+Only targets and derived totals must refresh; user chooses to regenerate if needed.
 
-strict tolerance rules
+Add/verify a quick integration/manual check to confirm the UI updates after saving settings.
 
-locked constraints
+Tests to Add / Update (Required)
+Seasoning tests
+Modify: src/lib/portioningEngine.test.ts
+Add:
 
-portion cap constraints
+Seasoning never exceeds 15g
 
-rounding conflicts
+Warning appears if seasoning was capped
 
-ratio constraint conflicts
+New: src/lib/seasoningRules.test.ts
+Add unit tests for:
 
-Add bulk validation test harness (200–1000 runs)
+isSeasoning
 
-Phase 6: Debug Panel
-Add collapsible debug panel:
+computeSeasoningGrams
 
-targets vs achieved
+normalizeSeasoningPortions
 
-deltas
+Rigorous Testing Requirement (Must be re-run after changes)
+Non-negotiable
+After implementing the fixes, re-run the full rigorous testing again to prove nothing has broken.
 
-active constraints
+Must-do test steps
+Run the entire existing test suite (no skipped tests).
 
-failure reasons
+Run bulk generation / harness testing again:
 
-Files to Create/Modify
-File	Action	Purpose
-supabase/migrations/xxx_meal_plan_v2.sql	CREATE	Schema changes
-src/lib/portioningEngine.ts	CREATE	New solver implementation
-src/lib/portioningEngine.test.ts	CREATE	New test suite
-src/lib/portioningTypes.ts	CREATE	Type definitions
-src/hooks/useProducts.ts	MODIFY	Add new fields
-src/hooks/useMealPlanItems.ts	MODIFY	Use new engine
-src/components/settings/ProductSettings.tsx	MODIFY	Add portion config UI
-src/components/mealplan/DayDetailModal.tsx	MODIFY	Debug panel + failure UI
-src/lib/autoPortioning.ts	DEPRECATE	Keep for reference only
-Migration Strategy
-Auto-migrate defaults based on existing heuristics (initial only)
-Current detection	New values
-Contains "yogurt/yoghurt"	category='dairy', min=100, max=350
-Contains "granola/muesli"	category='carb', min=25, max=60
-Contains "chicken/fish/salmon"	category='protein', min=100, max=300
-Contains "rice/pasta"	category='carb', min=80, max=250
-Contains "seasoning/schwartz"	category='seasoning', editable_mode='BOUNDED', max=15
-Contains "broccoli/veg"	editable_mode='LOCKED'
-Contains "cookie"	editable_mode='LOCKED'
-Contains "hunters chicken pasta"	editable_mode='LOCKED'
-Backwards compatibility mapping
-Old product_type='fixed' → editable_mode='LOCKED'
-
-Old product_type='editable' → editable_mode='FREE'
-
-Test Harness Design
-Bulk validation test should:
-
-run 200–1000 scenarios
+200–1000 scenarios minimum
 
 verify strict tolerances
 
 group failures by reason
 
-allow failures only for truly impossible scenarios
+Add/verify new tests:
 
-Example structure:
+Seasoning cap test (never > 15g)
 
-describe('Bulk Validation', () => {
-  it('generates valid plans for 1000 random scenarios', () => {
-    const failures: FailedScenario[] = [];
+Settings propagation test (settings change updates week 9–16 Feb display + targets)
 
-    for (let i = 0; i < 1000; i++) {
-      const scenario = generateRandomScenario();
-      const result = solve(scenario.items, scenario.targets);
+Manual regression checks:
 
-      if (!result.success) failures.push({ scenario, result });
-    }
+Generate week 9–16 Feb
 
-    const byReason = groupBy(failures, f => f.result.failure.reason);
-    console.table(byReason);
+Change settings targets
 
-    // Allow up to 5% failure only for truly impossible scenarios
-    expect(failures.length / 1000).toBeLessThan(0.05);
-  });
-});
-Risk Mitigation
-Risk	Mitigation
-Breaking existing meal plans	Feature flag new engine during rollout; keep old solver for comparison only
-Performance (500 iterations)	Benchmark; stop early when converged; optimise hotspots
-User confusion from new fields	Hide advanced settings behind a toggle
-Migration errors	Dry-run migration and validate outputs before applying
+Confirm UI updates targets immediately
+
+Regenerate and confirm solver uses the new targets
+
+Confirm no unrealistic portions appear
+
+Output required
+Provide a short test report:
+
+total scenarios run
+
+pass rate
+
+failures (if any) with grouped reasons
+
+confirmation that all existing tests still pass
+
+Files to Create/Modify
+File	Action	Lines Changed
+src/lib/seasoningRules.ts	CREATE	~50 lines
+src/lib/seasoningRules.test.ts	CREATE	~40 lines
+src/lib/portioningEngine.ts	MODIFY	~15 lines (import + post-solve hook + category map tweak)
+src/lib/portioningEngine.test.ts	MODIFY	~30 lines (new seasoning tests)
+src/hooks/useNutritionSettings.ts	MODIFY	2–3 lines (add invalidations)
+Regression Protection (Pre-merge checklist)
+Run existing test suite — all existing tests must pass.
+
+Run bulk validation — 200+ scenarios; investigate failures.
+
+New seasoning tests must pass (cap + warning).
+
+Manual check:
+
+Generate week 9–16 Feb
+
+Change settings
+
+Confirm week UI updates targets
+
+Confirm seasoning never exceeds 15g
+
+Risk Assessment
+Risk	Likelihood	Mitigation
+Post-solve cap changes totals	Low	Seasonings usually excluded from macros; cap rarely triggers
+Invalidation causes UI flicker	Low	React Query handles this; acceptable
+Existing tests break	Very Low	Changes are additive and isolated
 Success Criteria
-Pass rate: >95% of generated plans hit all tolerances (only impossible cases fail)
+Seasoning never exceeds 15g (hard cap) in any generated plan.
 
-No blank days: Always a valid plan or a clear failure reason
+Settings updates instantly reflect on week 9–16 Feb 2026 targets display and generation.
 
-Performance: <200ms per day solve (benchmark target)
+No regressions: existing tests continue to pass.
 
-User experience: Portions are realistic; meals are balanced; seasonings scale correctly
-
-Test coverage: All invariants verified via automated tests
+Rigorous bulk testing is re-run and reported.
