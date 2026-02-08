@@ -182,22 +182,14 @@ export default function Investments() {
     }
   };
 
-  // Calculate monthly contribution for projections
-  const monthlyContribution = useMemo(() => {
-    if (!selectedInvestment || investmentTransactions.length === 0) return 0;
-    
-    const deposits = investmentTransactions.filter(t => t.type === 'deposit');
-    if (deposits.length === 0) return 0;
-    
-    const firstDeposit = new Date(deposits[deposits.length - 1].transaction_date);
-    const lastDeposit = new Date(deposits[0].transaction_date);
-    const months = Math.max(1, Math.floor(
-      (lastDeposit.getTime() - firstDeposit.getTime()) / (1000 * 60 * 60 * 24 * 30)
-    ));
-    
-    const totalDeposits = deposits.reduce((sum, d) => sum + d.amount, 0);
-    return totalDeposits / months;
-  }, [selectedInvestment, investmentTransactions]);
+  // Use stored monthly contribution (default to 50 if not set)
+  const monthlyContribution = selectedInvestment?.monthly_contribution ?? 50;
+
+  const handleMonthlyContributionChange = (value: number) => {
+    if (selectedInvestmentId) {
+      updateInvestment({ id: selectedInvestmentId, monthly_contribution: value });
+    }
+  };
 
   const currentValue = useMemo(() => {
     if (!selectedInvestment) return 0;
@@ -407,6 +399,7 @@ export default function Investments() {
                 monthlyContribution={monthlyContribution}
                 expectedAnnualReturn={selectedInvestment.expected_annual_return}
                 onReturnChange={handleExpectedReturnChange}
+                onContributionChange={handleMonthlyContributionChange}
               />
             </div>
 

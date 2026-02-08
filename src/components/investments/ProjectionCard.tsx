@@ -15,6 +15,7 @@ interface ProjectionCardProps {
   monthlyContribution: number;
   expectedAnnualReturn: number;
   onReturnChange: (value: number) => void;
+  onContributionChange: (value: number) => void;
 }
 
 export function ProjectionCard({
@@ -22,6 +23,7 @@ export function ProjectionCard({
   monthlyContribution,
   expectedAnnualReturn,
   onReturnChange,
+  onContributionChange,
 }: ProjectionCardProps) {
   const projections = useMemo(() => {
     return {
@@ -121,15 +123,24 @@ export function ProjectionCard({
           })}
         </div>
 
-        {/* Summary */}
+        {/* Editable Monthly Contribution */}
         <div className="flex items-center justify-between text-sm p-3 rounded-lg bg-primary/5 border border-primary/20">
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-primary" />
             <span>Monthly contribution</span>
           </div>
-          <span className="font-medium">
-            {formatCurrency(monthlyContribution)}/month
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">£</span>
+            <Input
+              type="number"
+              step="1"
+              min="0"
+              value={monthlyContribution}
+              onChange={(e) => onContributionChange(parseFloat(e.target.value) || 0)}
+              className="w-20 h-8 text-right font-medium"
+            />
+            <span className="text-muted-foreground">/month</span>
+          </div>
         </div>
       </CardContent>
     </Card>

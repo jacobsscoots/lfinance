@@ -1274,6 +1274,7 @@ export type Database = {
           expected_annual_return: number | null
           fund_type: string | null
           id: string
+          monthly_contribution: number | null
           name: string
           notes: string | null
           provider: string | null
@@ -1289,6 +1290,7 @@ export type Database = {
           expected_annual_return?: number | null
           fund_type?: string | null
           id?: string
+          monthly_contribution?: number | null
           name: string
           notes?: string | null
           provider?: string | null
@@ -1304,6 +1306,7 @@ export type Database = {
           expected_annual_return?: number | null
           fund_type?: string | null
           id?: string
+          monthly_contribution?: number | null
           name?: string
           notes?: string | null
           provider?: string | null
