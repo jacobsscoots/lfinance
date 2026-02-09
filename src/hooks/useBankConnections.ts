@@ -219,15 +219,18 @@ export function useBankConnections() {
 
   const deleteConnection = useMutation({
     mutationFn: async (connectionId: string) => {
-      const { error } = await supabase
-        .from("bank_connections")
-        .delete()
-        .eq("id", connectionId);
+      // Use edge function to delete since base table SELECT is blocked for authenticated users
+      const { error } = await supabase.functions.invoke("truelayer-auth", {
+        body: { action: "delete-connection", connectionId },
+      });
 
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bank-connections"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["total-balance"] });
       toast({
         title: "Connection removed",
         description: "Your bank connection has been disconnected.",
@@ -236,7 +239,7 @@ export function useBankConnections() {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Unknown error",
+        description: normalizeError(error, "truelayer-auth"),
         variant: "destructive",
       });
     },
