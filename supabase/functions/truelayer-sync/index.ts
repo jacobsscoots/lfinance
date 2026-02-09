@@ -307,8 +307,8 @@ serve(async (req) => {
       ? (accounts[0]?.provider?.provider_id || accounts[0]?.provider?.display_name || connectionProvider)
       : connectionProvider;
 
-    // Update connection status + propagate real bank provider
-    await supabase
+    // Update connection status + propagate real bank provider (use service role since base table SELECT is blocked)
+    await serviceSupabase
       .from('bank_connections')
       .update({
         status: 'connected',

@@ -109,7 +109,7 @@ serve(async (req) => {
     }
 
     // Validate action
-    const validActions = ['auth-url', 'exchange-code', 'refresh-token'];
+    const validActions = ['auth-url', 'exchange-code', 'refresh-token', 'delete-connection'];
     if (!action || !validActions.includes(action)) {
       return errorResponse(
         `Missing or invalid action. Expected one of: ${validActions.join(', ')}`,
@@ -346,6 +346,50 @@ serve(async (req) => {
         .eq('id', connectionId);
 
       console.log('[refresh-token] Token refresh successful');
+      return jsonResponse({ success: true });
+    }
+
+    // Delete a bank connection and its associated accounts
+    if (action === 'delete-connection') {
+      const connectionId = body.connectionId;
+
+      if (!connectionId) {
+        return errorResponse('Missing connectionId parameter', 'delete-connection', 400);
+      }
+      if (!isValidUUID(connectionId)) {
+        return errorResponse('Invalid connectionId: must be a valid UUID', 'delete-connection', 400);
+      }
+
+      const serviceSupabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      // Verify ownership
+      const { data: connection, error: connError } = await serviceSupabase
+        .from('bank_connections')
+        .select('id, user_id')
+        .eq('id', connectionId)
+        .single();
+
+      if (connError || !connection) {
+        return errorResponse('Connection not found', 'delete-connection', 404);
+      }
+
+      if (connection.user_id !== userId) {
+        return errorResponse('Connection does not belong to this user', 'delete-connection', 403);
+      }
+
+      const { error: deleteError } = await serviceSupabase
+        .from('bank_connections')
+        .delete()
+        .eq('id', connectionId);
+
+      if (deleteError) {
+        return errorResponse('Failed to delete connection', 'delete-connection', 500, deleteError);
+      }
+
+      console.log('[delete-connection] Connection deleted:', connectionId);
       return jsonResponse({ success: true });
     }
 
