@@ -121,13 +121,34 @@ serve(async (req) => {
     // Generate auth URL for user to connect their bank
     if (action === 'auth-url') {
       const redirectUri = body.redirectUri || url.searchParams.get('redirectUri');
-      
+
       if (!redirectUri) {
         return errorResponse('Missing redirectUri parameter', 'auth-url', 400);
       }
 
       if (!isValidHttpsUrl(redirectUri)) {
         return errorResponse('Invalid redirectUri: must be a valid HTTPS URL', 'auth-url', 400);
+      }
+
+      // Create pending connection server-side using service role to bypass RLS
+      const serviceSupabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      const { data: connection, error: connError } = await serviceSupabase
+        .from('bank_connections')
+        .insert({
+          user_id: userId,
+          provider: 'truelayer',
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (connError) {
+        console.error('[auth-url] Failed to create pending connection:', connError);
+        return errorResponse('Failed to create bank connection', 'auth-url', 500);
       }
 
       const scopes = [
@@ -145,8 +166,8 @@ serve(async (req) => {
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `providers=uk-ob-all%20uk-oauth-all`;
 
-      console.log('[auth-url] Generated auth URL for redirect:', redirectUri);
-      return jsonResponse({ authUrl });
+      console.log('[auth-url] Generated auth URL for redirect:', redirectUri, 'connectionId:', connection.id);
+      return jsonResponse({ authUrl, connectionId: connection.id });
     }
 
     // Exchange authorization code for tokens - stores tokens server-side only
