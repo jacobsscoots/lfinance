@@ -426,21 +426,39 @@ function collectBlockers(
   tolerances: ToleranceConfig
 ): Blocker[] {
   const blockers: Blocker[] = [];
-  
+  const totals = sumMacros(items, portions, true);
+
+  // Report which macros are outside tolerance
+  const macroChecks: Array<{ name: string; achieved: number; target: number; tol: number }> = [
+    { name: 'Protein', achieved: totals.protein, target: targets.protein, tol: tolerances.protein.max },
+    { name: 'Carbs', achieved: totals.carbs, target: targets.carbs, tol: tolerances.carbs.max },
+    { name: 'Fat', achieved: totals.fat, target: targets.fat, tol: tolerances.fat.max },
+    { name: 'Calories', achieved: totals.calories, target: targets.calories, tol: tolerances.calories.max },
+  ];
+  for (const mc of macroChecks) {
+    const diff = mc.achieved - mc.target;
+    if (Math.abs(diff) > mc.tol) {
+      blockers.push({
+        itemName: mc.name,
+        constraint: 'macro_tolerance',
+        value: Math.round(diff),
+        detail: `${mc.name}: ${Math.round(mc.achieved)} vs target ${mc.target} (${diff > 0 ? '+' : ''}${Math.round(diff)}, tolerance ±${mc.tol})`,
+      });
+    }
+  }
+
   // Check locked items that contribute significantly
   for (const item of items) {
     if (item.editableMode !== 'LOCKED') continue;
-    
     const grams = portions.get(item.id) ?? 0;
+    if (grams <= 0) continue;
     const macros = calculateMacros(item, grams);
-    
-    // Check each macro
     if (macros.fat > targets.fat * 0.3) {
       blockers.push({
         itemName: item.name,
         constraint: 'LOCKED',
         value: macros.fat,
-        detail: `Contributes ${Math.round(macros.fat)}g fat (${Math.round(macros.fat / targets.fat * 100)}% of target)`,
+        detail: `LOCKED at ${grams}g → ${Math.round(macros.fat)}g fat (${Math.round(macros.fat / targets.fat * 100)}% of target)`,
       });
     }
     if (macros.protein > targets.protein * 0.3) {
@@ -448,23 +466,21 @@ function collectBlockers(
         itemName: item.name,
         constraint: 'LOCKED',
         value: macros.protein,
-        detail: `Contributes ${Math.round(macros.protein)}g protein`,
+        detail: `LOCKED at ${grams}g → ${Math.round(macros.protein)}g protein (${Math.round(macros.protein / targets.protein * 100)}% of target)`,
       });
     }
   }
-  
-  // Check items at their limits
+
+  // Check adjustable items at their limits
   for (const item of items) {
     if (item.editableMode === 'LOCKED') continue;
-    
     const grams = portions.get(item.id) ?? 0;
-    
     if (item.maxPortionGrams > 0 && grams >= item.maxPortionGrams) {
       blockers.push({
         itemName: item.name,
         constraint: 'max_portion',
         value: item.maxPortionGrams,
-        detail: `At maximum portion of ${item.maxPortionGrams}g`,
+        detail: `${item.name} at MAX ${item.maxPortionGrams}g (${item.category}) — can't add more`,
       });
     }
     if (item.minPortionGrams > 0 && grams <= item.minPortionGrams) {
@@ -472,11 +488,11 @@ function collectBlockers(
         itemName: item.name,
         constraint: 'min_portion',
         value: item.minPortionGrams,
-        detail: `At minimum portion of ${item.minPortionGrams}g`,
+        detail: `${item.name} at MIN ${item.minPortionGrams}g (${item.category}) — can't reduce`,
       });
     }
   }
-  
+
   return blockers;
 }
 
@@ -691,11 +707,362 @@ function initializePortionsWithStrategy(
       
       grams = clampToConstraints(grams, item);
     }
-    
+
     portions.set(item.id, grams);
   }
-  
+
   return portions;
+}
+
+// ============================================================================
+// MACRO-BALANCE INITIALIZATION (target-aware starting point)
+// ============================================================================
+
+/**
+ * Target-aware initialization: groups items by primary nutrient contribution
+ * and allocates portions to approximately hit each macro target.
+ * Much better starting point than midpoint or blind strategies.
+ */
+function macroBalanceInit(
+  items: SolverItem[],
+  targets: SolverTargets,
+  seasoningsCountMacros: boolean
+): Map<string, number> {
+  const portions = new Map<string, number>();
+
+  // 1. Set locked items and seasonings
+  for (const item of items) {
+    if (item.editableMode === 'LOCKED' || item.category === 'seasoning') {
+      portions.set(item.id, item.currentGrams);
+    }
+  }
+  scaleSeasonings(items, portions);
+
+  // 2. Compute what locked items already contribute
+  const lockedTotals = sumMacros(items, portions, seasoningsCountMacros);
+  const remaining = {
+    protein: Math.max(0, targets.protein - lockedTotals.protein),
+    carbs: Math.max(0, targets.carbs - lockedTotals.carbs),
+    fat: Math.max(0, targets.fat - lockedTotals.fat),
+    calories: Math.max(0, targets.calories - lockedTotals.calories),
+  };
+
+  // 3. Get adjustable items
+  const adjustable = items.filter(i =>
+    i.editableMode !== 'LOCKED' && i.category !== 'seasoning'
+  );
+
+  if (adjustable.length === 0) return portions;
+
+  // 4. Classify items by primary nutrient (relative to target scale)
+  const classify = (item: SolverItem): 'protein' | 'carb' | 'fat' | 'mixed' => {
+    const p = item.nutritionPer100g.protein;
+    const c = item.nutritionPer100g.carbs;
+    const f = item.nutritionPer100g.fat;
+    const pNorm = targets.protein > 0 ? p / targets.protein : 0;
+    const cNorm = targets.carbs > 0 ? c / targets.carbs : 0;
+    const fNorm = targets.fat > 0 ? f / targets.fat : 0;
+    if (pNorm > cNorm && pNorm > fNorm) return 'protein';
+    if (cNorm > pNorm && cNorm > fNorm) return 'carb';
+    if (fNorm > pNorm && fNorm > cNorm) return 'fat';
+    return 'mixed';
+  };
+
+  const groups: Record<string, SolverItem[]> = {
+    protein: [], carb: [], fat: [], mixed: []
+  };
+  for (const item of adjustable) {
+    groups[classify(item)].push(item);
+  }
+
+  // 5. Allocate each group to approximately hit its primary macro target
+  const allocateGroup = (
+    group: SolverItem[],
+    nutrientKey: 'protein' | 'carbs' | 'fat',
+    targetAmount: number
+  ) => {
+    if (group.length === 0 || targetAmount <= 0) return;
+    const totalDensity = group.reduce((sum, item) => {
+      const ef = item.eatenFactor ?? 1;
+      return sum + (item.nutritionPer100g[nutrientKey] / 100 * ef);
+    }, 0);
+    if (totalDensity <= 0) {
+      for (const item of group) {
+        const mid = Math.round((item.minPortionGrams + item.maxPortionGrams) / 2);
+        portions.set(item.id, clampToConstraints(mid, item));
+      }
+      return;
+    }
+    for (const item of group) {
+      const ef = item.eatenFactor ?? 1;
+      const density = item.nutritionPer100g[nutrientKey] / 100 * ef;
+      if (density <= 0) {
+        const mid = Math.round((item.minPortionGrams + item.maxPortionGrams) / 2);
+        portions.set(item.id, clampToConstraints(mid, item));
+        continue;
+      }
+      const share = density / totalDensity;
+      const neededGrams = (targetAmount * share) / density;
+      const grams = clampToConstraints(Math.round(neededGrams), item);
+      portions.set(item.id, grams);
+    }
+  };
+
+  // Protein first (user's top priority), then carbs, then fat
+  allocateGroup(groups.protein, 'protein', remaining.protein);
+  allocateGroup(groups.carb, 'carbs', remaining.carbs);
+  allocateGroup(groups.fat, 'fat', remaining.fat);
+
+  // Mixed items and any unallocated go to midpoint
+  for (const item of adjustable) {
+    if (!portions.has(item.id)) {
+      const mid = Math.round((item.minPortionGrams + item.maxPortionGrams) / 2);
+      portions.set(item.id, clampToConstraints(mid, item));
+    }
+  }
+
+  return portions;
+}
+
+// ============================================================================
+// GRADIENT-BASED COORDINATE DESCENT SOLVER
+// ============================================================================
+
+/**
+ * Gradient-based coordinate descent solver.
+ *
+ * For each adjustable item, computes the analytically optimal step size
+ * to minimize weighted macro error, then applies it (Gauss-Seidel style).
+ *
+ * Key advantages over greedy hill-climbing:
+ * - Each step is analytically optimal (not limited to discrete step sizes)
+ * - All items adjusted per iteration (not just one)
+ * - Gauss-Seidel updates propagate information immediately
+ * - Converges in ~10-30 iterations vs 100+ for greedy
+ *
+ * Includes a fine-tuning phase with ±1g/±step adjustments to escape
+ * rounding traps when the gradient step rounds to zero.
+ */
+function runGradientSolve(
+  items: SolverItem[],
+  targets: SolverTargets,
+  tolerances: ToleranceConfig,
+  seasoningsCountMacros: boolean,
+  maxIterations: number,
+  initPortions: Map<string, number>,
+  debugMode: boolean
+): SolverResult & { iterationsRun: number } {
+  const portions = new Map(initPortions);
+  scaleSeasonings(items, portions);
+
+  const adjustableItems = items.filter(item =>
+    item.editableMode !== 'LOCKED' && item.category !== 'seasoning'
+  );
+
+  if (adjustableItems.length === 0) {
+    const totals = sumMacros(items, portions, seasoningsCountMacros);
+    const delta = calculateDelta(totals, targets);
+    if (isWithinTolerance(totals, targets, tolerances)) {
+      return { success: true, portions, totals: roundMacros(totals), score: 0, iterationsRun: 0 };
+    }
+    return {
+      success: false,
+      failure: {
+        reason: 'no_adjustable_items',
+        blockers: collectBlockers(items, portions, targets, tolerances),
+        closestTotals: roundMacros(totals),
+        targetDelta: delta,
+        iterationsRun: 0,
+      },
+      bestEffortPortions: portions,
+      iterationsRun: 0,
+    } as SolverResult & { iterationsRun: number };
+  }
+
+  // Precompute nutrient density per gram for each adjustable item
+  const nutrientDensity = adjustableItems.map(item => {
+    const ef = item.eatenFactor ?? 1;
+    return {
+      cal: item.nutritionPer100g.calories / 100 * ef,
+      pro: item.nutritionPer100g.protein / 100 * ef,
+      carb: item.nutritionPer100g.carbs / 100 * ef,
+      fat: item.nutritionPer100g.fat / 100 * ef,
+    };
+  });
+
+  // Macro weights matching calculateNetError
+  const W = { cal: 1, pro: 10, carb: 8, fat: 10 };
+
+  let bestCandidate: CandidatePlan | null = null;
+  let iterationsRun = 0;
+  let lastError = Infinity;
+  let stagnation = 0;
+
+  for (let iter = 0; iter < maxIterations; iter++, iterationsRun++) {
+    const totals = sumMacros(items, portions, seasoningsCountMacros);
+    const delta = calculateDelta(totals, targets);
+    const currentError = calculateNetError(delta, tolerances);
+
+    // Check for valid solution
+    if (isWithinTolerance(totals, targets, tolerances)) {
+      const score = scorePlan(portions, totals, targets, items);
+      if (!bestCandidate || score < bestCandidate.score) {
+        bestCandidate = { portions: new Map(portions), totals: roundMacros(totals), score };
+      }
+      break;
+    }
+
+    if (currentError < 0.1) break;
+
+    // Stagnation check
+    if (Math.abs(currentError - lastError) < 0.01) {
+      stagnation++;
+      if (stagnation > 40) break;
+    } else {
+      stagnation = 0;
+    }
+    lastError = currentError;
+
+    // What we still need (positive = under target)
+    const need = {
+      cal: targets.calories - totals.calories,
+      pro: targets.protein - totals.protein,
+      carb: targets.carbs - totals.carbs,
+      fat: targets.fat - totals.fat,
+    };
+
+    let anyChanged = false;
+
+    // PHASE 1: Gradient coordinate descent — optimal step per item
+    for (let j = 0; j < adjustableItems.length; j++) {
+      const item = adjustableItems[j];
+      const n = nutrientDensity[j];
+      const currentGrams = portions.get(item.id) ?? item.currentGrams;
+
+      // Optimal step to minimize weighted squared error:
+      // Δg = Σ(w_m × need_m × n_m) / Σ(w_m × n_m²)
+      const numerator =
+        W.cal * need.cal * n.cal +
+        W.pro * need.pro * n.pro +
+        W.carb * need.carb * n.carb +
+        W.fat * need.fat * n.fat;
+
+      const denominator =
+        W.cal * n.cal * n.cal +
+        W.pro * n.pro * n.pro +
+        W.carb * n.carb * n.carb +
+        W.fat * n.fat * n.fat;
+
+      if (denominator < 1e-10) continue;
+
+      const optimalStep = numerator / denominator;
+
+      let newGrams = applyRounding(
+        currentGrams + optimalStep,
+        item.roundingRule,
+        item.unitSizeGrams
+      );
+      newGrams = clampToConstraints(newGrams, item);
+
+      if (newGrams !== currentGrams) {
+        // Gauss-Seidel: update need immediately so next item sees the effect
+        const dg = newGrams - currentGrams;
+        need.cal -= dg * n.cal;
+        need.pro -= dg * n.pro;
+        need.carb -= dg * n.carb;
+        need.fat -= dg * n.fat;
+        portions.set(item.id, newGrams);
+        anyChanged = true;
+      }
+    }
+
+    // PHASE 2: Fine-tuning — escape rounding traps with ±step increments
+    if (!anyChanged) {
+      for (let j = 0; j < adjustableItems.length; j++) {
+        const item = adjustableItems[j];
+        const currentGrams = portions.get(item.id) ?? 0;
+        const step = Math.max(item.portionStepGrams, 1);
+
+        const candidateSet = new Set<number>();
+        for (const d of [1, -1, 2, -2, step, -step, step * 2, -step * 2]) {
+          const g = clampToConstraints(currentGrams + d, item);
+          if (g !== currentGrams) candidateSet.add(g);
+        }
+
+        let bestError = tryAdjustment(items, portions, item.id, currentGrams, targets, tolerances, seasoningsCountMacros);
+        let bestGrams = currentGrams;
+
+        for (const g of candidateSet) {
+          const error = tryAdjustment(items, portions, item.id, g, targets, tolerances, seasoningsCountMacros);
+          if (error < bestError - 0.001) {
+            bestError = error;
+            bestGrams = g;
+          }
+        }
+
+        if (bestGrams !== currentGrams) {
+          portions.set(item.id, bestGrams);
+          anyChanged = true;
+        }
+      }
+      if (!anyChanged) break; // Truly converged
+    }
+
+    scaleSeasonings(items, portions);
+  }
+
+  // Return best candidate if found
+  if (bestCandidate) {
+    const itemsWithMeta = items.map(item => ({
+      id: item.id,
+      category: item.category,
+      maxPortionGrams: item.maxPortionGrams,
+      name: item.name,
+      foodType: item.category === 'seasoning' ? 'seasoning' : undefined,
+    }));
+    const { portions: normPortions, capped } = normalizeSeasoningPortions(
+      bestCandidate.portions, itemsWithMeta, DEFAULT_SEASONING_MAX_GRAMS
+    );
+    const warnings: string[] = [];
+    if (capped.length > 0) {
+      warnings.push(`Capped ${capped.length} seasoning(s) to max ${DEFAULT_SEASONING_MAX_GRAMS}g`);
+    }
+    return {
+      success: true,
+      portions: normPortions,
+      totals: bestCandidate.totals,
+      score: bestCandidate.score,
+      iterationsRun,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
+  }
+
+  // Failed — return best-effort with diagnostics
+  const itemsWithMeta = items.map(item => ({
+    id: item.id,
+    category: item.category,
+    maxPortionGrams: item.maxPortionGrams,
+    name: item.name,
+    foodType: item.category === 'seasoning' ? 'seasoning' : undefined,
+  }));
+  const { portions: normPortions } = normalizeSeasoningPortions(
+    portions, itemsWithMeta, DEFAULT_SEASONING_MAX_GRAMS
+  );
+  const finalTotals = sumMacros(items, normPortions, seasoningsCountMacros);
+  const finalDelta = calculateDelta(finalTotals, targets);
+
+  return {
+    success: false,
+    failure: {
+      reason: stagnation > 30 ? 'stagnation' : 'max_iterations_exceeded',
+      blockers: collectBlockers(items, normPortions, targets, tolerances),
+      closestTotals: roundMacros(finalTotals),
+      targetDelta: finalDelta,
+      iterationsRun,
+    },
+    bestEffortPortions: normPortions,
+    iterationsRun,
+  } as SolverResult & { iterationsRun: number };
 }
 
 /**
@@ -797,40 +1164,38 @@ export function solve(
   // (don't short-circuit; the solver will get as close as it can)
 
   // ============================================================
-  // FIX A2: Multi-start solver with deterministic strategies
+  // PHASE 1: Gradient solver with multiple starting points
+  // (macro_balance → midpoint → protein_heavy → carb_heavy → current)
   // ============================================================
-  const strategies: InitStrategy[] = ['current', 'midpoint', 'protein_heavy', 'carb_heavy'];
-  const iterationsPerAttempt = Math.ceil(maxIterations / strategies.length);
+  const initStrategies: InitStrategy[] = ['midpoint', 'protein_heavy', 'carb_heavy', 'current'];
+
+  // Build initialization portfolios: macro_balance first (best), then others
+  const initPortfolios: Array<{ name: string; portions: Map<string, number> }> = [
+    { name: 'macro_balance', portions: macroBalanceInit(items, targets, seasoningsCountMacros) },
+    ...initStrategies.map(s => ({
+      name: s,
+      portions: initializePortionsWithStrategy(items, s),
+    })),
+  ];
+
+  const totalAttempts = initPortfolios.length + initStrategies.length; // gradient + greedy fallback
+  const iterationsPerAttempt = Math.ceil(maxIterations / totalAttempts);
 
   let bestResult: SolverResult | null = null;
   let bestFailedPortions: Map<string, number> | null = null;
   let totalIterations = 0;
   let lastFailureReason: 'max_iterations_exceeded' | 'stagnation' = 'max_iterations_exceeded';
 
-  for (const strategy of strategies) {
-    const result = runSingleSolve(
-      items,
-      targets,
-      tolerances,
-      seasoningsCountMacros,
-      iterationsPerAttempt,
-      strategy,
-      opts.debugMode
-    );
-
+  // Helper to evaluate and track a solver result
+  const evaluateResult = (result: SolverResult & { iterationsRun: number }): SolverResult | null => {
     totalIterations += result.iterationsRun;
 
     if (result.success) {
       // Post-validation: check meal-level calorie minimums
       const mealFailures = validateMealMinimums(items, result.portions, seasoningsCountMacros);
       if (mealFailures) {
-        // Macro targets met, but a meal is below minimum calories — treat as failure
         const totals = sumMacros(items, result.portions, seasoningsCountMacros);
         const delta = calculateDelta(totals, targets);
-        const blockerDetails = mealFailures.map(f =>
-          `${f.meal} has only ${f.calories} kcal (min ${f.minimum})`
-        );
-        // Track as failed and try other strategies
         const mealFailResult = {
           success: false,
           failure: {
@@ -846,19 +1211,16 @@ export function solve(
           },
           bestEffortPortions: result.portions,
         } as SolverResult;
-
         if (!bestResult) {
           bestResult = mealFailResult;
           bestFailedPortions = result.portions;
         }
-        continue; // Skip to next strategy — don't fall through to failed-result tracking
-      } else {
-        // Found a valid solution - return it
-        return result;
+        return null; // Not a valid solution
       }
+      return result; // Valid solution — caller should return it
     }
 
-    // Track best failed result (by weighted error closeness)
+    // Track best failed result
     const currentFailure = (result as { success: false; failure: SolverFailure }).failure;
     const currentScore = Math.abs(currentFailure.targetDelta.calories) +
       Math.abs(currentFailure.targetDelta.protein) * 10 +
@@ -875,16 +1237,38 @@ export function solve(
         Math.abs(bestFailure.targetDelta.protein) * 10 +
         Math.abs(bestFailure.targetDelta.carbs) * 8 +
         Math.abs(bestFailure.targetDelta.fat) * 10;
-
       if (currentScore < bestScore) {
         bestResult = result;
         bestFailedPortions = (result as any).bestEffortPortions ?? null;
         lastFailureReason = currentFailure.reason as 'max_iterations_exceeded' | 'stagnation';
       }
     }
+    return null;
+  };
+
+  // Try gradient solver with each initialization
+  for (const init of initPortfolios) {
+    const result = runGradientSolve(
+      items, targets, tolerances, seasoningsCountMacros,
+      iterationsPerAttempt, init.portions, opts.debugMode
+    );
+    const validResult = evaluateResult(result);
+    if (validResult) return validResult;
   }
 
-  // All strategies failed — return best attempt with portions attached
+  // ============================================================
+  // PHASE 2: Legacy greedy solver as fallback
+  // ============================================================
+  for (const strategy of initStrategies) {
+    const result = runSingleSolve(
+      items, targets, tolerances, seasoningsCountMacros,
+      iterationsPerAttempt, strategy, opts.debugMode
+    );
+    const validResult = evaluateResult(result);
+    if (validResult) return validResult;
+  }
+
+  // All strategies failed — return best attempt with diagnostics
   if (bestResult && !bestResult.success) {
     const failure = (bestResult as { success: false; failure: SolverFailure }).failure;
     return {
