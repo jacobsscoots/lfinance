@@ -195,8 +195,14 @@ serve(async (req) => {
         return errorResponse('Invalid connectionId: must be a valid UUID', 'exchange-code', 400);
       }
 
+      // Use service role to read bank_connections (base table SELECT blocked for authenticated users)
+      const serviceSupabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
       // Verify the connection belongs to this user
-      const { data: connection, error: connError } = await supabase
+      const { data: connection, error: connError } = await serviceSupabase
         .from('bank_connections')
         .select('id, user_id')
         .eq('id', connectionId)
@@ -241,7 +247,7 @@ serve(async (req) => {
       const expiresAt = new Date();
       expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await serviceSupabase
         .from('bank_connections')
         .update({
           access_token: tokenData.access_token,
@@ -275,8 +281,14 @@ serve(async (req) => {
         return errorResponse('Invalid connectionId: must be a valid UUID', 'refresh-token', 400);
       }
 
+      // Use service role to read bank_connections (base table SELECT blocked for authenticated users)
+      const serviceSupabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
       // Get the connection and verify ownership
-      const { data: connection, error: connError } = await supabase
+      const { data: connection, error: connError } = await serviceSupabase
         .from('bank_connections')
         .select('id, user_id, refresh_token')
         .eq('id', connectionId)
@@ -324,7 +336,7 @@ serve(async (req) => {
       const expiresAt = new Date();
       expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
-      await supabase
+      await serviceSupabase
         .from('bank_connections')
         .update({
           access_token: tokenData.access_token,
