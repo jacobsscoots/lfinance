@@ -214,7 +214,7 @@ export function TransactionCsvImport({ open, onOpenChange }: TransactionCsvImpor
                     <SelectValue placeholder="(Optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
