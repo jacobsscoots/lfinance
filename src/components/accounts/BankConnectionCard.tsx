@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, Trash2, Building2, Link } from "lucide-react";
 import { useBankConnections } from "@/hooks/useBankConnections";
+import { useAccounts } from "@/hooks/useAccounts";
 import { getProviderLabel } from "@/lib/bankProviders";
 import { format } from "date-fns";
 
@@ -25,6 +26,7 @@ export function BankConnectionCard() {
     syncConnection,
     deleteConnection,
   } = useBankConnections();
+  const { allAccounts } = useAccounts();
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const handleConnect = () => {
@@ -102,6 +104,17 @@ export function BankConnectionCard() {
                       <p className="font-medium text-sm">
                         {getProviderLabel(connection.provider)}
                       </p>
+                      {(() => {
+                        const linkedAccounts = allAccounts.filter(a => a.connection_id === connection.id);
+                        if (linkedAccounts.length > 0) {
+                          return (
+                            <p className="text-xs text-muted-foreground">
+                              {linkedAccounts.map(a => a.display_name || a.name).join(", ")}
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
                       <div className="flex items-center gap-2">
                         <Badge
                           variant={connection.status === "connected" ? "default" : "secondary"}

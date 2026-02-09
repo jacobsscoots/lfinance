@@ -1,7 +1,10 @@
+import { useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
+
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface BankConnection {
   id: string;
@@ -99,6 +102,8 @@ export function useBankConnections() {
       return (data || []) as BankConnection[];
     },
     enabled: !!user,
+    refetchInterval: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const startConnection = useMutation({
@@ -258,8 +263,44 @@ export function useBankConnections() {
     },
   });
 
+  // Auto-sync all connected banks every 5 minutes
+  const syncingRef = useRef(false);
+  const connections = connectionsQuery.data || [];
+
+  const autoSync = useCallback(async () => {
+    if (syncingRef.current || !user) return;
+    const connectedIds = connections
+      .filter((c) => c.status === "connected")
+      .map((c) => c.id);
+    if (connectedIds.length === 0) return;
+
+    syncingRef.current = true;
+    try {
+      for (const id of connectedIds) {
+        await supabase.functions.invoke("truelayer-sync", {
+          body: { connectionId: id },
+        });
+      }
+      // Silently refresh queries — no toast for background sync
+      queryClient.invalidateQueries({ queryKey: ["bank-connections"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["total-balance"] });
+    } catch {
+      // Background sync failures are silent — user can manually sync
+    } finally {
+      syncingRef.current = false;
+    }
+  }, [connections, user, queryClient]);
+
+  useEffect(() => {
+    if (!user || connections.length === 0) return;
+    const intervalId = setInterval(autoSync, AUTO_SYNC_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [user, connections.length, autoSync]);
+
   return {
-    connections: connectionsQuery.data || [],
+    connections,
     isLoading: connectionsQuery.isLoading,
     startConnection,
     completeConnection,
