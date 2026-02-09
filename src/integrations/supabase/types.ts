@@ -2242,6 +2242,8 @@ export type Database = {
           matched_transaction_id: string | null
           net_pay: number | null
           ni_deducted: number | null
+          other_deductions: Json | null
+          pay_date: string | null
           pay_period_end: string | null
           pay_period_start: string | null
           pension_deducted: number | null
@@ -2263,6 +2265,8 @@ export type Database = {
           matched_transaction_id?: string | null
           net_pay?: number | null
           ni_deducted?: number | null
+          other_deductions?: Json | null
+          pay_date?: string | null
           pay_period_end?: string | null
           pay_period_start?: string | null
           pension_deducted?: number | null
@@ -2284,6 +2288,8 @@ export type Database = {
           matched_transaction_id?: string | null
           net_pay?: number | null
           ni_deducted?: number | null
+          other_deductions?: Json | null
+          pay_date?: string | null
           pay_period_end?: string | null
           pay_period_start?: string | null
           pension_deducted?: number | null

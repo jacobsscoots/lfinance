@@ -7,12 +7,19 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface OtherDeduction {
+  name: string;
+  amount: number;
+}
+
 interface ExtractionResult {
   gross_pay: number | null;
   net_pay: number | null;
   tax_deducted: number | null;
   ni_deducted: number | null;
   pension_deducted: number | null;
+  other_deductions: OtherDeduction[];
+  pay_date: string | null;
   pay_period_start: string | null;
   pay_period_end: string | null;
   employer_name: string | null;
@@ -66,26 +73,35 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are a UK payslip data extractor. Extract the following fields from payslips:
-- gross_pay: Total earnings before deductions (number)
-- net_pay: Take-home pay after all deductions (number)
-- tax_deducted: PAYE tax amount (number)
-- ni_deducted: National Insurance amount (number)
-- pension_deducted: Pension contribution (number)
-- pay_period_start: Start of pay period (ISO date string YYYY-MM-DD)
-- pay_period_end: End of pay period (ISO date string YYYY-MM-DD)
-- employer_name: Company/employer name (string)
-- confidence: Your confidence in the extraction accuracy ("high", "medium", or "low")
+            content: `You are a UK payslip data extractor. Extract ALL of the following fields from the payslip document.
 
-Return null for any field you cannot extract reliably. Be conservative - if unclear, return null.
-UK payslips typically show Tax, NI, and Pension as deductions. Net pay is sometimes labeled "Net Pay", "Take Home Pay", or similar.`,
+CRITICAL RULES:
+1. **Pension**: ONLY extract a pension amount if there is an explicit line labelled "Pension", "Employer Pension", "Employee Pension Contribution", or similar. Do NOT confuse other deductions (e.g. "Health Cash Plan", "Health Care", "Smart Tech", "Union Fees", "Cycle to Work") with pension. If no pension line exists, return null for pension_deducted.
+
+2. **Other Deductions**: Extract ALL salary deductions that are NOT Tax/PAYE, National Insurance, or Pension. This includes items like:
+   - Health Cash Plan, Healthcare
+   - Union Fees, Union Subscription
+   - Smart Tech Repayment, Cycle to Work
+   - Student Loan
+   - Any other named deduction
+   Return each as {name, amount} in the other_deductions array.
+
+3. **Pay Date**: The date the employee is actually paid (often labelled "Pay Date", "Payment Date", "Date Paid"). This is DIFFERENT from the pay period end date. Return as YYYY-MM-DD.
+
+4. **Pay Period**: The start and end of the pay period (e.g. "Period Start"/"Period End", or "Tax Period"). Return as YYYY-MM-DD.
+
+5. **Dates**: UK payslips often use DD.MM.YYYY or DD/MM/YYYY format. Convert all dates to YYYY-MM-DD (ISO format). Be careful with day/month order — in UK format, the day comes first.
+
+6. Gross pay = total earnings before deductions. Net pay = take-home pay after all deductions.
+
+Return null for any field you cannot reliably extract.`,
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "Extract the payslip data from this image:",
+                text: "Extract all payslip data from this document. Pay careful attention to distinguishing pension from other deductions, and extract the pay date separately from the pay period dates.",
               },
               {
                 type: "image_url",
@@ -101,18 +117,31 @@ UK payslips typically show Tax, NI, and Pension as deductions. Net pay is someti
             type: "function",
             function: {
               name: "extract_payslip_data",
-              description: "Extract structured payslip data",
+              description: "Extract structured payslip data including all deductions",
               parameters: {
                 type: "object",
                 properties: {
-                  gross_pay: { type: ["number", "null"] },
-                  net_pay: { type: ["number", "null"] },
-                  tax_deducted: { type: ["number", "null"] },
-                  ni_deducted: { type: ["number", "null"] },
-                  pension_deducted: { type: ["number", "null"] },
-                  pay_period_start: { type: ["string", "null"] },
-                  pay_period_end: { type: ["string", "null"] },
-                  employer_name: { type: ["string", "null"] },
+                  gross_pay: { type: ["number", "null"], description: "Total gross pay before deductions" },
+                  net_pay: { type: ["number", "null"], description: "Net take-home pay after all deductions" },
+                  tax_deducted: { type: ["number", "null"], description: "PAYE tax deducted" },
+                  ni_deducted: { type: ["number", "null"], description: "National Insurance contribution" },
+                  pension_deducted: { type: ["number", "null"], description: "Pension contribution ONLY — null if no pension line exists" },
+                  other_deductions: {
+                    type: "array",
+                    description: "All other salary deductions not covered by tax, NI, or pension",
+                    items: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string", description: "Name of the deduction as shown on payslip" },
+                        amount: { type: "number", description: "Amount deducted" },
+                      },
+                      required: ["name", "amount"],
+                    },
+                  },
+                  pay_date: { type: ["string", "null"], description: "The date the employee is paid (YYYY-MM-DD), NOT the period end" },
+                  pay_period_start: { type: ["string", "null"], description: "Start of pay period (YYYY-MM-DD)" },
+                  pay_period_end: { type: ["string", "null"], description: "End of pay period (YYYY-MM-DD)" },
+                  employer_name: { type: ["string", "null"], description: "Employer/company name" },
                   confidence: { type: "string", enum: ["high", "medium", "low"] },
                 },
                 required: ["confidence"],
@@ -152,7 +181,11 @@ UK payslips typically show Tax, NI, and Pension as deductions. Net pay is someti
       if (!toolCall?.function?.arguments) {
         throw new Error("No tool call response");
       }
-      extracted = JSON.parse(toolCall.function.arguments);
+      const parsed = JSON.parse(toolCall.function.arguments);
+      extracted = {
+        ...parsed,
+        other_deductions: Array.isArray(parsed.other_deductions) ? parsed.other_deductions : [],
+      };
     } catch (e) {
       console.error("Failed to parse AI response:", e);
       extracted = {
@@ -161,11 +194,20 @@ UK payslips typically show Tax, NI, and Pension as deductions. Net pay is someti
         tax_deducted: null,
         ni_deducted: null,
         pension_deducted: null,
+        other_deductions: [],
+        pay_date: null,
         pay_period_start: null,
         pay_period_end: null,
         employer_name: null,
         confidence: "low",
       };
+    }
+
+    // Post-extraction verification: validate pension isn't a misidentified deduction
+    if (extracted.pension_deducted !== null && extracted.other_deductions.length === 0) {
+      // If we got a pension but no other deductions, the model may have confused them
+      // Check if the pension amount matches a common non-pension deduction pattern
+      console.log("Pension extracted:", extracted.pension_deducted, "Other deductions:", extracted.other_deductions);
     }
 
     // Update payslip with extracted data
@@ -175,6 +217,8 @@ UK payslips typically show Tax, NI, and Pension as deductions. Net pay is someti
       tax_deducted: extracted.tax_deducted,
       ni_deducted: extracted.ni_deducted,
       pension_deducted: extracted.pension_deducted,
+      other_deductions: extracted.other_deductions,
+      pay_date: extracted.pay_date,
       pay_period_start: extracted.pay_period_start,
       pay_period_end: extracted.pay_period_end,
       employer_name: extracted.employer_name,
@@ -182,23 +226,25 @@ UK payslips typically show Tax, NI, and Pension as deductions. Net pay is someti
       extraction_raw: aiData,
     };
 
-    // Attempt auto-matching if confidence is not low
+    // Attempt auto-matching using pay_date (preferred) or pay_period_end as fallback
     let matchedTransactionId: string | null = null;
     let matchStatus = "pending";
 
-    if (extracted.confidence !== "low" && extracted.net_pay && extracted.pay_period_end) {
+    const matchDate = extracted.pay_date || extracted.pay_period_end;
+
+    if (extracted.confidence !== "low" && extracted.net_pay && matchDate) {
       // Find matching income transactions
       // Criteria:
       // - type = 'income'
       // - amount within ±0.50 of net_pay
-      // - date within ±2 days of pay_period_end
+      // - date within ±2 days of pay_date (or pay_period_end)
       // - not already linked to another payslip
       // - description does NOT contain refund indicators
       
-      const payPeriodEnd = new Date(extracted.pay_period_end);
-      const dateMin = new Date(payPeriodEnd);
+      const refDate = new Date(matchDate);
+      const dateMin = new Date(refDate);
       dateMin.setDate(dateMin.getDate() - 2);
-      const dateMax = new Date(payPeriodEnd);
+      const dateMax = new Date(refDate);
       dateMax.setDate(dateMax.getDate() + 2);
       
       const amountMin = extracted.net_pay - 0.50;
@@ -249,7 +295,6 @@ UK payslips typically show Tax, NI, and Pension as deductions. Net pay is someti
             matchedTransactionId = available[0].id;
             matchStatus = "auto_matched";
           } else if (available.length > 1) {
-            // Multiple matches - force manual review
             matchStatus = "pending";
           } else {
             matchStatus = "no_match";

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { usePayslips, Payslip, PayslipUpdateInput } from "@/hooks/usePayslips";
+import { usePayslips, Payslip, PayslipUpdateInput, PayslipOtherDeduction } from "@/hooks/usePayslips";
 import { getPayslipSignedUrl, isPayslipPdf } from "@/lib/payslipUpload";
 import { format } from "date-fns";
 import {
@@ -130,6 +130,15 @@ export function PayslipPreviewDialog({
     return "Not extracted";
   };
 
+  const formatPayDate = () => {
+    if (payslip.pay_date) {
+      return format(new Date(payslip.pay_date), "d MMM yyyy");
+    }
+    return null;
+  };
+
+  const otherDeductions: PayslipOtherDeduction[] = Array.isArray(payslip.other_deductions) ? payslip.other_deductions : [];
+
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent className="max-w-lg">
@@ -137,6 +146,7 @@ export function PayslipPreviewDialog({
           <ResponsiveDialogTitle>Payslip Details</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
             {payslip.employer_name || "Unknown employer"} • {formatPayPeriod()}
+            {formatPayDate() && <span className="block text-xs mt-0.5">Paid: {formatPayDate()}</span>}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
 
@@ -234,10 +244,23 @@ export function PayslipPreviewDialog({
                   {payslip.ni_deducted ? `-${formatCurrency(payslip.ni_deducted)}` : "—"}
                 </div>
                 
-                <div className="text-muted-foreground">Pension</div>
-                <div className="font-medium text-right text-red-600">
-                  {payslip.pension_deducted ? `-${formatCurrency(payslip.pension_deducted)}` : "—"}
-                </div>
+                {payslip.pension_deducted != null && payslip.pension_deducted > 0 && (
+                  <>
+                    <div className="text-muted-foreground">Pension</div>
+                    <div className="font-medium text-right text-red-600">
+                      -{formatCurrency(payslip.pension_deducted)}
+                    </div>
+                  </>
+                )}
+
+                {otherDeductions.length > 0 && otherDeductions.map((d, i) => (
+                  <div key={i} className="contents">
+                    <div className="text-muted-foreground">{d.name}</div>
+                    <div className="font-medium text-right text-red-600">
+                      -{formatCurrency(d.amount)}
+                    </div>
+                  </div>
+                ))}
                 
                 <Separator className="col-span-2 my-1" />
                 
