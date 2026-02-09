@@ -18,10 +18,13 @@ interface BillCardProps {
 }
 
 const frequencyLabels: Record<string, string> = {
+  daily: "Daily",
   weekly: "Weekly",
   fortnightly: "Fortnightly",
   monthly: "Monthly",
+  bimonthly: "Every 2 Months",
   quarterly: "Quarterly",
+  biannual: "Bi-annual",
   yearly: "Yearly",
 };
 

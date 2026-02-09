@@ -3335,6 +3335,8 @@ export type Database = {
         | "quarterly"
         | "yearly"
         | "biannual"
+        | "daily"
+        | "bimonthly"
       transaction_type: "income" | "expense"
     }
     CompositeTypes: {
@@ -3470,6 +3472,8 @@ export const Constants = {
         "quarterly",
         "yearly",
         "biannual",
+        "daily",
+        "bimonthly",
       ],
       transaction_type: ["income", "expense"],
     },

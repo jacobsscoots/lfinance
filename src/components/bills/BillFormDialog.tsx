@@ -212,9 +212,11 @@ export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps
                   <SelectValue placeholder="Select frequency" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
+                  <SelectItem value="daily">Daily</SelectItem>
                   <SelectItem value="weekly">Weekly</SelectItem>
                   <SelectItem value="fortnightly">Fortnightly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="bimonthly">Every 2 Months</SelectItem>
                   <SelectItem value="quarterly">Quarterly</SelectItem>
                   <SelectItem value="biannual">Bi-annual (6 months)</SelectItem>
                   <SelectItem value="yearly">Yearly</SelectItem>
