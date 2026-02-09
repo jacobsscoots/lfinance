@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Receipt, CreditCard, Tv } from "lucide-react";
+import { Plus, Receipt, CreditCard, Tv, Upload } from "lucide-react";
+import { ExcelImportDialog } from "@/components/settings/ExcelImportDialog";
 import { useBills, Bill } from "@/hooks/useBills";
 import { BillListItem } from "@/components/bills/BillListItem";
 import { BillFormDialog } from "@/components/bills/BillFormDialog";
@@ -16,6 +17,7 @@ export default function Bills() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [activeTab, setActiveTab] = useState<"bills" | "subscriptions">("bills");
+  const [importOpen, setImportOpen] = useState(false);
 
   // Separate bills from subscriptions
   const allActiveBills = bills.filter((b) => b.is_active);
@@ -68,10 +70,16 @@ export default function Bills() {
               Manage your recurring bills and subscriptions
             </p>
           </div>
-          <Button onClick={handleAddNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Bill
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import Excel
+            </Button>
+            <Button onClick={handleAddNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Bill
+            </Button>
+          </div>
         </div>
 
         {/* Summary Card */}
@@ -192,6 +200,7 @@ export default function Bills() {
 
       <BillFormDialog open={formOpen} onOpenChange={setFormOpen} bill={selectedBill} />
       <DeleteBillDialog open={deleteOpen} onOpenChange={setDeleteOpen} bill={selectedBill} />
+      <ExcelImportDialog open={importOpen} onOpenChange={setImportOpen} initialSection="bills" />
     </AppLayout>
   );
 }
