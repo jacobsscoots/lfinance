@@ -1,4 +1,10 @@
 import { addDays, format } from "date-fns";
+import {
+  calculateOrderByDate,
+  getReorderStatus,
+  type ShippingProfile,
+  type ReorderStatus,
+} from "./reorderCalculations";
 
 export interface ToiletryItem {
   id: string;
@@ -35,6 +41,9 @@ export interface ToiletryItem {
   current_weight_grams: number | null;
   calculated_usage_rate: number | null;
   last_weighed_at: string | null;
+  // Retailer / reorder
+  retailer: string | null;
+  safety_buffer_days: number;
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -49,6 +58,12 @@ export interface ToiletryForecast {
   yearlyCost: number;
   statusLevel: "healthy" | "low" | "empty";
   percentRemaining: number;
+  // Reorder fields (populated when retailer profile available)
+  orderByDate: Date | null;
+  orderByFormatted: string | null;
+  reorderStatus: ReorderStatus;
+  effectiveDailyUsage: number;
+  usageSource: "log" | "weight" | "manual";
 }
 
 export interface PurchaseCalculation {
@@ -83,21 +98,32 @@ const LOW_STOCK_THRESHOLD_DAYS = 14;
 /**
  * Calculate forecasting data for a toiletry item
  */
-export function calculateForecast(item: ToiletryItem): ToiletryForecast {
+export function calculateForecast(
+  item: ToiletryItem,
+  options?: {
+    logBasedUsageRate?: number | null;
+    shippingProfile?: ShippingProfile | null;
+  }
+): ToiletryForecast {
   const { current_remaining, usage_rate_per_day, total_size, cost_per_item } = item;
   
   // Use weight-based data if available, otherwise fall back to manual tracking
   let effectiveRemaining = current_remaining;
   let effectiveRate = usage_rate_per_day;
+  let usageSource: "log" | "weight" | "manual" = "manual";
+  
+  // Priority: log-based > weight-based > manual
+  if (options?.logBasedUsageRate != null && options.logBasedUsageRate > 0) {
+    effectiveRate = options.logBasedUsageRate;
+    usageSource = "log";
+  } else if (item.calculated_usage_rate != null && item.calculated_usage_rate > 0) {
+    effectiveRate = item.calculated_usage_rate;
+    usageSource = "weight";
+  }
   
   // If we have weight-based data, use it for more accurate forecasting
   if (item.current_weight_grams != null && item.empty_weight_grams != null) {
     effectiveRemaining = Math.max(0, item.current_weight_grams - item.empty_weight_grams);
-  }
-  
-  // Use calculated rate if available (from weight-based tracking)
-  if (item.calculated_usage_rate != null && item.calculated_usage_rate > 0) {
-    effectiveRate = item.calculated_usage_rate;
   }
   
   // Days remaining = effectiveRemaining / effectiveRate
@@ -111,10 +137,10 @@ export function calculateForecast(item: ToiletryItem): ToiletryForecast {
     ? format(runOutDate, "MMM d")
     : "N/A";
   
-  // Monthly usage = usage_rate_per_day * 30
-  const monthlyUsage = usage_rate_per_day * 30;
+  // Monthly usage = effectiveRate * 30
+  const monthlyUsage = effectiveRate * 30;
   
-  // Monthly cost = (usage_rate_per_day * 30 / total_size) * cost_per_item
+  // Monthly cost = (effectiveRate * 30 / total_size) * cost_per_item
   const monthlyCost = total_size > 0 
     ? (monthlyUsage / total_size) * cost_per_item
     : 0;
@@ -134,6 +160,22 @@ export function calculateForecast(item: ToiletryItem): ToiletryForecast {
   const percentRemaining = total_size > 0 
     ? Math.round((current_remaining / total_size) * 100)
     : 0;
+
+  // Reorder calculations
+  let orderByDate: Date | null = null;
+  let orderByFormatted: string | null = null;
+  let reorderStatus: ReorderStatus = "no_data";
+
+  if (options?.shippingProfile && isFinite(daysRemaining)) {
+    const result = calculateOrderByDate(
+      runOutDate,
+      options.shippingProfile,
+      item.safety_buffer_days ?? 2
+    );
+    orderByDate = result.orderByDate;
+    orderByFormatted = format(result.orderByDate, "d MMM");
+    reorderStatus = getReorderStatus(result.orderByDate);
+  }
   
   return {
     daysRemaining: Math.round(daysRemaining),
@@ -144,6 +186,11 @@ export function calculateForecast(item: ToiletryItem): ToiletryForecast {
     yearlyCost,
     statusLevel,
     percentRemaining,
+    orderByDate,
+    orderByFormatted,
+    reorderStatus,
+    effectiveDailyUsage: effectiveRate,
+    usageSource,
   };
 }
 
