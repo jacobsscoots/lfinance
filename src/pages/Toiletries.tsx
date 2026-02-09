@@ -5,6 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus } from "lucide-react";
 import { useToiletries } from "@/hooks/useToiletries";
 import { useToiletryPurchases } from "@/hooks/useToiletryPurchases";
+import { useToiletryUsageLogs } from "@/hooks/useToiletryUsageLogs";
+import { useRetailerProfiles } from "@/hooks/useRetailerProfiles";
+import { calculateDailyUsageFromLogs } from "@/lib/reorderCalculations";
 import { ToiletrySummaryCards } from "@/components/toiletries/ToiletrySummaryCards";
 import { ToiletryCategoryFilter } from "@/components/toiletries/ToiletryCategoryFilter";
 import { ToiletryTable } from "@/components/toiletries/ToiletryTable";
@@ -14,8 +17,10 @@ import { LogWeightDialog } from "@/components/toiletries/LogWeightDialog";
 import { LinkPurchaseDialog } from "@/components/toiletries/LinkPurchaseDialog";
 import { PriceComparisonDialog } from "@/components/toiletries/PriceComparisonDialog";
 import { OrdersTab } from "@/components/toiletries/OrdersTab";
+import { OrdersPanel } from "@/components/toiletries/OrdersPanel";
 import { ToiletrySummaryTab } from "@/components/toiletries/ToiletrySummaryTab";
 import type { ToiletryItem } from "@/lib/toiletryCalculations";
+import type { ShippingProfile } from "@/lib/reorderCalculations";
 
 export default function Toiletries() {
   const { 
@@ -29,7 +34,39 @@ export default function Toiletries() {
   } = useToiletries();
   
   const { purchases, createPurchase } = useToiletryPurchases();
+  const { logs: allUsageLogs } = useToiletryUsageLogs();
+  const { profiles, getProfileForRetailer } = useRetailerProfiles();
   
+  // Compute per-item usage rates from logs
+  const usageRates = useMemo(() => {
+    const rates: Record<string, number | null> = {};
+    for (const item of toiletries) {
+      const itemLogs = allUsageLogs.filter((l) => l.toiletry_item_id === item.id);
+      const result = calculateDailyUsageFromLogs(
+        itemLogs.map((l) => ({ logged_date: l.logged_date, amount_used: l.amount_used }))
+      );
+      rates[item.id] = result.dailyUsage;
+    }
+    return rates;
+  }, [toiletries, allUsageLogs]);
+
+  // Build shipping profile lookup by retailer name (lowercase)
+  const shippingProfiles = useMemo(() => {
+    const map: Record<string, ShippingProfile | null> = {};
+    for (const p of profiles) {
+      map[p.retailer_name.toLowerCase()] = {
+        dispatch_days_min: p.dispatch_days_min,
+        dispatch_days_max: p.dispatch_days_max,
+        delivery_days_min: p.delivery_days_min,
+        delivery_days_max: p.delivery_days_max,
+        dispatches_weekends: p.dispatches_weekends,
+        delivers_weekends: p.delivers_weekends,
+        cutoff_time: p.cutoff_time,
+      };
+    }
+    return map;
+  }, [profiles]);
+
   const [activeTab, setActiveTab] = useState("items");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [formDialogOpen, setFormDialogOpen] = useState(false);
@@ -145,6 +182,9 @@ export default function Toiletries() {
           </TabsList>
           
           <TabsContent value="items" className="space-y-6">
+            {/* Orders Panel (inline at top) */}
+            <OrdersPanel />
+
             {/* Summary Cards */}
             <ToiletrySummaryCards items={toiletries} />
             
@@ -168,6 +208,8 @@ export default function Toiletries() {
                 onLogWeight={handleLogWeight}
                 onLinkPurchase={handleLinkPurchase}
                 onFindPrices={handleFindPrices}
+                usageRates={usageRates}
+                shippingProfiles={shippingProfiles}
               />
             )}
           </TabsContent>

@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { MoreVertical, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,24 +10,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { 
-  calculateForecast, 
   formatCurrency, 
   getStatusBadgeVariant, 
   getStatusDisplayText,
   TOILETRY_CATEGORIES,
-  type ToiletryItem 
+  type ToiletryItem,
+  type ToiletryForecast,
 } from "@/lib/toiletryCalculations";
+import {
+  getReorderBadgeVariant,
+  getReorderStatusLabel,
+} from "@/lib/reorderCalculations";
 import { cn } from "@/lib/utils";
 
 interface ToiletryCardProps {
   item: ToiletryItem;
+  forecast: ToiletryForecast;
   onEdit: (item: ToiletryItem) => void;
   onDelete: (item: ToiletryItem) => void;
   onRestock: (item: ToiletryItem) => void;
 }
 
-export function ToiletryCard({ item, onEdit, onDelete, onRestock }: ToiletryCardProps) {
-  const forecast = calculateForecast(item);
+export function ToiletryCard({ item, forecast, onEdit, onDelete, onRestock }: ToiletryCardProps) {
   const categoryLabel = TOILETRY_CATEGORIES.find(c => c.value === item.category)?.label || item.category;
 
   return (
@@ -42,10 +45,15 @@ export function ToiletryCard({ item, onEdit, onDelete, onRestock }: ToiletryCard
                 {getStatusDisplayText(item, forecast)}
               </Badge>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 flex-wrap">
               <Badge variant="secondary" className="text-xs">
                 {categoryLabel}
               </Badge>
+              {item.retailer && (
+                <Badge variant="outline" className="text-xs">
+                  {item.retailer}
+                </Badge>
+              )}
               <span>•</span>
               <span>{item.total_size}{item.size_unit}</span>
               <span>•</span>
@@ -106,6 +114,25 @@ export function ToiletryCard({ item, onEdit, onDelete, onRestock }: ToiletryCard
               )}>
                 {forecast.daysRemaining} days • {forecast.runOutDateFormatted}
               </span>
+            )}
+          </div>
+
+          {/* Usage + Order-by row */}
+          <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
+            <span className="text-muted-foreground">
+              {forecast.effectiveDailyUsage.toFixed(1)}{item.size_unit}/day
+              <span className="ml-1 opacity-70">
+                ({forecast.usageSource === "log" ? "logged" : 
+                  forecast.usageSource === "weight" ? "weight" : "manual"})
+              </span>
+            </span>
+            {forecast.orderByFormatted && (
+              <Badge 
+                variant={getReorderBadgeVariant(forecast.reorderStatus)} 
+                className="text-xs"
+              >
+                Order by {forecast.orderByFormatted}
+              </Badge>
             )}
           </div>
         </div>
