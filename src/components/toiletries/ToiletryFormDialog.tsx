@@ -447,14 +447,14 @@ export function ToiletryFormDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Retailer</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <Select onValueChange={(val) => field.onChange(val === "none" ? "" : val)} value={field.value || "none"}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select retailer" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-popover">
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {RETAILER_OPTIONS.map(r => (
                             <SelectItem key={r} value={r}>{r}</SelectItem>
                           ))}
