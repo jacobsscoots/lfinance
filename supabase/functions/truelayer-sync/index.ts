@@ -302,12 +302,18 @@ serve(async (req) => {
       }
     }
 
-    // Update connection status
+    // Detect the real bank provider from synced accounts (e.g. "ob-monzo" instead of "truelayer")
+    const detectedProvider = syncedAccounts.length > 0
+      ? (accounts[0]?.provider?.provider_id || accounts[0]?.provider?.display_name || connectionProvider)
+      : connectionProvider;
+
+    // Update connection status + propagate real bank provider
     await supabase
       .from('bank_connections')
       .update({
         status: 'connected',
         last_synced_at: new Date().toISOString(),
+        provider: detectedProvider,
       })
       .eq('id', connectionId);
 

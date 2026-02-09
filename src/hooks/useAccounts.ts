@@ -67,8 +67,8 @@ export function useAccounts() {
       return uniqueAccounts;
     },
     enabled: !!user,
-    // Auto-refresh every 10 minutes
-    refetchInterval: 10 * 60 * 1000,
+    // Auto-refresh every 5 minutes (matches bank connection auto-sync interval)
+    refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   });
 
