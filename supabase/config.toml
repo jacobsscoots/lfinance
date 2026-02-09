@@ -33,3 +33,9 @@ verify_jwt = false
 [functions.bright-sync-readings]
 verify_jwt = false
 
+[functions.tracking-webhook]
+verify_jwt = false
+
+[functions.ingest-order-emails]
+verify_jwt = false
+

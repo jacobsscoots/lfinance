@@ -24,9 +24,16 @@ import {
   getStatusDisplayText,
   TOILETRY_CATEGORIES,
   type ToiletryItem,
+  type ToiletryForecast,
 } from "@/lib/toiletryCalculations";
+import {
+  getReorderBadgeVariant,
+  getReorderStatusLabel,
+  type ShippingProfile,
+} from "@/lib/reorderCalculations";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ToiletryCard } from "./ToiletryCard";
+import { cn } from "@/lib/utils";
 
 interface ToiletryTableProps {
   items: ToiletryItem[];
@@ -36,6 +43,8 @@ interface ToiletryTableProps {
   onLogWeight?: (item: ToiletryItem) => void;
   onLinkPurchase?: (item: ToiletryItem) => void;
   onFindPrices?: (item: ToiletryItem) => void;
+  usageRates?: Record<string, number | null>;
+  shippingProfiles?: Record<string, ShippingProfile | null>;
 }
 
 export function ToiletryTable({
@@ -46,6 +55,8 @@ export function ToiletryTable({
   onLogWeight,
   onLinkPurchase,
   onFindPrices,
+  usageRates,
+  shippingProfiles,
 }: ToiletryTableProps) {
   const isMobile = useIsMobile();
 
@@ -58,6 +69,15 @@ export function ToiletryTable({
     );
   }
 
+  const getForecast = (item: ToiletryItem): ToiletryForecast => {
+    return calculateForecast(item, {
+      logBasedUsageRate: usageRates?.[item.id] ?? null,
+      shippingProfile: item.retailer
+        ? shippingProfiles?.[item.retailer.toLowerCase()] ?? null
+        : null,
+    });
+  };
+
   // Mobile: Card layout
   if (isMobile) {
     return (
@@ -66,6 +86,7 @@ export function ToiletryTable({
           <ToiletryCard
             key={item.id}
             item={item}
+            forecast={getForecast(item)}
             onEdit={onEdit}
             onDelete={onDelete}
             onRestock={onRestock}
@@ -75,7 +96,7 @@ export function ToiletryTable({
     );
   }
 
-  // Desktop: Table layout with horizontal scroll
+  // Desktop: Table layout
   return (
     <div className="rounded-md border overflow-x-auto">
       <Table>
@@ -84,15 +105,16 @@ export function ToiletryTable({
             <TableHead>Item</TableHead>
             <TableHead className="hidden sm:table-cell">Category</TableHead>
             <TableHead>Remaining</TableHead>
+            <TableHead className="hidden md:table-cell">Daily Usage</TableHead>
             <TableHead className="hidden md:table-cell">Days Left</TableHead>
-            <TableHead className="hidden md:table-cell">Run-out</TableHead>
+            <TableHead className="hidden lg:table-cell">Order By</TableHead>
             <TableHead className="hidden lg:table-cell">Monthly</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.map((item) => {
-            const forecast = calculateForecast(item);
+            const forecast = getForecast(item);
             const categoryLabel = TOILETRY_CATEGORIES.find(
               (c) => c.value === item.category
             )?.label || item.category;
@@ -109,6 +131,11 @@ export function ToiletryTable({
                       <Badge variant={getStatusBadgeVariant(item, forecast)} className="text-xs">
                         {getStatusDisplayText(item, forecast)}
                       </Badge>
+                      {item.retailer && (
+                        <Badge variant="outline" className="text-xs">
+                          {item.retailer}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </TableCell>
@@ -129,18 +156,46 @@ export function ToiletryTable({
                     />
                   </div>
                 </TableCell>
-                
+
                 <TableCell className="hidden md:table-cell">
-                  <span className={forecast.statusLevel === "low" ? "text-amber-600 font-medium" : 
-                                  forecast.statusLevel === "empty" ? "text-destructive font-medium" : ""}>
-                    {forecast.daysRemaining === Infinity ? "—" : `${forecast.daysRemaining} days`}
-                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">
+                      {forecast.effectiveDailyUsage.toFixed(1)}{item.size_unit}/day
+                    </span>
+                    <span className="text-xs text-muted-foreground capitalize">
+                      {forecast.usageSource === "log" ? "📊 Logged" : 
+                       forecast.usageSource === "weight" ? "⚖️ Weight" : "✏️ Manual"}
+                    </span>
+                  </div>
                 </TableCell>
                 
                 <TableCell className="hidden md:table-cell">
-                  <span className="text-sm">
-                    {forecast.runOutDateFormatted}
+                  <span className={cn(
+                    forecast.statusLevel === "low" && "text-warning font-medium",
+                    forecast.statusLevel === "empty" && "text-destructive font-medium"
+                  )}>
+                    {forecast.daysRemaining === Infinity ? "—" : `${forecast.daysRemaining} days`}
                   </span>
+                </TableCell>
+
+                <TableCell className="hidden lg:table-cell">
+                  {forecast.orderByFormatted ? (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-semibold">
+                        {forecast.orderByFormatted}
+                      </span>
+                      <Badge 
+                        variant={getReorderBadgeVariant(forecast.reorderStatus)} 
+                        className="text-xs w-fit"
+                      >
+                        {getReorderStatusLabel(forecast.reorderStatus)}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {item.retailer ? "—" : "Set retailer"}
+                    </span>
+                  )}
                 </TableCell>
                 
                 <TableCell className="hidden lg:table-cell">
