@@ -19,6 +19,7 @@ import { PaymentFormDialog } from "@/components/debt/PaymentFormDialog";
 import { TransactionList } from "@/components/debt/TransactionList";
 import { TransactionFormDialog } from "@/components/debt/TransactionFormDialog";
 import { TransactionCsvImport } from "@/components/debt/TransactionCsvImport";
+import { StepChangeImport } from "@/components/debt/StepChangeImport";
 import { PayoffPlanCard } from "@/components/debt/PayoffPlanCard";
 import { DebtReportsTab } from "@/components/debt/DebtReportsTab";
 
@@ -29,6 +30,7 @@ export default function DebtTracker() {
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [excelImportOpen, setExcelImportOpen] = useState(false);
+  const [stepChangeImportOpen, setStepChangeImportOpen] = useState(false);
   const [selectedDebtId, setSelectedDebtId] = useState<string | undefined>();
 
   const { debts, isLoading: debtsLoading } = useDebts();
@@ -56,6 +58,10 @@ export default function DebtTracker() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setStepChangeImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import StepChange
+            </Button>
             <Button variant="outline" onClick={() => setExcelImportOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Import Excel
@@ -100,7 +106,7 @@ export default function DebtTracker() {
               payments={payments}
               monthlyBudget={settings?.monthly_budget ?? null}
             />
-            
+
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2">
                 <DebtCharts
@@ -220,6 +226,12 @@ export default function DebtTracker() {
         open={excelImportOpen}
         onOpenChange={setExcelImportOpen}
         initialSection="debts"
+      />
+
+      <StepChangeImport
+        open={stepChangeImportOpen}
+        onOpenChange={setStepChangeImportOpen}
+        debts={debts}
       />
     </AppLayout>
   );
