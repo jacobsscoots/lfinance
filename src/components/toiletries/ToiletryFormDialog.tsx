@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Upload } from "lucide-react";
+import { differenceInDays } from "date-fns";
 import { RETAILER_OPTIONS } from "@/hooks/useRetailerProfiles";
 import {
   ResponsiveDialog,
@@ -21,7 +22,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -30,34 +30,45 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { 
-  TOILETRY_CATEGORIES, 
   SIZE_UNITS, 
   STATUS_OPTIONS,
   type ToiletryItem 
 } from "@/lib/toiletryCalculations";
 import { ToiletryImportDialog, ExtractedToiletryData } from "./ToiletryImportDialog";
 
+function formatUsageDuration(days: number | null): string {
+  if (days == null || days <= 0) return "—";
+  if (days < 7) return `${days} day${days !== 1 ? "s" : ""}`;
+  if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    const rem = days % 7;
+    return rem > 0 ? `${weeks}w ${rem}d` : `${weeks} week${weeks !== 1 ? "s" : ""}`;
+  }
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+    const rem = days % 30;
+    return rem > 0 ? `${months}m ${rem}d` : `${months} month${months !== 1 ? "s" : ""}`;
+  }
+  const years = Math.floor(days / 365);
+  const rem = days % 365;
+  const months = Math.floor(rem / 30);
+  return months > 0 ? `${years}y ${months}m` : `${years} year${years !== 1 ? "s" : ""}`;
+}
+
 const toiletryFormSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  name: z.string().min(1, "Name is required").max(200, "Name too long"),
   brand: z.string().max(100).optional().nullable(),
-  category: z.string().min(1, "Category is required"),
+  status: z.string().min(1, "Status is required"),
   total_size: z.coerce.number().positive("Must be greater than 0"),
   size_unit: z.string().min(1, "Unit is required"),
   cost_per_item: z.coerce.number().min(0, "Cannot be negative"),
   offer_price: z.coerce.number().min(0).optional().nullable(),
   offer_label: z.string().max(100).optional().nullable(),
   pack_size: z.coerce.number().int().min(1, "Must be at least 1"),
-  usage_rate_per_day: z.coerce.number().positive("Must be greater than 0"),
-  current_remaining: z.coerce.number().min(0, "Cannot be negative"),
-  status: z.string().min(1, "Status is required"),
-  notes: z.string().max(500).optional(),
-  image_url: z.string().url().optional().nullable().or(z.literal("")),
-  source_url: z.string().url().optional().nullable().or(z.literal("")),
+  opened_at: z.string().optional().nullable(),
+  finished_at: z.string().optional().nullable(),
   retailer: z.string().optional().nullable(),
   safety_buffer_days: z.coerce.number().int().min(0).default(2),
-}).refine(data => data.current_remaining <= data.total_size, {
-  message: "Remaining cannot exceed total size",
-  path: ["current_remaining"],
 });
 
 type ToiletryFormValues = z.infer<typeof toiletryFormSchema>;
@@ -65,7 +76,7 @@ type ToiletryFormValues = z.infer<typeof toiletryFormSchema>;
 interface ToiletryFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (values: ToiletryFormValues) => void;
+  onSubmit: (values: any) => void;
   initialData?: ToiletryItem | null;
   isLoading?: boolean;
 }
@@ -85,19 +96,15 @@ export function ToiletryFormDialog({
     defaultValues: {
       name: "",
       brand: "",
-      category: "other",
+      status: "active",
       total_size: 100,
       size_unit: "ml",
       cost_per_item: 0,
       offer_price: null,
       offer_label: "",
       pack_size: 1,
-      usage_rate_per_day: 1,
-      current_remaining: 100,
-      status: "active",
-      notes: "",
-      image_url: "",
-      source_url: "",
+      opened_at: null,
+      finished_at: null,
       retailer: null,
       safety_buffer_days: 2,
     },
@@ -108,19 +115,15 @@ export function ToiletryFormDialog({
       form.reset({
         name: initialData.name,
         brand: (initialData as any).brand || "",
-        category: initialData.category,
+        status: initialData.status,
         total_size: initialData.total_size,
         size_unit: initialData.size_unit,
         cost_per_item: initialData.cost_per_item,
         offer_price: (initialData as any).offer_price || null,
         offer_label: (initialData as any).offer_label || "",
         pack_size: initialData.pack_size,
-        usage_rate_per_day: initialData.usage_rate_per_day,
-        current_remaining: initialData.current_remaining,
-        status: initialData.status,
-        notes: initialData.notes || "",
-        image_url: (initialData as any).image_url || "",
-        source_url: (initialData as any).source_url || "",
+        opened_at: initialData.opened_at || null,
+        finished_at: initialData.finished_at || null,
         retailer: initialData.retailer || null,
         safety_buffer_days: initialData.safety_buffer_days ?? 2,
       });
@@ -128,68 +131,77 @@ export function ToiletryFormDialog({
       form.reset({
         name: "",
         brand: "",
-        category: "other",
+        status: "active",
         total_size: 100,
         size_unit: "ml",
         cost_per_item: 0,
         offer_price: null,
         offer_label: "",
         pack_size: 1,
-        usage_rate_per_day: 1,
-        current_remaining: 100,
-        status: "active",
-        notes: "",
-        image_url: "",
-        source_url: "",
+        opened_at: null,
+        finished_at: null,
         retailer: null,
         safety_buffer_days: 2,
       });
     }
   }, [initialData, form]);
 
+  const openedAt = form.watch("opened_at");
+  const finishedAt = form.watch("finished_at");
+
+  const usageDays = useMemo(() => {
+    if (!openedAt) return null;
+    const end = finishedAt ? new Date(finishedAt) : new Date();
+    const start = new Date(openedAt);
+    const days = differenceInDays(end, start);
+    return days > 0 ? days : null;
+  }, [openedAt, finishedAt]);
+
   const handleSubmit = (values: ToiletryFormValues) => {
-    onSubmit(values);
+    // Calculate usage_rate_per_day from dates for backward compat
+    let usage_rate_per_day = 1;
+    if (values.opened_at) {
+      const end = values.finished_at ? new Date(values.finished_at) : new Date();
+      const start = new Date(values.opened_at);
+      const days = differenceInDays(end, start);
+      if (days > 0) {
+        usage_rate_per_day = values.total_size / days;
+      }
+    }
+
+    const current_remaining = values.finished_at 
+      ? 0 
+      : values.opened_at 
+        ? Math.max(0, values.total_size - (usage_rate_per_day * differenceInDays(new Date(), new Date(values.opened_at))))
+        : values.total_size;
+
+    onSubmit({
+      ...values,
+      category: "other",
+      usage_rate_per_day,
+      current_remaining,
+      retailer: values.retailer === "none" ? null : values.retailer,
+    });
     onOpenChange(false);
   };
 
   const handleImport = (data: ExtractedToiletryData, selectedFields: Set<string>) => {
-    if (selectedFields.has("name") && data.name) {
-      form.setValue("name", data.name);
-    }
-    if (selectedFields.has("brand") && data.brand) {
-      form.setValue("brand", data.brand);
-    }
-    if (selectedFields.has("image_url") && data.image_url) {
-      form.setValue("image_url", data.image_url);
-    }
-    if (selectedFields.has("price") && data.price) {
-      form.setValue("cost_per_item", data.price);
-    }
-    if (selectedFields.has("offer_price") && data.offer_price) {
-      form.setValue("offer_price", data.offer_price);
-    }
-    if (selectedFields.has("offer_label") && data.offer_label) {
-      form.setValue("offer_label", data.offer_label);
-    }
+    if (selectedFields.has("name") && data.name) form.setValue("name", data.name);
+    if (selectedFields.has("brand") && data.brand) form.setValue("brand", data.brand);
+    if (selectedFields.has("price") && data.price) form.setValue("cost_per_item", data.price);
+    if (selectedFields.has("offer_price") && data.offer_price) form.setValue("offer_price", data.offer_price);
+    if (selectedFields.has("offer_label") && data.offer_label) form.setValue("offer_label", data.offer_label);
     if (selectedFields.has("pack_size") && data.pack_size) {
       form.setValue("total_size", data.pack_size);
-      form.setValue("current_remaining", data.pack_size);
     }
-    if (selectedFields.has("size_unit") && data.size_unit) {
-      form.setValue("size_unit", data.size_unit);
-    }
-    if (data.source_url) {
-      form.setValue("source_url", data.source_url);
-    }
+    if (selectedFields.has("size_unit") && data.size_unit) form.setValue("size_unit", data.size_unit);
   };
-
-  const currentImageUrl = form.watch("image_url");
 
   return (
     <>
       <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
         <ResponsiveDialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-          <ResponsiveDialogHeader>
+          <ResponsiveDialogHeader className="pr-8">
             <div className="flex items-center justify-between gap-4">
               <ResponsiveDialogTitle>
                 {isEditing ? "Edit Item" : "Add Toiletry Item"}
@@ -208,18 +220,7 @@ export function ToiletryFormDialog({
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-              {/* Image Preview (when editing with existing image) */}
-              {isEditing && currentImageUrl && (
-                <div className="space-y-2">
-                  <FormLabel>Current Image</FormLabel>
-                  <img 
-                    src={currentImageUrl} 
-                    alt={form.watch("name") || "Product"}
-                    className="max-h-32 w-full object-contain rounded-lg border bg-muted"
-                  />
-                </div>
-              )}
-
+              {/* Name */}
               <FormField
                 control={form.control}
                 name="name"
@@ -227,53 +228,28 @@ export function ToiletryFormDialog({
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Shampoo" {...field} />
+                      <Input placeholder="e.g. Shampoo 400ml" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="brand"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Brand</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Pantene" {...field} value={field.value || ""} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
+              {/* Brand + Status */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="category"
+                  name="brand"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-popover">
-                          {TOILETRY_CATEGORIES.map(cat => (
-                            <SelectItem key={cat.value} value={cat.value}>
-                              {cat.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Brand</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Pantene" {...field} value={field.value || ""} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
                 <FormField
                   control={form.control}
                   name="status"
@@ -299,7 +275,8 @@ export function ToiletryFormDialog({
                   )}
                 />
               </div>
-              
+
+              {/* Total Size + Unit */}
               <div className="grid grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
@@ -314,7 +291,6 @@ export function ToiletryFormDialog({
                     </FormItem>
                   )}
                 />
-                
                 <FormField
                   control={form.control}
                   name="size_unit"
@@ -340,7 +316,8 @@ export function ToiletryFormDialog({
                   )}
                 />
               </div>
-              
+
+              {/* Price + Offer Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -355,7 +332,6 @@ export function ToiletryFormDialog({
                     </FormItem>
                   )}
                 />
-                
                 <FormField
                   control={form.control}
                   name="offer_price"
@@ -378,6 +354,7 @@ export function ToiletryFormDialog({
                 />
               </div>
 
+              {/* Offer Label */}
               <FormField
                 control={form.control}
                 name="offer_label"
@@ -396,6 +373,7 @@ export function ToiletryFormDialog({
                 )}
               />
 
+              {/* Pack Size */}
               <FormField
                 control={form.control}
                 name="pack_size"
@@ -410,36 +388,58 @@ export function ToiletryFormDialog({
                 )}
               />
               
+              {/* Usage Start Date + End Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="usage_rate_per_day"
+                  name="opened_at"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Usage per Day</FormLabel>
+                      <FormLabel>Usage Start Date</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" min="0.01" {...field} />
+                        <Input 
+                          type="date" 
+                          {...field} 
+                          value={field.value || ""} 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
                 <FormField
                   control={form.control}
-                  name="current_remaining"
+                  name="finished_at"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Current Remaining</FormLabel>
+                      <FormLabel>Usage End Date</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" min="0" {...field} />
+                        <Input 
+                          type="date" 
+                          {...field} 
+                          value={field.value || ""} 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              
+
+              {/* Auto-calculated Usage */}
+              {openedAt && (
+                <div className="rounded-lg border bg-muted/50 p-3">
+                  <p className="text-sm text-muted-foreground">
+                    Usage duration:{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatUsageDuration(usageDays)}
+                    </span>
+                    {!finishedAt && <span className="text-xs ml-1">(still in use)</span>}
+                  </p>
+                </div>
+              )}
+
+              {/* Retailer + Safety Buffer */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -447,7 +447,7 @@ export function ToiletryFormDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Retailer</FormLabel>
-                      <Select onValueChange={(val) => field.onChange(val === "none" ? "" : val)} value={field.value || "none"}>
+                      <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value || "none"}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select retailer" />
@@ -479,24 +479,6 @@ export function ToiletryFormDialog({
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes (optional)</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Any additional notes..."
-                        className="resize-none"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
               <ResponsiveDialogFooter>
                 <Button
                   type="button"
