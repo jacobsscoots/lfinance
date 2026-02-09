@@ -53,6 +53,7 @@ export interface Product {
   target_quantity: number | null;
   packaging_weight_grams: number | null;
   gross_pack_size_grams: number | null;
+  current_weight_grams: number | null;
   // Grocery tracking
   retailer: string | null;
   default_discount_type: string | null;

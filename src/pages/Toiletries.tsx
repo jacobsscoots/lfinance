@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus } from "lucide-react";
+import { Plus, Scale } from "lucide-react";
 import { useToiletries } from "@/hooks/useToiletries";
 import { useToiletryPurchases } from "@/hooks/useToiletryPurchases";
 import { useToiletryUsageLogs } from "@/hooks/useToiletryUsageLogs";
@@ -19,6 +19,7 @@ import { PriceComparisonDialog } from "@/components/toiletries/PriceComparisonDi
 import { OrdersTab } from "@/components/toiletries/OrdersTab";
 import { OrdersPanel } from "@/components/toiletries/OrdersPanel";
 import { ToiletrySummaryTab } from "@/components/toiletries/ToiletrySummaryTab";
+import { WeighToiletriesDialog } from "@/components/toiletries/WeighToiletriesDialog";
 import type { ToiletryItem } from "@/lib/toiletryCalculations";
 import type { ShippingProfile } from "@/lib/reorderCalculations";
 
@@ -79,6 +80,7 @@ export default function Toiletries() {
   const [linkingItem, setLinkingItem] = useState<ToiletryItem | null>(null);
   const [priceDialogOpen, setPriceDialogOpen] = useState(false);
   const [pricingItem, setPricingItem] = useState<ToiletryItem | null>(null);
+  const [weighDialogOpen, setWeighDialogOpen] = useState(false);
   
   const filteredItems = useMemo(() => {
     if (!selectedCategory) return toiletries;
@@ -167,6 +169,10 @@ export default function Toiletries() {
               Track and forecast your consumables
             </p>
           </div>
+          <Button variant="outline" onClick={() => setWeighDialogOpen(true)}>
+            <Scale className="mr-2 h-4 w-4" />
+            Weigh What I Have
+          </Button>
           <Button onClick={handleAddClick}>
             <Plus className="mr-2 h-4 w-4" />
             Add Item
@@ -264,6 +270,13 @@ export default function Toiletries() {
           open={priceDialogOpen}
           onOpenChange={setPriceDialogOpen}
           item={pricingItem}
+        />
+        
+        {/* Weigh What I Have Dialog */}
+        <WeighToiletriesDialog
+          open={weighDialogOpen}
+          onOpenChange={setWeighDialogOpen}
+          items={toiletries}
         />
       </div>
     </AppLayout>
