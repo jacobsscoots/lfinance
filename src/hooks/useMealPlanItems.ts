@@ -262,6 +262,132 @@ export function useMealPlanItems(weekStart: Date) {
     },
   });
 
+  // Copy all items from one day to the previous day
+  const copyDayToPrevious = useMutation({
+    mutationFn: async ({ sourcePlanId, sourcePlanDate }: { sourcePlanId: string; sourcePlanDate: string }) => {
+      if (!user) throw new Error("Not authenticated");
+      
+      // Find source plan items
+      const sourcePlan = mealPlans.find(p => p.id === sourcePlanId);
+      if (!sourcePlan || !sourcePlan.items || sourcePlan.items.length === 0) {
+        throw new Error("No items to copy");
+      }
+
+      // Find previous day's plan
+      const sourceIndex = weekDates.indexOf(sourcePlanDate);
+      if (sourceIndex <= 0) {
+        throw new Error("Cannot copy to previous day - start of week");
+      }
+
+      const prevDate = weekDates[sourceIndex - 1];
+      const targetPlan = mealPlans.find(p => p.meal_date === prevDate);
+      if (!targetPlan) {
+        throw new Error("Previous day plan not found");
+      }
+
+      // Create copies of all items, clamping seasonings
+      const newItems = sourcePlan.items.map(item => {
+        let quantity = item.quantity_grams;
+        
+        const isSeasoning = item.product && shouldCapAsSeasoning(
+          item.product.food_type,
+          item.product.name,
+          item.product.food_type
+        );
+        if (isSeasoning && quantity > DEFAULT_SEASONING_MAX_GRAMS) {
+          quantity = DEFAULT_SEASONING_MAX_GRAMS;
+        }
+        
+        return {
+          user_id: user.id,
+          meal_plan_id: targetPlan.id,
+          product_id: item.product_id,
+          meal_type: item.meal_type,
+          quantity_grams: quantity,
+        };
+      });
+
+      const { data, error } = await supabase
+        .from("meal_plan_items")
+        .insert(newItems)
+        .select();
+      
+      if (error) throw error;
+      return { count: data?.length || 0, targetDate: prevDate };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      toast.success(`Copied ${result.count} items to ${result.targetDate}`);
+    },
+    onError: (error) => {
+      toast.error("Failed to copy: " + error.message);
+    },
+  });
+
+  // Copy all items from one day to any date in the week
+  const copyDayToDate = useMutation({
+    mutationFn: async ({ sourcePlanId, sourcePlanDate, targetDate }: { sourcePlanId: string; sourcePlanDate: string; targetDate: string }) => {
+      if (!user) throw new Error("Not authenticated");
+      
+      // Validate target date
+      if (!weekDates.includes(targetDate)) {
+        throw new Error("Target date not in current week");
+      }
+      if (targetDate === sourcePlanDate) {
+        throw new Error("Cannot copy to the same day");
+      }
+      
+      // Find source plan items
+      const sourcePlan = mealPlans.find(p => p.id === sourcePlanId);
+      if (!sourcePlan || !sourcePlan.items || sourcePlan.items.length === 0) {
+        throw new Error("No items to copy");
+      }
+
+      // Find target plan
+      const targetPlan = mealPlans.find(p => p.meal_date === targetDate);
+      if (!targetPlan) {
+        throw new Error("Target day plan not found");
+      }
+
+      // Create copies of all items, clamping seasonings
+      const newItems = sourcePlan.items.map(item => {
+        let quantity = item.quantity_grams;
+        
+        const isSeasoning = item.product && shouldCapAsSeasoning(
+          item.product.food_type,
+          item.product.name,
+          item.product.food_type
+        );
+        if (isSeasoning && quantity > DEFAULT_SEASONING_MAX_GRAMS) {
+          quantity = DEFAULT_SEASONING_MAX_GRAMS;
+        }
+        
+        return {
+          user_id: user.id,
+          meal_plan_id: targetPlan.id,
+          product_id: item.product_id,
+          meal_type: item.meal_type,
+          quantity_grams: quantity,
+        };
+      });
+
+      const { data, error } = await supabase
+        .from("meal_plan_items")
+        .insert(newItems)
+        .select();
+      
+      if (error) throw error;
+      return { count: data?.length || 0, targetDate };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      toast.success(`Copied ${result.count} items to ${result.targetDate}`);
+    },
+    onError: (error) => {
+      toast.error("Failed to copy: " + error.message);
+    },
+  });
+
   // Clear all items from a specific day
   const clearDay = useMutation({
     mutationFn: async (planId: string) => {
@@ -816,6 +942,8 @@ export function useMealPlanItems(weekStart: Date) {
     updateMealStatus,
     copyFromPreviousWeek,
     copyDayToNext,
+    copyDayToPrevious,
+    copyDayToDate,
     clearDay,
     clearWeek,
     recalculateDay,

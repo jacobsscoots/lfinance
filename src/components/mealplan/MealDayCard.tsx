@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parse } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { MealItemMultiSelectDialog } from "./MealItemMultiSelectDialog";
 import { EatingOutDialog } from "./EatingOutDialog";
 import { DayDetailModal } from "./DayDetailModal";
 import { DayMacroSummary } from "./DayMacroSummary";
+import { CopyToDateDialog } from "./CopyToDateDialog";
 import { DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,8 @@ interface MealDayCardProps {
   isBlackout?: boolean;
   blackoutReason?: string | null;
   weeklyOverride?: WeeklyTargetsOverride | null;
-  weekDates?: string[]; // Array of date strings for determining last day
+  weekDates?: string[];
+  mealPlans?: MealPlan[];
 }
 
 const MEAL_LABELS: Record<MealType, string> = {
@@ -42,23 +44,28 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
   eating_out: <ExternalLink className="h-3 w-3 text-primary" />,
 };
 
-export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, weekDates }: MealDayCardProps) {
+export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, weekDates, mealPlans = [] }: MealDayCardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [copyToDateOpen, setCopyToDateOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
   
-  const { updateMealStatus, removeItem, updateItem, copyDayToNext, clearDay, recalculateDay } = useMealPlanItems(weekStart);
+  const { updateMealStatus, removeItem, updateItem, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay } = useMealPlanItems(weekStart);
   
   // Parse as local date to avoid UTC-shift issues
   const date = parse(plan.meal_date, "yyyy-MM-dd", new Date());
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
   const isTargetMode = settings?.mode === "target_based";
-  // Fix: Only disable copy for the actual LAST day in the week array, not all Mondays
+  // Fix: Only disable copy for the actual LAST day in the week array
   const isLastDayOfWeek = weekDates 
     ? plan.meal_date === weekDates[weekDates.length - 1] 
-    : date.getDay() === 1; // Fallback to old logic if weekDates not provided
+    : date.getDay() === 1;
+  // First day detection for "Copy to Previous"
+  const isFirstDayOfWeek = weekDates 
+    ? plan.meal_date === weekDates[0] 
+    : date.getDay() === 0;
   const hasItems = items.length > 0;
   
   // Use unified getDailyTargets for single source of truth
@@ -146,6 +153,19 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
     copyDayToNext.mutate({ sourcePlanId: plan.id, sourcePlanDate: plan.meal_date });
   };
 
+  const handleCopyToPreviousDay = () => {
+    copyDayToPrevious.mutate({ sourcePlanId: plan.id, sourcePlanDate: plan.meal_date });
+  };
+
+  const handleCopyToDate = (targetDate: string) => {
+    copyDayToDate.mutate({ 
+      sourcePlanId: plan.id, 
+      sourcePlanDate: plan.meal_date, 
+      targetDate 
+    });
+    setCopyToDateOpen(false);
+  };
+
   const handleClearDay = () => {
     clearDay.mutate(plan.id);
   };
@@ -217,6 +237,20 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                   >
                     <Copy className="h-4 w-4 mr-2" />
                     Copy to Next Day
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleCopyToPreviousDay}
+                    disabled={isFirstDayOfWeek || items.length === 0 || copyDayToPrevious.isPending}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy to Previous Day
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => setCopyToDateOpen(true)}
+                    disabled={items.length === 0}
+                  >
+                    <CalendarDays className="h-4 w-4 mr-2" />
+                    Copy to Date...
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
@@ -403,6 +437,18 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
         settings={settings}
         weeklyOverride={weeklyOverride}
       />
+
+      {weekDates && mealPlans.length > 0 && (
+        <CopyToDateDialog
+          open={copyToDateOpen}
+          onOpenChange={setCopyToDateOpen}
+          sourcePlan={plan}
+          weekDates={weekDates}
+          mealPlans={mealPlans}
+          onConfirm={handleCopyToDate}
+          isPending={copyDayToDate.isPending}
+        />
+      )}
     </>
   );
 }

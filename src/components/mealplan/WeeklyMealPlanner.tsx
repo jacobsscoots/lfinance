@@ -343,6 +343,7 @@ export function WeeklyMealPlanner() {
                   blackoutReason={getBlackoutReason(mealPlans[selectedDayIndex].meal_date, blackouts)}
                   weeklyOverride={weeklyOverride}
                   weekDates={weekDates}
+                  mealPlans={mealPlans}
                 />
               )}
             </div>
@@ -361,6 +362,7 @@ export function WeeklyMealPlanner() {
                   blackoutReason={getBlackoutReason(plan.meal_date, blackouts)}
                   weeklyOverride={weeklyOverride}
                   weekDates={weekDates}
+                  mealPlans={mealPlans}
                 />
               ))}
             </div>
