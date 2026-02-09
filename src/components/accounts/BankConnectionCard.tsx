@@ -102,7 +102,15 @@ export function BankConnectionCard() {
                     </div>
                     <div>
                       <p className="font-medium text-sm">
-                        {getProviderLabel(connection.provider)}
+                        {(() => {
+                          const linkedAccounts = allAccounts.filter(a => a.connection_id === connection.id);
+                          if (linkedAccounts.length > 0) {
+                            // Use the first linked account's provider for a proper bank name
+                            const bankName = linkedAccounts.find(a => a.provider)?.provider;
+                            return bankName ? getProviderLabel(bankName) : getProviderLabel(connection.provider);
+                          }
+                          return getProviderLabel(connection.provider);
+                        })()}
                       </p>
                       {(() => {
                         const linkedAccounts = allAccounts.filter(a => a.connection_id === connection.id);
