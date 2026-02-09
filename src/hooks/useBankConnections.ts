@@ -112,41 +112,20 @@ export function useBankConnections() {
 
       const redirectUri = `${window.location.origin}/accounts?truelayer_callback=true`;
 
-      // Create a pending connection record
-      const { data: connection, error: connError } = await supabase
-        .from("bank_connections")
-        .insert({
-          user_id: user.id,
-          provider: "truelayer",
-          status: "pending",
-        })
-        .select("id")
-        .single();
+      // Edge function creates the pending connection server-side (bypasses RLS)
+      // and returns both authUrl and connectionId
+      const { data, error } = await supabase.functions.invoke("truelayer-auth", {
+        body: { action: "auth-url", redirectUri },
+      });
 
-      if (connError) throw connError;
+      if (error) throw error;
+      if (!data?.authUrl) throw new Error("No auth URL returned from server");
+      if (!data?.connectionId) throw new Error("No connection ID returned from server");
 
-      try {
-        // Get auth URL from edge function - JWT is automatically included
-        const { data, error } = await supabase.functions.invoke("truelayer-auth", {
-          body: { action: "auth-url", redirectUri },
-        });
+      // Store connection ID for callback
+      localStorage.setItem("pending_bank_connection_id", data.connectionId);
 
-        if (error) throw error;
-        if (!data?.authUrl) throw new Error("No auth URL returned from server");
-
-        // Store connection ID for callback
-        localStorage.setItem("pending_bank_connection_id", connection.id);
-
-        return { authUrl: data.authUrl, connectionId: connection.id };
-      } catch (invokeError) {
-        // Clean up pending connection if auth URL fetch fails
-        await supabase
-          .from("bank_connections")
-          .delete()
-          .eq("id", connection.id);
-        
-        throw invokeError;
-      }
+      return { authUrl: data.authUrl, connectionId: data.connectionId };
     },
     onSuccess: ({ authUrl }) => {
       // Redirect to TrueLayer
