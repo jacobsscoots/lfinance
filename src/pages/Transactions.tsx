@@ -12,6 +12,7 @@ import { DeleteTransactionDialog } from "@/components/transactions/DeleteTransac
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { getPayCycleForDate, toPaydaySettings } from "@/lib/payCycle";
+import { useAutoLinkTransactions } from "@/hooks/useAutoLinkTransactions";
 import {
   Collapsible,
   CollapsibleContent,
@@ -32,6 +33,7 @@ export default function Transactions() {
   });
   
   const { transactions, isLoading } = useTransactions(filters);
+  useAutoLinkTransactions(transactions);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
