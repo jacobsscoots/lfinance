@@ -2094,6 +2094,140 @@ export type Database = {
         }
         Relationships: []
       }
+      online_orders: {
+        Row: {
+          created_at: string
+          id: string
+          order_date: string
+          order_number: string | null
+          retailer_name: string
+          source: string
+          source_message_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_date?: string
+          order_number?: string | null
+          retailer_name: string
+          source?: string
+          source_message_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_date?: string
+          order_number?: string | null
+          retailer_name?: string
+          source?: string
+          source_message_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_name: string
+          matched_toiletry_item_id: string | null
+          order_id: string
+          quantity: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_name: string
+          matched_toiletry_item_id?: string | null
+          order_id: string
+          quantity?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_name?: string
+          matched_toiletry_item_id?: string | null
+          order_id?: string
+          quantity?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_matched_toiletry_item_id_fkey"
+            columns: ["matched_toiletry_item_id"]
+            isOneToOne: false
+            referencedRelation: "toiletry_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "online_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_shipments: {
+        Row: {
+          carrier: string | null
+          created_at: string
+          id: string
+          last_event_at: string | null
+          last_payload: Json | null
+          order_id: string
+          status: string
+          tracking_number: string
+          tracking_provider: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          carrier?: string | null
+          created_at?: string
+          id?: string
+          last_event_at?: string | null
+          last_payload?: Json | null
+          order_id: string
+          status?: string
+          tracking_number: string
+          tracking_provider?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          carrier?: string | null
+          created_at?: string
+          id?: string
+          last_event_at?: string | null
+          last_payload?: Json | null
+          order_id?: string
+          status?: string
+          tracking_number?: string
+          tracking_provider?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_shipments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "online_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payslips: {
         Row: {
           created_at: string
@@ -2315,6 +2449,51 @@ export type Database = {
         }
         Relationships: []
       }
+      retailer_shipping_profiles: {
+        Row: {
+          created_at: string
+          cutoff_time: string | null
+          delivers_weekends: boolean
+          delivery_days_max: number
+          delivery_days_min: number
+          dispatch_days_max: number
+          dispatch_days_min: number
+          dispatches_weekends: boolean
+          id: string
+          retailer_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          cutoff_time?: string | null
+          delivers_weekends?: boolean
+          delivery_days_max?: number
+          delivery_days_min?: number
+          dispatch_days_max?: number
+          dispatch_days_min?: number
+          dispatches_weekends?: boolean
+          id?: string
+          retailer_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          cutoff_time?: string | null
+          delivers_weekends?: boolean
+          delivery_days_max?: number
+          delivery_days_min?: number
+          dispatch_days_max?: number
+          dispatch_days_min?: number
+          dispatches_weekends?: boolean
+          id?: string
+          retailer_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       service_allowances: {
         Row: {
           allowance_type: string
@@ -2425,6 +2604,8 @@ export type Database = {
           quantity_in_use: number | null
           quantity_on_hand: number | null
           reorder_threshold: number | null
+          retailer: string | null
+          safety_buffer_days: number
           size_unit: string
           source_url: string | null
           status: string
@@ -2460,6 +2641,8 @@ export type Database = {
           quantity_in_use?: number | null
           quantity_on_hand?: number | null
           reorder_threshold?: number | null
+          retailer?: string | null
+          safety_buffer_days?: number
           size_unit?: string
           source_url?: string | null
           status?: string
@@ -2495,6 +2678,8 @@ export type Database = {
           quantity_in_use?: number | null
           quantity_on_hand?: number | null
           reorder_threshold?: number | null
+          retailer?: string | null
+          safety_buffer_days?: number
           size_unit?: string
           source_url?: string | null
           status?: string
@@ -2699,6 +2884,44 @@ export type Database = {
             columns: ["transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      toiletry_usage_logs: {
+        Row: {
+          amount_used: number
+          created_at: string
+          id: string
+          logged_date: string
+          notes: string | null
+          toiletry_item_id: string
+          user_id: string
+        }
+        Insert: {
+          amount_used: number
+          created_at?: string
+          id?: string
+          logged_date?: string
+          notes?: string | null
+          toiletry_item_id: string
+          user_id: string
+        }
+        Update: {
+          amount_used?: number
+          created_at?: string
+          id?: string
+          logged_date?: string
+          notes?: string | null
+          toiletry_item_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "toiletry_usage_logs_toiletry_item_id_fkey"
+            columns: ["toiletry_item_id"]
+            isOneToOne: false
+            referencedRelation: "toiletry_items"
             referencedColumns: ["id"]
           },
         ]

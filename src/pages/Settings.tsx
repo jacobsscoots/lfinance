@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Tag, CalendarDays, Package, Target, FileText, Calendar, Mail, Upload } from "lucide-react";
+import { User, Tag, CalendarDays, Package, Target, FileText, Calendar, Mail, Upload, Truck } from "lucide-react";
 import { ExcelImportDialog } from "@/components/settings/ExcelImportDialog";
+import { RetailerProfileSettings } from "@/components/settings/RetailerProfileSettings";
 import { ProductSettings } from "@/components/settings/ProductSettings";
 import { NutritionTargetSettings } from "@/components/settings/NutritionTargetSettings";
 import { PaydaySettings } from "@/components/settings/PaydaySettings";
@@ -64,6 +65,10 @@ export default function Settings() {
               <Mail className="h-4 w-4" />
               <span className="hidden sm:inline">Gmail</span>
             </TabsTrigger>
+            <TabsTrigger value="shipping" className="flex items-center gap-2 flex-1 sm:flex-none">
+              <Truck className="h-4 w-4" />
+              <span className="hidden sm:inline">Shipping</span>
+            </TabsTrigger>
             <TabsTrigger value="import" className="flex items-center gap-2 flex-1 sm:flex-none">
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Import</span>
@@ -108,6 +113,10 @@ export default function Settings() {
 
           <TabsContent value="gmail">
             <GmailSettings />
+          </TabsContent>
+
+          <TabsContent value="shipping">
+            <RetailerProfileSettings />
           </TabsContent>
 
           <TabsContent value="import">

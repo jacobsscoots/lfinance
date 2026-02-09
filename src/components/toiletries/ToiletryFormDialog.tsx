@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Upload } from "lucide-react";
+import { RETAILER_OPTIONS } from "@/hooks/useRetailerProfiles";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -52,6 +53,8 @@ const toiletryFormSchema = z.object({
   notes: z.string().max(500).optional(),
   image_url: z.string().url().optional().nullable().or(z.literal("")),
   source_url: z.string().url().optional().nullable().or(z.literal("")),
+  retailer: z.string().optional().nullable(),
+  safety_buffer_days: z.coerce.number().int().min(0).default(2),
 }).refine(data => data.current_remaining <= data.total_size, {
   message: "Remaining cannot exceed total size",
   path: ["current_remaining"],
@@ -95,6 +98,8 @@ export function ToiletryFormDialog({
       notes: "",
       image_url: "",
       source_url: "",
+      retailer: null,
+      safety_buffer_days: 2,
     },
   });
 
@@ -116,6 +121,8 @@ export function ToiletryFormDialog({
         notes: initialData.notes || "",
         image_url: (initialData as any).image_url || "",
         source_url: (initialData as any).source_url || "",
+        retailer: initialData.retailer || null,
+        safety_buffer_days: initialData.safety_buffer_days ?? 2,
       });
     } else {
       form.reset({
@@ -134,6 +141,8 @@ export function ToiletryFormDialog({
         notes: "",
         image_url: "",
         source_url: "",
+        retailer: null,
+        safety_buffer_days: 2,
       });
     }
   }, [initialData, form]);
@@ -431,6 +440,45 @@ export function ToiletryFormDialog({
                 />
               </div>
               
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="retailer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Retailer</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select retailer" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-popover">
+                          <SelectItem value="">None</SelectItem>
+                          {RETAILER_OPTIONS.map(r => (
+                            <SelectItem key={r} value={r}>{r}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="safety_buffer_days"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Safety Buffer (days)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="1" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <FormField
                 control={form.control}
                 name="notes"
