@@ -75,9 +75,9 @@ export function ToiletryTable({
     );
   }
 
-  // Desktop: Table layout
+  // Desktop: Table layout with horizontal scroll
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>

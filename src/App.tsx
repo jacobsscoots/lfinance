@@ -16,11 +16,17 @@ import Toiletries from "./pages/Toiletries";
 import Investments from "./pages/Investments";
 import CheaperBills from "./pages/CheaperBills";
 import Settings from "./pages/Settings";
-import Deals from "./pages/Deals";
 import DebtTracker from "./pages/DebtTracker";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60, // 1 minute
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -40,7 +46,6 @@ const App = () => (
             <Route path="/groceries" element={<ProtectedRoute><Groceries /></ProtectedRoute>} />
             <Route path="/meal-plan" element={<ProtectedRoute><MealPlan /></ProtectedRoute>} />
             <Route path="/toiletries" element={<ProtectedRoute><Toiletries /></ProtectedRoute>} />
-            <Route path="/deals" element={<ProtectedRoute><Deals /></ProtectedRoute>} />
             <Route path="/debt-tracker" element={<ProtectedRoute><DebtTracker /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

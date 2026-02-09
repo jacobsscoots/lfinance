@@ -11,7 +11,6 @@ import {
   Sparkles,
   PieChart,
   Percent,
-  Tag,
   Wallet2
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -19,19 +18,28 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
+// Navigation items organized into logical groups
 const navigation = [
+  // Money & Tracking
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Accounts", href: "/accounts", icon: CreditCard },
   { name: "Transactions", href: "/transactions", icon: Receipt },
+  { name: "Debt Tracker", href: "/debt-tracker", icon: Wallet2 },
+  
+  // Bills & Savings
   { name: "Bills", href: "/bills", icon: TrendingUp },
   { name: "Cheaper Bills", href: "/cheaper-bills", icon: Percent },
+  
+  // Investments
   { name: "Investments", href: "/investments", icon: PieChart },
+  
+  // Planning & Lifestyle
   { name: "Calendar", href: "/calendar", icon: CalendarDays },
   { name: "Groceries", href: "/groceries", icon: ShoppingCart },
   { name: "Meal Plan", href: "/meal-plan", icon: UtensilsCrossed },
   { name: "Toiletries", href: "/toiletries", icon: Sparkles },
-  { name: "Deal Scanner", href: "/deals", icon: Tag },
-  { name: "Debt Tracker", href: "/debt-tracker", icon: Wallet2 },
+  
+  // System
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
