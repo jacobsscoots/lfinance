@@ -38,24 +38,34 @@ export function isSeasoning(foodType: string | null | undefined): boolean {
 export function isSeasoningByName(name: string | null | undefined): boolean {
   if (!name) return false;
   const lowered = name.toLowerCase();
-  
+
   // Seasoning patterns - dry rubs, spices, powders
   const seasoningPatterns = [
-    'seasoning', 'rub', 'spice', 'powder', 'paprika', 'cajun', 
+    'seasoning', 'rub', 'spice', 'powder', 'paprika', 'cajun',
     'herbs', 'pepper', 'schwartz', 'oregano', 'cumin', 'chili',
     'coriander', 'turmeric', 'garam masala', 'curry powder',
     'garlic powder', 'onion powder', 'mixed spice'
   ];
-  
+
   // Sauce patterns - liquid condiments
+  // NOTE: patterns must be specific enough to not match food names
+  // e.g., 'bbq sauce' not 'bbq' (which would match 'BBQ Chicken Pasta')
   const saucePatterns = [
-    'sauce', 'dressing', 'mayo', 'ketchup', 'mustard', 'oil',
-    'soy sauce', 'teriyaki', 'sriracha', 'hot sauce', 'bbq',
-    'marinade', 'vinegar', 'glaze'
+    'sauce', 'dressing', 'mayo', 'ketchup', 'mustard',
+    'soy sauce', 'teriyaki', 'sriracha', 'hot sauce', 'bbq sauce',
+    'bbq rub', 'bbq seasoning', 'marinade', 'vinegar', 'glaze'
   ];
-  
-  return seasoningPatterns.some(p => lowered.includes(p)) || 
-         saucePatterns.some(p => lowered.includes(p));
+
+  // "oil" only matches as standalone word or common oil phrases,
+  // not inside words like "foil" or product names
+  const oilPatterns = [
+    'olive oil', 'coconut oil', 'vegetable oil', 'rapeseed oil',
+    'sesame oil', 'cooking oil', 'sunflower oil',
+  ];
+
+  return seasoningPatterns.some(p => lowered.includes(p)) ||
+         saucePatterns.some(p => lowered.includes(p)) ||
+         oilPatterns.some(p => lowered.includes(p));
 }
 
 /**
@@ -82,11 +92,19 @@ export function shouldCapAsSeasoning(
 ): boolean {
   // Direct category match
   if (category === 'seasoning') return true;
-  
+
   // Food type match (sauce or seasoning)
   if (isSeasoning(foodType)) return true;
-  
-  // Fallback to name-based detection
+
+  // Only use name-based fallback when category is 'other' or unset.
+  // Items with known categories (protein, carb, dairy, premade, etc.) should
+  // NOT be recategorized as seasoning based on name patterns alone.
+  const knownNonSeasoningCategories = [
+    'protein', 'carb', 'veg', 'dairy', 'fruit', 'snack', 'premade', 'fat'
+  ];
+  if (category && knownNonSeasoningCategories.includes(category)) return false;
+
+  // Fallback to name-based detection (only for 'other' or unset category)
   return isSeasoningByName(name);
 }
 

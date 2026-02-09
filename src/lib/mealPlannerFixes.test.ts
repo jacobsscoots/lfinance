@@ -1272,3 +1272,385 @@ describe("Meal-level minimums: no obviously broken meals", () => {
     expect(result.success).toBe(true);
   });
 });
+
+// ============================================================================
+// 12. MFP REPLAY TEST — Prove nutrition math matches MyFitnessPal
+// ============================================================================
+
+describe("MFP Replay: nutrition math matches MyFitnessPal", () => {
+  /**
+   * Data from MyFitnessPal screenshot for Feb 9 2026:
+   *
+   * Target: 1895 kcal, 166P, 213C, 42F
+   *
+   * Breakfast (587 kcal, 61C, 23F, 30P):
+   *   Tesco 0% Fat Greek Style Yogurt 300g → 180cal, 23C, 1F, 19P
+   *   Tesco Breakfast Fruit Topper 150g → 66cal, 13C, 1F, 1P
+   *   Tesco Greek Style Natural Yogurt 200g → 198cal, 8C, 15F, 7P
+   *   Lizi's Original Granola 30g → 143cal, 17C, 6F, 3P
+   *
+   * Lunch (675 kcal, 76C, 9F, 68P):
+   *   MyProtein Hunters BBQ Chicken Pasta 550g → 675cal, 76C, 9F, 68P
+   *
+   * Dinner (683 kcal, 77C, 11F, 69P):
+   *   Birds Eye Steamfresh Veg Mix 1 bag → 64cal, 10C, 1F, 3P
+   *   Schwartz Seasoning 10g → 32cal, 7C, 0F, 1P
+   *   Ben's Wholegrain Rice 175g → 313cal, 60C, 5F, 7P
+   *   Tesco Chicken Breast Mini Fillets 240g → 274cal, 0C, 5F, 58P
+   *
+   * MFP Totals: 1945 kcal, 214C, 43F, 167P
+   * Remaining: -50 kcal, -1C, -1F, -1P ← all within tolerance!
+   */
+
+  // Per-100g nutrition computed from MFP data
+  const mfpItems = {
+    greekYogurt0: {
+      name: "Tesco 0% Fat Greek Style Yogurt",
+      grams: 300,
+      // 180cal/300g = 60cal/100g; 19P/300g = 6.33/100g; 23C/300g = 7.67/100g; 1F/300g = 0.33/100g
+      per100g: { calories: 60, protein: 6.33, carbs: 7.67, fat: 0.33 },
+      expected: { calories: 180, protein: 19, carbs: 23, fat: 1 },
+    },
+    fruitTopper: {
+      name: "Tesco Breakfast Fruit Topper",
+      grams: 150,
+      // 66cal/150g = 44/100g; 1P/150g = 0.67/100g; 13C/150g = 8.67/100g; 1F/150g = 0.67/100g
+      per100g: { calories: 44, protein: 0.67, carbs: 8.67, fat: 0.67 },
+      expected: { calories: 66, protein: 1, carbs: 13, fat: 1 },
+    },
+    naturalYogurt: {
+      name: "Tesco Greek Style Natural Yogurt",
+      grams: 200,
+      // 198cal/200g = 99/100g; 7P/200g = 3.5/100g; 8C/200g = 4/100g; 15F/200g = 7.5/100g
+      per100g: { calories: 99, protein: 3.5, carbs: 4, fat: 7.5 },
+      expected: { calories: 198, protein: 7, carbs: 8, fat: 15 },
+    },
+    granola: {
+      name: "Lizi's Original Granola",
+      grams: 30,
+      // 143cal/30g = 476.67/100g; 3P/30g = 10/100g; 17C/30g = 56.67/100g; 6F/30g = 20/100g
+      per100g: { calories: 476.67, protein: 10, carbs: 56.67, fat: 20 },
+      expected: { calories: 143, protein: 3, carbs: 17, fat: 6 },
+    },
+    huntersPasta: {
+      name: "MyProtein Hunters BBQ Chicken Pasta",
+      grams: 550,
+      // 675cal/550g = 122.73/100g; 68P/550g = 12.36/100g; 76C/550g = 13.82/100g; 9F/550g = 1.64/100g
+      per100g: { calories: 122.73, protein: 12.36, carbs: 13.82, fat: 1.64 },
+      expected: { calories: 675, protein: 68, carbs: 76, fat: 9 },
+    },
+    vegMix: {
+      name: "Birds Eye Steamfresh Veg Mix",
+      grams: 480, // 1 bag ≈ 480g (64cal from a bag)
+      // 64cal/480g = 13.33/100g; 3P/480g = 0.63/100g; 10C/480g = 2.08/100g; 1F/480g = 0.21/100g
+      per100g: { calories: 13.33, protein: 0.625, carbs: 2.083, fat: 0.208 },
+      expected: { calories: 64, protein: 3, carbs: 10, fat: 1 },
+    },
+    seasoning: {
+      name: "Schwartz Pepper & Garlic Seasoning",
+      grams: 10,
+      // 32cal/10g = 320/100g; 1P/10g = 10/100g; 7C/10g = 70/100g; 0F/10g = 0/100g
+      per100g: { calories: 320, protein: 10, carbs: 70, fat: 0 },
+      expected: { calories: 32, protein: 1, carbs: 7, fat: 0 },
+    },
+    rice: {
+      name: "Ben's Original Wholegrain Rice",
+      grams: 175,
+      // 313cal/175g = 178.86/100g; 7P/175g = 4/100g; 60C/175g = 34.29/100g; 5F/175g = 2.86/100g
+      per100g: { calories: 178.86, protein: 4, carbs: 34.29, fat: 2.857 },
+      expected: { calories: 313, protein: 7, carbs: 60, fat: 5 },
+    },
+    chickenBreast: {
+      name: "Tesco Chicken Breast Mini Fillets",
+      grams: 240,
+      // 274cal/240g = 114.17/100g; 58P/240g = 24.17/100g; 0C/240g = 0/100g; 5F/240g = 2.08/100g
+      per100g: { calories: 114.17, protein: 24.167, carbs: 0, fat: 2.083 },
+      expected: { calories: 274, protein: 58, carbs: 0, fat: 5 },
+    },
+  };
+
+  it("computeTotals for MFP grams matches MFP totals within ±2 (rounding)", () => {
+    // Create MealPlanItems from MFP data to test computeTotals
+    const items: MealPlanItem[] = Object.entries(mfpItems).map(([key, data], idx) => createMealPlanItem({
+      id: `mfp-${key}`,
+      quantity_grams: data.grams,
+      meal_type: key === "huntersPasta" ? "lunch" :
+        ["greekYogurt0", "fruitTopper", "naturalYogurt", "granola"].includes(key) ? "breakfast" : "dinner",
+      product: {
+        ...createMealPlanItem().product!,
+        name: data.name,
+        calories_per_100g: data.per100g.calories,
+        protein_per_100g: data.per100g.protein,
+        carbs_per_100g: data.per100g.carbs,
+        fat_per_100g: data.per100g.fat,
+        eaten_factor: 1,
+      } as any,
+    }));
+
+    const totals = computeTotals(items);
+
+    // MFP totals: 1945 kcal, 214C, 43F, 167P
+    // Allow ±5 for rounding differences between MFP and our system
+    expect(Math.abs(totals.calories - 1945)).toBeLessThanOrEqual(5);
+    expect(Math.abs(totals.protein - 167)).toBeLessThanOrEqual(2);
+    expect(Math.abs(totals.carbs - 214)).toBeLessThanOrEqual(2);
+    expect(Math.abs(totals.fat - 43)).toBeLessThanOrEqual(2);
+  });
+
+  it("each MFP item's macro calculation matches expected values (±1g rounding)", () => {
+    for (const [key, data] of Object.entries(mfpItems)) {
+      const item = createSolverItem({
+        id: `mfp-${key}`,
+        name: data.name,
+        nutritionPer100g: data.per100g,
+        currentGrams: data.grams,
+      });
+      const macros = calculateMacros(item, data.grams);
+
+      expect(Math.abs(macros.calories - data.expected.calories)).toBeLessThanOrEqual(1.5);
+      expect(Math.abs(macros.protein - data.expected.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(macros.carbs - data.expected.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(macros.fat - data.expected.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+// ============================================================================
+// 13. SOLVER PROOF — Solver can hit MFP-day targets with same foods
+// ============================================================================
+
+describe("Solver Proof: hits MFP-day targets with same foods", () => {
+  it("solver finds a solution within tolerance for the MFP Feb 9 day", () => {
+    // Create solver items matching the MFP day
+    // Fixed items: Hunters Pasta (premade), Veg Mix (fixed bag), Seasoning (locked)
+    // Adjustable items: 0% yogurt, fruit topper, natural yogurt, granola, rice, chicken
+    const items: SolverItem[] = [
+      // Breakfast: adjustable
+      createSolverItem({
+        id: "greek-yogurt-0",
+        name: "Tesco 0% Fat Greek Style Yogurt",
+        category: "dairy",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 60, protein: 6.33, carbs: 7.67, fat: 0.33 },
+        currentGrams: 0,
+        minPortionGrams: 100,
+        maxPortionGrams: 500,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "fruit-topper",
+        name: "Tesco Breakfast Fruit Topper",
+        category: "fruit",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 44, protein: 0.67, carbs: 8.67, fat: 0.67 },
+        currentGrams: 0,
+        minPortionGrams: 50,
+        maxPortionGrams: 150,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "natural-yogurt",
+        name: "Tesco Greek Style Natural Yogurt",
+        category: "dairy",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 99, protein: 3.5, carbs: 4, fat: 7.5 },
+        currentGrams: 0,
+        minPortionGrams: 100,
+        maxPortionGrams: 500,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+      createSolverItem({
+        id: "granola",
+        name: "Lizi's Original Granola",
+        category: "snack",
+        mealType: "breakfast",
+        nutritionPer100g: { calories: 476.67, protein: 10, carbs: 56.67, fat: 20 },
+        currentGrams: 0,
+        minPortionGrams: 20,
+        maxPortionGrams: 80,
+        portionStepGrams: 5,
+        roundingRule: "nearest_5g",
+      }),
+
+      // Lunch: LOCKED premade (550g pack)
+      createSolverItem({
+        id: "hunters-pasta",
+        name: "MyProtein Hunters BBQ Chicken Pasta",
+        category: "premade",
+        mealType: "lunch",
+        editableMode: "LOCKED",
+        nutritionPer100g: { calories: 122.73, protein: 12.36, carbs: 13.82, fat: 1.64 },
+        currentGrams: 550,
+      }),
+
+      // Dinner: veg mix LOCKED (1 bag), seasoning LOCKED, rice + chicken adjustable
+      createSolverItem({
+        id: "veg-mix",
+        name: "Birds Eye Steamfresh Veg Mix",
+        category: "veg",
+        mealType: "dinner",
+        editableMode: "LOCKED",
+        nutritionPer100g: { calories: 13.33, protein: 0.625, carbs: 2.083, fat: 0.208 },
+        currentGrams: 480,
+      }),
+      createSolverItem({
+        id: "seasoning",
+        name: "Schwartz Pepper & Garlic Seasoning",
+        category: "seasoning",
+        mealType: "dinner",
+        editableMode: "LOCKED",
+        nutritionPer100g: { calories: 320, protein: 10, carbs: 70, fat: 0 },
+        currentGrams: 10,
+        minPortionGrams: 0,
+        maxPortionGrams: 15,
+        countMacros: true,
+      }),
+      createSolverItem({
+        id: "rice",
+        name: "Ben's Original Wholegrain Rice",
+        category: "carb",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 178.86, protein: 4, carbs: 34.29, fat: 2.857 },
+        currentGrams: 0,
+        minPortionGrams: 80,
+        maxPortionGrams: 250,
+        portionStepGrams: 5,
+        roundingRule: "nearest_5g",
+      }),
+      createSolverItem({
+        id: "chicken",
+        name: "Tesco Chicken Breast Mini Fillets",
+        category: "protein",
+        mealType: "dinner",
+        nutritionPer100g: { calories: 114.17, protein: 24.167, carbs: 0, fat: 2.083 },
+        currentGrams: 0,
+        minPortionGrams: 100,
+        maxPortionGrams: 300,
+        portionStepGrams: 10,
+        roundingRule: "nearest_10g",
+      }),
+    ];
+
+    // Target: 1895 kcal, 166P, 213C, 42F (from MFP "Your Daily Goal")
+    const targets: SolverTargets = { calories: 1895, protein: 166, carbs: 213, fat: 42 };
+
+    const result = solve(items, targets, {
+      maxIterations: 500,
+      seasoningsCountMacros: true,
+    });
+
+    // The solver MUST succeed — MFP proved these targets are achievable
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      // Verify all macros within tolerance
+      expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
+      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+
+      // Locked items must retain their grams
+      expect(result.portions.get("hunters-pasta")).toBe(550);
+      expect(result.portions.get("veg-mix")).toBe(480);
+
+      // No insane portions
+      const fruitGrams = result.portions.get("fruit-topper")!;
+      expect(fruitGrams).toBeGreaterThanOrEqual(50);
+      expect(fruitGrams).toBeLessThanOrEqual(150);
+
+      const granolaGrams = result.portions.get("granola")!;
+      expect(granolaGrams).toBeGreaterThanOrEqual(20);
+      expect(granolaGrams).toBeLessThanOrEqual(80);
+
+      // Log the solution for visual proof
+      console.log("=== SOLVER PROOF: MFP Feb 9 Day ===");
+      console.log(`Target: ${targets.calories}cal, ${targets.protein}P, ${targets.carbs}C, ${targets.fat}F`);
+      console.log(`Achieved: ${result.totals.calories}cal, ${result.totals.protein}P, ${result.totals.carbs}C, ${result.totals.fat}F`);
+      console.log("Portions:");
+      for (const item of items) {
+        const g = result.portions.get(item.id);
+        console.log(`  ${item.name}: ${g}g (${item.editableMode})`);
+      }
+    }
+  });
+
+  it("solver handles the same MFP day even with 1g step sizes (fine-grained)", () => {
+    // Same items but with 1g steps for maximum precision
+    const items: SolverItem[] = [
+      createSolverItem({
+        id: "greek-yogurt-0", name: "Tesco 0% Fat Greek Style Yogurt",
+        category: "dairy", mealType: "breakfast",
+        nutritionPer100g: { calories: 60, protein: 6.33, carbs: 7.67, fat: 0.33 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 500,
+        portionStepGrams: 1, roundingRule: "nearest_1g",
+      }),
+      createSolverItem({
+        id: "fruit-topper", name: "Tesco Breakfast Fruit Topper",
+        category: "fruit", mealType: "breakfast",
+        nutritionPer100g: { calories: 44, protein: 0.67, carbs: 8.67, fat: 0.67 },
+        currentGrams: 0, minPortionGrams: 50, maxPortionGrams: 150,
+        portionStepGrams: 1, roundingRule: "nearest_1g",
+      }),
+      createSolverItem({
+        id: "natural-yogurt", name: "Tesco Greek Style Natural Yogurt",
+        category: "dairy", mealType: "breakfast",
+        nutritionPer100g: { calories: 99, protein: 3.5, carbs: 4, fat: 7.5 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 500,
+        portionStepGrams: 1, roundingRule: "nearest_1g",
+      }),
+      createSolverItem({
+        id: "granola", name: "Lizi's Original Granola",
+        category: "snack", mealType: "breakfast",
+        nutritionPer100g: { calories: 476.67, protein: 10, carbs: 56.67, fat: 20 },
+        currentGrams: 0, minPortionGrams: 20, maxPortionGrams: 80,
+        portionStepGrams: 1, roundingRule: "nearest_1g",
+      }),
+      createSolverItem({
+        id: "hunters-pasta", name: "MyProtein Hunters BBQ Chicken Pasta",
+        category: "premade", mealType: "lunch", editableMode: "LOCKED",
+        nutritionPer100g: { calories: 122.73, protein: 12.36, carbs: 13.82, fat: 1.64 },
+        currentGrams: 550,
+      }),
+      createSolverItem({
+        id: "veg-mix", name: "Birds Eye Steamfresh Veg Mix",
+        category: "veg", mealType: "dinner", editableMode: "LOCKED",
+        nutritionPer100g: { calories: 13.33, protein: 0.625, carbs: 2.083, fat: 0.208 },
+        currentGrams: 480,
+      }),
+      createSolverItem({
+        id: "seasoning", name: "Schwartz Seasoning",
+        category: "seasoning", mealType: "dinner", editableMode: "LOCKED",
+        nutritionPer100g: { calories: 320, protein: 10, carbs: 70, fat: 0 },
+        currentGrams: 10, minPortionGrams: 0, maxPortionGrams: 15, countMacros: true,
+      }),
+      createSolverItem({
+        id: "rice", name: "Ben's Original Wholegrain Rice",
+        category: "carb", mealType: "dinner",
+        nutritionPer100g: { calories: 178.86, protein: 4, carbs: 34.29, fat: 2.857 },
+        currentGrams: 0, minPortionGrams: 80, maxPortionGrams: 250,
+        portionStepGrams: 1, roundingRule: "nearest_1g",
+      }),
+      createSolverItem({
+        id: "chicken", name: "Tesco Chicken Breast Mini Fillets",
+        category: "protein", mealType: "dinner",
+        nutritionPer100g: { calories: 114.17, protein: 24.167, carbs: 0, fat: 2.083 },
+        currentGrams: 0, minPortionGrams: 100, maxPortionGrams: 300,
+        portionStepGrams: 1, roundingRule: "nearest_1g",
+      }),
+    ];
+
+    const targets: SolverTargets = { calories: 1895, protein: 166, carbs: 213, fat: 42 };
+    const result = solve(items, targets, { maxIterations: 500, seasoningsCountMacros: true });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
+      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+    }
+  });
+});
