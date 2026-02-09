@@ -6,8 +6,6 @@ import { toast } from "sonner";
 export interface BrightConnection {
   id: string;
   user_id: string;
-  access_token: string | null;
-  token_expires_at: string | null;
   electricity_resource_id: string | null;
   gas_resource_id: string | null;
   last_synced_at: string | null;
@@ -26,7 +24,7 @@ export function useBrightConnection() {
       if (!user) return null;
 
       const { data, error } = await supabase
-        .from("bright_connections")
+        .from("bright_connections_safe")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();

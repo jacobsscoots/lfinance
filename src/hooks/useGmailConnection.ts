@@ -7,9 +7,6 @@ export interface GmailConnection {
   id: string;
   user_id: string;
   email: string;
-  access_token: string | null;
-  refresh_token: string | null;
-  token_expires_at: string | null;
   last_synced_at: string | null;
   status: 'active' | 'error' | 'revoked';
   created_at: string;
@@ -36,7 +33,7 @@ export function useGmailConnection() {
       if (!user) return null;
       
       const { data, error } = await supabase
-        .from("gmail_connections")
+        .from("gmail_connections_safe")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
