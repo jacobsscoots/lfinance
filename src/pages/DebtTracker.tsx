@@ -2,7 +2,8 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Plus, CreditCard, Receipt, ArrowRightLeft, FileText, Wallet2 } from "lucide-react";
+import { Plus, CreditCard, Receipt, ArrowRightLeft, FileText, Wallet2, Upload } from "lucide-react";
+import { ExcelImportDialog } from "@/components/settings/ExcelImportDialog";
 import { useDebts } from "@/hooks/useDebts";
 import { useDebtPayments } from "@/hooks/useDebtPayments";
 import { useDebtTransactions } from "@/hooks/useDebtTransactions";
@@ -27,6 +28,7 @@ export default function DebtTracker() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
   const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [excelImportOpen, setExcelImportOpen] = useState(false);
   const [selectedDebtId, setSelectedDebtId] = useState<string | undefined>();
 
   const { debts, isLoading: debtsLoading } = useDebts();
@@ -54,6 +56,10 @@ export default function DebtTracker() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setExcelImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import Excel
+            </Button>
             <Button onClick={() => setDebtDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Debt
@@ -208,6 +214,12 @@ export default function DebtTracker() {
       <TransactionCsvImport
         open={csvImportOpen}
         onOpenChange={setCsvImportOpen}
+      />
+
+      <ExcelImportDialog
+        open={excelImportOpen}
+        onOpenChange={setExcelImportOpen}
+        initialSection="debts"
       />
     </AppLayout>
   );

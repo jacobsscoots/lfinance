@@ -224,6 +224,7 @@ export type Database = {
           end_date: string | null
           frequency: Database["public"]["Enums"]["bill_frequency"]
           id: string
+          import_key: string | null
           is_active: boolean | null
           is_subscription: boolean | null
           is_variable: boolean | null
@@ -246,6 +247,7 @@ export type Database = {
           end_date?: string | null
           frequency?: Database["public"]["Enums"]["bill_frequency"]
           id?: string
+          import_key?: string | null
           is_active?: boolean | null
           is_subscription?: boolean | null
           is_variable?: boolean | null
@@ -268,6 +270,7 @@ export type Database = {
           end_date?: string | null
           frequency?: Database["public"]["Enums"]["bill_frequency"]
           id?: string
+          import_key?: string | null
           is_active?: boolean | null
           is_subscription?: boolean | null
           is_variable?: boolean | null
@@ -1059,6 +1062,7 @@ export type Database = {
           debt_type: string
           due_day: number | null
           id: string
+          import_key: string | null
           interest_type: string
           min_payment: number | null
           notes: string | null
@@ -1078,6 +1082,7 @@ export type Database = {
           debt_type: string
           due_day?: number | null
           id?: string
+          import_key?: string | null
           interest_type?: string
           min_payment?: number | null
           notes?: string | null
@@ -1097,6 +1102,7 @@ export type Database = {
           debt_type?: string
           due_day?: number | null
           id?: string
+          import_key?: string | null
           interest_type?: string
           min_payment?: number | null
           notes?: string | null
@@ -1660,6 +1666,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      import_logs: {
+        Row: {
+          bills_added: number
+          bills_skipped: number
+          bills_updated: number
+          debts_added: number
+          debts_skipped: number
+          debts_updated: number
+          details: Json | null
+          file_name: string
+          id: string
+          imported_at: string
+          layout_detected: string | null
+          mapping_signature: string | null
+          settings_sheet_name: string | null
+          subs_added: number
+          subs_skipped: number
+          subs_updated: number
+          user_id: string
+        }
+        Insert: {
+          bills_added?: number
+          bills_skipped?: number
+          bills_updated?: number
+          debts_added?: number
+          debts_skipped?: number
+          debts_updated?: number
+          details?: Json | null
+          file_name: string
+          id?: string
+          imported_at?: string
+          layout_detected?: string | null
+          mapping_signature?: string | null
+          settings_sheet_name?: string | null
+          subs_added?: number
+          subs_skipped?: number
+          subs_updated?: number
+          user_id: string
+        }
+        Update: {
+          bills_added?: number
+          bills_skipped?: number
+          bills_updated?: number
+          debts_added?: number
+          debts_skipped?: number
+          debts_updated?: number
+          details?: Json | null
+          file_name?: string
+          id?: string
+          imported_at?: string
+          layout_detected?: string | null
+          mapping_signature?: string | null
+          settings_sheet_name?: string | null
+          subs_added?: number
+          subs_skipped?: number
+          subs_updated?: number
+          user_id?: string
+        }
+        Relationships: []
       }
       investment_accounts: {
         Row: {
