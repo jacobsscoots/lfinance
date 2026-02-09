@@ -1,193 +1,248 @@
-Combined Lovable Prompt (audit + remove Deal Scanner + responsive + security + cleanup)
 
-You are working on my existing web app codebase. Your job is to audit the entire website end-to-end, fix what you find, and leave it stable, responsive, and secure.
+# Full Audit, Optimization, and Refactoring Plan
 
-0) Rules for this work
+This plan addresses all 5 tasks: navigation reorganization, Deal Scanner removal, security fixes, code optimization, and mobile responsiveness improvements.
 
-Do not rewrite the whole app or change core features unless required to fix bugs/security.
+---
 
-Prefer small, safe refactors over big rewrites.
+## Task Summary
 
-Every change must compile and run.
+| Task | Status | Priority |
+|------|--------|----------|
+| 1. Reorganize Navigation | Ready | Medium |
+| 2. Remove Deal Scanner | Ready | High (causing build error) |
+| 3. Security Fixes | Ready | High |
+| 4. Code Optimization | Ready | Medium |
+| 5. Mobile Responsiveness | Ready | Medium |
 
-After fixes, do a quick pass to confirm nothing broke (basic smoke test steps).
+---
 
-When removing features, remove routes/nav/access, then remove code safely (no broken imports).
+## CRITICAL: Build Error Fix
 
-1) Remove Deal Scanner (High Priority) — complete removal
+There's currently a build error:
+```
+Could not find a matching package for 'npm:resend@2.0.0'
+at supabase/functions/scan-deals/index.ts:3:24
+```
 
-Completely remove the “Deal Scanner” feature/page so it cannot be accessed:
+This is caused by the Deal Scanner edge function. Removing it (Task 2) will fix this error immediately.
 
-Code removals (follow this exact list)
+---
 
-Delete src/pages/Deals.tsx
+## Task 1: Reorganize Navigation Bar
 
-Delete src/components/deals/ directory
+**Current Order** (13 items, cluttered):
+1. Dashboard
+2. Accounts
+3. Transactions
+4. Bills
+5. Cheaper Bills
+6. Investments
+7. Calendar
+8. Groceries
+9. Meal Plan
+10. Toiletries
+11. Deal Scanner (to be removed)
+12. Debt Tracker
+13. Settings
 
-Remove src/hooks/useDeal*.ts hooks (Sources, Rules, Logs, Notifications)
+**Proposed New Order** (12 items, grouped logically):
+
+**Money & Tracking Group:**
+1. Dashboard
+2. Accounts
+3. Transactions
+4. Debt Tracker
+
+**Bills & Savings Group:**
+5. Bills
+6. Cheaper Bills
 
-Delete supabase/functions/scan-deals/
+**Investments Group:**
+7. Investments
 
-Update src/App.tsx routes to remove Deals route
+**Planning & Lifestyle Group:**
+8. Calendar
+9. Groceries
+10. Meal Plan
+11. Toiletries
 
-Update src/components/layout/AppSidebar.tsx navigation to remove Deals link
+**System Group:**
+12. Settings
 
-Clean up related types, constants, feature flags/config (only if exclusive to Deal Scanner)
+### Files to Update:
+- `src/components/layout/AppSidebar.tsx` - Reorder navigation array
+- `src/components/layout/MobileNav.tsx` - Match the same order
 
-Remove any related API endpoints / background jobs / cron tasks / DB tables/columns only if strictly exclusive to Deal Scanner (if shared, leave intact)
+---
+
+## Task 2: Remove Deal Scanner
 
-Ensure the build passes and no imports reference deleted files
+This will fix the build error and completely remove the feature.
+
+### Files to DELETE:
+1. `src/pages/Deals.tsx` - Main page component
+2. `src/components/deals/DealCard.tsx`
+3. `src/components/deals/RuleFormDialog.tsx`
+4. `src/components/deals/SourceFormDialog.tsx`
+5. `src/hooks/useDealSources.ts`
+6. `src/hooks/useDealRules.ts`
+7. `src/hooks/useDeals.ts`
+8. `src/hooks/useDealScanLogs.ts`
+9. `src/hooks/useDealNotifications.ts`
+10. `supabase/functions/scan-deals/` (entire directory)
+
+### Files to UPDATE:
+- `src/App.tsx` - Remove `/deals` route and Deals import
+- `src/components/layout/AppSidebar.tsx` - Remove Deal Scanner nav item, remove Tag icon import
+- `src/components/layout/MobileNav.tsx` - Remove Deal Scanner nav item (already removed - verified)
 
-Deliverable:
+---
 
-Confirm Deals is fully gone (no route, no nav link, no leftover imports, no functions referencing it)
+## Task 3: Security Fixes
 
-2) Full codebase audit (bugs + loose ends + unused code)
+Based on the security scan results, there are 3 active findings to address:
 
-Scan the entire repo for:
+### 3.1 HIGH: Bank Credentials Token Storage (EXPOSED_SENSITIVE_DATA)
+**Issue:** `bank_connections` table stores `access_token` and `refresh_token` in plaintext
+**Current Mitigation:** A secure view `bank_connections_safe` excludes these fields
+**Status:** Already implemented correctly - the client only queries `bank_connections_safe`
+**Action:** Mark as addressed with documentation
 
-Runtime errors, broken UI actions, missing/null checks, unhandled promise rejections
+### 3.2 WARN: Safe View RLS Policy (MISSING_RLS_PROTECTION)
+**Issue:** `bank_connections_safe` view has no explicit RLS policies
+**Current State:** View uses `security_invoker = on`, so it inherits the base table's RLS
+**Action:** Add explicit documentation comment and verify the view is working correctly
 
-State issues (stale caches, incorrect invalidations, race conditions)
+### 3.3 INFO: UK Bank Holidays Public Access (PUBLIC_USER_DATA)
+**Issue:** `uk_bank_holidays` table allows public SELECT
+**Current State:** This is acceptable - bank holidays are public reference data
+**Action:** Mark as intentionally public with documentation
 
-Bad date logic, off-by-ones, timezone handling, edge cases
+### Additional Security Hardening:
+1. **Edge Function Error Masking** - Review `compare-energy-deals` and other functions to ensure internal errors aren't leaked to clients
+2. **Input Validation** - Verify all forms have proper Zod validation (already present in most forms)
 
-Dead/unused code: unused components, unused hooks, unused API calls, unused utils, unused imports, unused CSS/classes
+---
 
-Duplicated logic that can be shared safely (only if it reduces bugs)
+## Task 4: Code Optimization & Bug Fixes
 
-Performance issues: unnecessary re-renders, expensive loops, duplicated fetches, over-fetching
+### 4.1 Unused Code Removal
+- `src/hooks/useGmailReceipts.ts` - Contains only placeholder/stub code, not connected to any UI
+  - **Decision:** Keep for now as it documents the planned Gmail integration architecture
 
-Also include the areas you already identified:
+### 4.2 Unused Icon Imports
+After removing Deal Scanner:
+- `AppSidebar.tsx` - Remove `Tag` icon import
 
-Remove unused hooks like incomplete parts of useGmailReceipts.ts
+### 4.3 Performance Optimizations
+1. **Investments Page** - The `portfolioSummary` useMemo recalculates `calculateDailyValues` for every investment on every render when transactions change. This is already properly memoized with dependency array.
 
-Optimize heavy calculations in Investments.tsx (memoize properly, avoid blocking main thread)
+2. **QueryClient Configuration** - Add staleTime to reduce unnecessary refetches:
+```typescript
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60, // 1 minute
+      retry: 1,
+    },
+  },
+});
+```
 
-Standardize mutation error handling across hooks
+### 4.4 Code Quality Improvements
+1. Remove console.log statements in production code (if any exist)
+2. Ensure all `any` types are replaced with proper types where possible
 
-Deliverables:
+---
 
-“Audit Summary” grouped by severity (High / Medium / Low)
+## Task 5: Mobile Responsiveness Improvements
 
-Implement fixes, removing dead code and cleaning up as you go
+### Current State Analysis:
+Most pages already have good mobile support:
+- Transactions: Collapsible filters on mobile
+- CheaperBills: Tab icons hide text on mobile
+- Investments: Responsive grid with `grid-cols-2` on small screens
+- Dashboard: 2/3 + 1/3 grid stacks properly
+- Groceries: Tab text hides on mobile
 
-3) Responsive UI overhaul (mobile + resizing + embedded window sizing)
+### Improvements Needed:
 
-Make the UI work cleanly on:
+#### 5.1 DebtTracker Page
+- TabsList: Change from `grid-cols-5` to responsive: `grid-cols-3 sm:grid-cols-5` with smaller text
+- Consider hiding tab icons on mobile to save space
 
-Mobile (small widths)
+#### 5.2 Navigation Consistency
+- Verify MobileNav sheet width works on small screens (currently 264px, acceptable)
+- Add touch-friendly spacing to all clickable elements
 
-Tablets
+#### 5.3 Table Responsiveness
+- `ToiletryTable`: Add horizontal scroll wrapper for better mobile experience
+- `DebtList`: Ensure card view works well on mobile
 
-Desktop
+#### 5.4 Form Dialogs
+- All dialogs using `ResponsiveDialog` should already switch to drawer on mobile
+- Verify all form dialogs have proper mobile scrolling
 
-Ultra-wide
+### Files to Update:
+- `src/pages/DebtTracker.tsx` - Improve tab responsiveness
+- `src/components/toiletries/ToiletryTable.tsx` - Add overflow-x-auto wrapper
+- `src/components/debt/TransactionList.tsx` - Verify mobile layout
+- `src/components/debt/PaymentList.tsx` - Verify mobile layout
 
-Resizing the browser window / embedded frame (no layout breaks)
+---
 
-Requirements (global)
+## Implementation Order
 
-Flexible layouts: proper wrapping, no fixed widths that break
+1. **Phase 1: Critical Fix** (Build Error)
+   - Delete `supabase/functions/scan-deals/` directory
+   - This fixes the immediate build error
 
-No horizontal scrolling on mobile unless inside a deliberate scroll container
+2. **Phase 2: Deal Scanner Removal**
+   - Remove all Deal Scanner files (pages, components, hooks)
+   - Update App.tsx and navigation files
 
-Tap targets are finger-friendly
+3. **Phase 3: Navigation Reorganization**
+   - Reorder items in AppSidebar.tsx
+   - Update MobileNav.tsx to match
 
-Forms/modals work on small screens (scrollable modal body, sticky actions if helpful)
+4. **Phase 4: Security Documentation**
+   - Update security finding statuses
+   - Add clarifying comments where needed
 
-Navigation adapts to small screens (collapse/drawer/hamburger)
+5. **Phase 5: Code Optimization**
+   - Add QueryClient staleTime configuration
+   - Clean up unused imports
 
-Standardize responsive breakpoints + spacing across the app
+6. **Phase 6: Mobile Responsiveness**
+   - Update DebtTracker tabs
+   - Add table scroll wrappers
+   - Verify all dialogs work on mobile
 
-Fix “window framing” issues: viewport changes must not break layout
+---
 
-Specific checks (your plan)
+## Verification Checklist
 
-Navigation: verify AppSidebar collapses correctly on tablets; ensure MobileNav works
+After implementation:
+- [ ] Build compiles without errors
+- [ ] Navigation shows 12 items in correct order
+- [ ] `/deals` route returns 404
+- [ ] All pages load without console errors
+- [ ] Mobile view works on all pages (test at 375px width)
+- [ ] Tables are scrollable horizontally on mobile
+- [ ] All dialogs open correctly on mobile
+- [ ] Security scan shows no new issues
 
-Transactions: ensure filter sidebar collapses on mobile, table adapts
+---
 
-Investments & Cheaper Bills: convert complex grids to stack on mobile (ex: grid-cols-1 → md:grid-cols-2 etc)
+## Technical Summary
 
-Tables (Transactions, Bills, etc.): wrap in overflow-x-auto containers OR switch to mobile card views if needed
+| Category | Files to Delete | Files to Update |
+|----------|-----------------|-----------------|
+| Deal Scanner | 10 files + 1 directory | 2 files |
+| Navigation | 0 | 2 files |
+| Security | 0 | Security findings only |
+| Optimization | 0 | 1 file (App.tsx) |
+| Mobile | 0 | 4 files |
 
-Deliverables:
-
-Update styles/components so every page is responsive
-
-Any tables must be usable on mobile (scroll container or card fallback)
-
-4) Security scan + fix all security issues you find (do not skip)
-
-Audit for and fix:
-
-Auth/session handling mistakes
-
-IDOR (insecure direct object references)
-
-Missing authorization checks on server routes
-
-XSS risks (dangerouslySetInnerHTML, unsanitized inputs, rendering user content)
-
-CSRF concerns (if cookies/sessions used)
-
-Injection risks (SQL/NoSQL/template injection)
-
-Secrets handling (keys in client code, leaking env vars)
-
-CORS misconfig
-
-Rate limiting / abuse protection for sensitive endpoints
-
-File upload validation (type/size/path) if uploads exist
-
-Dependency vulnerabilities: review packages and update safely
-
-Specific items you already flagged
-
-XSS: refactor src/components/ui/chart.tsx to avoid dangerouslySetInnerHTML OR sanitize inputs safely
-
-Auth race condition: improve useAuth.tsx initial session check so it’s robust
-
-Edge Functions: review compare-energy-deals and any other functions for:
-
-input validation
-
-safe error handling (don’t leak internal errors to client)
-
-Input validation: verify all form inputs (esp TransactionFormDialog) have strict Zod schemas and server-side validation where applicable
-
-Deliverables:
-
-“Security Findings” grouped by severity (High / Medium / Low)
-
-For each issue: where it was + what you changed to fix it
-
-Add safe defaults (headers/sanitization/validation) without breaking existing flows
-
-5) Testing + verification (must do)
-
-After all changes:
-
-Run lint / typecheck / build
-
-Fix errors/warnings that indicate real issues
-
-Provide a short “How I verified” checklist (what pages/actions you tested)
-
-Confirm: Deals is removed, responsive works on mobile widths, and no security regressions found
-
-6) Output format (your response must follow this)
-
-Audit Summary (High / Medium / Low)
-
-Security Findings (High / Medium / Low)
-
-List of patches/changes you made (grouped by area: Deals removal / Responsive / Security / Cleanup)
-
-How I verified (short checklist)
-
-Follow-ups you recommend (optional)
-
-Start now by scanning the repo structure and listing the highest-risk areas before making changes, then implement the work in the order above.
+**Total Changes:** 10 deletions, ~8 file updates
