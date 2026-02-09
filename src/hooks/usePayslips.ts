@@ -9,6 +9,11 @@ import {
   fileToBase64,
 } from "@/lib/payslipUpload";
 
+export interface PayslipOtherDeduction {
+  name: string;
+  amount: number;
+}
+
 export interface Payslip {
   id: string;
   user_id: string;
@@ -19,6 +24,8 @@ export interface Payslip {
   tax_deducted: number | null;
   ni_deducted: number | null;
   pension_deducted: number | null;
+  other_deductions: PayslipOtherDeduction[];
+  pay_date: string | null;
   pay_period_start: string | null;
   pay_period_end: string | null;
   employer_name: string | null;
@@ -37,6 +44,8 @@ export interface PayslipUpdateInput {
   tax_deducted?: number | null;
   ni_deducted?: number | null;
   pension_deducted?: number | null;
+  other_deductions?: PayslipOtherDeduction[];
+  pay_date?: string | null;
   pay_period_start?: string | null;
   pay_period_end?: string | null;
   employer_name?: string | null;
@@ -58,7 +67,10 @@ export function usePayslips() {
         .order("pay_period_end", { ascending: false, nullsFirst: false });
 
       if (error) throw error;
-      return data as Payslip[];
+      return (data ?? []).map((d) => ({
+        ...d,
+        other_deductions: Array.isArray(d.other_deductions) ? d.other_deductions : [],
+      })) as unknown as Payslip[];
     },
     enabled: !!user?.id,
   });
@@ -135,15 +147,19 @@ export function usePayslips() {
 
   const updatePayslip = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: PayslipUpdateInput }) => {
+      const dbUpdates = {
+        ...updates,
+        other_deductions: updates.other_deductions ? JSON.parse(JSON.stringify(updates.other_deductions)) : undefined,
+      };
       const { data, error } = await supabase
         .from("payslips")
-        .update(updates)
+        .update(dbUpdates)
         .eq("id", id)
         .select()
         .single();
 
       if (error) throw error;
-      return data as Payslip;
+      return { ...data, other_deductions: Array.isArray(data.other_deductions) ? data.other_deductions : [] } as unknown as Payslip;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payslips"] });
@@ -169,7 +185,7 @@ export function usePayslips() {
         .single();
 
       if (error) throw error;
-      return data as Payslip;
+      return { ...data, other_deductions: Array.isArray(data.other_deductions) ? data.other_deductions : [] } as unknown as Payslip;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["payslips"] });
