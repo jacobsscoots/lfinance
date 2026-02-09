@@ -75,11 +75,19 @@ function calculateNetPackGrams(product: Product): number {
 
 /**
  * Calculate stock on hand in grams.
- * Uses both quantity_on_hand and quantity_in_use as available stock.
  * 
- * stockGrams = (quantity_on_hand + quantity_in_use) * netPackGrams
+ * Priority:
+ * 1. If current_weight_grams is set, use weight-based: current_weight - packaging_weight
+ * 2. Otherwise fall back to pack-based: (quantity_on_hand + quantity_in_use) * netPackGrams
  */
 function calculateStockGrams(product: Product, netPackGrams: number): number {
+  // Weight-based stock (user weighed the item)
+  if (product.current_weight_grams != null && product.current_weight_grams > 0) {
+    const packagingWeight = product.packaging_weight_grams ?? 0;
+    return Math.max(0, product.current_weight_grams - packagingWeight);
+  }
+
+  // Pack-based stock (traditional quantity tracking)
   const onHand = product.quantity_on_hand ?? 0;
   const inUse = product.quantity_in_use ?? 0;
   
