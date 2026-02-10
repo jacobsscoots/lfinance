@@ -18,6 +18,7 @@ import CheaperBills from "./pages/CheaperBills";
 import Settings from "./pages/Settings";
 import DebtTracker from "./pages/DebtTracker";
 import YearlyPlanner from "./pages/YearlyPlanner";
+import NetWorth from "./pages/NetWorth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -49,6 +50,7 @@ const App = () => (
             <Route path="/toiletries" element={<ProtectedRoute><Toiletries /></ProtectedRoute>} />
             <Route path="/debt-tracker" element={<ProtectedRoute><DebtTracker /></ProtectedRoute>} />
             <Route path="/yearly-planner" element={<ProtectedRoute><YearlyPlanner /></ProtectedRoute>} />
+            <Route path="/net-worth" element={<ProtectedRoute><NetWorth /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

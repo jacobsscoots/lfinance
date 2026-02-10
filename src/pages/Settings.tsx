@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Tag, CalendarDays, Package, Target, FileText, Calendar, Mail, Upload, Truck } from "lucide-react";
+import { User, Tag, CalendarDays, Package, Target, FileText, Calendar, Mail, Upload, Truck, Activity } from "lucide-react";
 import { ExcelImportDialog } from "@/components/settings/ExcelImportDialog";
 import { RetailerProfileSettings } from "@/components/settings/RetailerProfileSettings";
 import { ProductSettings } from "@/components/settings/ProductSettings";
@@ -11,6 +11,7 @@ import { PayslipSettings } from "@/components/settings/PayslipSettings";
 import { PayslipPreviewDialog } from "@/components/settings/PayslipPreviewDialog";
 import { ZigzagCalculator } from "@/components/settings/ZigzagCalculator";
 import { GmailSettings } from "@/components/settings/GmailSettings";
+import { ServiceStatusSettings } from "@/components/settings/ServiceStatusSettings";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Payslip } from "@/hooks/usePayslips";
@@ -35,8 +36,12 @@ export default function Settings() {
           </p>
         </div>
 
-        <Tabs defaultValue="nutrition" className="space-y-4">
+        <Tabs defaultValue="services" className="space-y-4">
           <TabsList className="w-full flex overflow-x-auto h-auto flex-wrap sm:flex-nowrap">
+            <TabsTrigger value="services" className="flex items-center gap-2 flex-1 sm:flex-none">
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">Services</span>
+            </TabsTrigger>
             <TabsTrigger value="nutrition" className="flex items-center gap-2 flex-1 sm:flex-none">
               <Target className="h-4 w-4" />
               <span className="hidden sm:inline">Nutrition</span>
@@ -78,6 +83,10 @@ export default function Settings() {
               <span className="hidden sm:inline">Account</span>
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="services">
+            <ServiceStatusSettings />
+          </TabsContent>
 
           <TabsContent value="nutrition">
             <NutritionTargetSettings />

@@ -14,7 +14,8 @@ import {
   Percent,
   Wallet2,
   LogOut,
-  CalendarRange
+  CalendarRange,
+  BarChart3
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -22,30 +23,43 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 
-// Navigation items organized into logical groups (same order as AppSidebar)
-const navigation = [
-  // Money & Tracking
-  { name: "Dashboard", href: "/", icon: Home },
-  { name: "Accounts", href: "/accounts", icon: CreditCard },
-  { name: "Transactions", href: "/transactions", icon: Receipt },
-  { name: "Debt Tracker", href: "/debt-tracker", icon: Wallet2 },
-  
-  // Bills & Savings
-  { name: "Bills", href: "/bills", icon: TrendingUp },
-  { name: "Cheaper Bills", href: "/cheaper-bills", icon: Percent },
-  { name: "Yearly Planner", href: "/yearly-planner", icon: CalendarRange },
-  
-  // Investments
-  { name: "Investments", href: "/investments", icon: PieChart },
-  
-  // Planning & Lifestyle
-  { name: "Calendar", href: "/calendar", icon: CalendarDays },
-  { name: "Groceries", href: "/groceries", icon: ShoppingCart },
-  { name: "Meal Plan", href: "/meal-plan", icon: UtensilsCrossed },
-  { name: "Toiletries", href: "/toiletries", icon: Sparkles },
-  
-  // System
-  { name: "Settings", href: "/settings", icon: Settings },
+const navGroups = [
+  {
+    label: null,
+    items: [{ name: "Dashboard", href: "/", icon: Home }],
+  },
+  {
+    label: "MONEY",
+    items: [
+      { name: "Accounts", href: "/accounts", icon: CreditCard },
+      { name: "Transactions", href: "/transactions", icon: Receipt },
+      { name: "Debt Tracker", href: "/debt-tracker", icon: Wallet2 },
+    ],
+  },
+  {
+    label: "BILLS",
+    items: [
+      { name: "Bills", href: "/bills", icon: TrendingUp },
+      { name: "Cheaper Bills", href: "/cheaper-bills", icon: Percent },
+      { name: "Yearly Planner", href: "/yearly-planner", icon: CalendarRange },
+    ],
+  },
+  {
+    label: "INVESTMENTS",
+    items: [
+      { name: "Investments", href: "/investments", icon: PieChart },
+      { name: "Net Worth", href: "/net-worth", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "LIFESTYLE",
+    items: [
+      { name: "Calendar", href: "/calendar", icon: CalendarDays },
+      { name: "Groceries", href: "/groceries", icon: ShoppingCart },
+      { name: "Meal Plan", href: "/meal-plan", icon: UtensilsCrossed },
+      { name: "Toiletries", href: "/toiletries", icon: Sparkles },
+    ],
+  },
 ];
 
 export function MobileNav() {
@@ -77,26 +91,51 @@ export function MobileNav() {
             <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
               <span className="text-lg font-semibold text-sidebar-foreground">Menu</span>
             </div>
-            <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <NavLink
-                    key={item.name}
-                    to={item.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    )}
-                  >
-                    <item.icon className="h-5 w-5 shrink-0" />
-                    {item.name}
-                  </NavLink>
-                );
-              })}
+            <nav className="flex-1 px-4 py-4 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)]">
+              {navGroups.map((group, gi) => (
+                <div key={gi}>
+                  {group.label && (
+                    <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                      {group.label}
+                    </p>
+                  )}
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => {
+                      const isActive = location.pathname === item.href;
+                      return (
+                        <NavLink
+                          key={item.name}
+                          to={item.href}
+                          onClick={() => setOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                            isActive
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                          )}
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          {item.name}
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {/* Settings in mobile */}
+              <NavLink
+                to="/settings"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  location.pathname === "/settings"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                Settings
+              </NavLink>
             </nav>
             {/* Footer in mobile nav */}
             <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
