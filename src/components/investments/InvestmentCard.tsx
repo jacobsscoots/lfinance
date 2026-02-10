@@ -10,7 +10,8 @@ import {
   Trash2,
   Building,
   Calendar,
-  Percent
+  Percent,
+  Activity
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InvestmentAccount } from "@/hooks/useInvestments";
 import { InvestmentTransaction } from "@/hooks/useInvestmentTransactions";
+import { InvestmentValuation } from "@/hooks/useInvestmentValuations";
 import { 
   calculateContributionTotal, 
   calculateReturn, 
@@ -33,6 +35,7 @@ import { cn } from "@/lib/utils";
 interface InvestmentCardProps {
   investment: InvestmentAccount;
   transactions: InvestmentTransaction[];
+  livePrice?: { price: number; dailyChange?: { amount: number; percentage: number } | null } | null;
   onClick?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -41,6 +44,7 @@ interface InvestmentCardProps {
 export function InvestmentCard({
   investment,
   transactions,
+  livePrice,
   onClick,
   onEdit,
   onDelete,
@@ -53,7 +57,37 @@ export function InvestmentCard({
       amount: tx.amount,
     }));
 
-    // Calculate current value using daily values
+    const totalContributions = calculateContributionTotal(formattedTransactions);
+
+    // If we have a live price AND transactions have units, use units * price
+    if (livePrice && investment.ticker_symbol) {
+      const totalUnits = transactions.reduce((sum, tx) => {
+        const units = Number(tx.units) || 0;
+        if (tx.type === 'deposit' || tx.type === 'dividend') return sum + units;
+        if (tx.type === 'withdrawal') return sum - units;
+        return sum;
+      }, 0);
+
+      const currentValue = totalUnits * livePrice.price;
+      const totalReturn = currentValue - totalContributions;
+      const returnPercentage = calculateReturn(currentValue, totalContributions);
+      const dailyChange = livePrice.dailyChange 
+        ? { amount: totalUnits * livePrice.dailyChange.amount, percentage: livePrice.dailyChange.percentage }
+        : calculateDailyChange(currentValue, investment.expected_annual_return);
+
+      return {
+        currentValue,
+        totalContributions,
+        returnPercentage,
+        totalReturn,
+        dailyChange,
+        totalUnits,
+        unitPrice: livePrice.price,
+        isLive: true,
+      };
+    }
+
+    // Fallback to estimated compound growth
     const today = new Date();
     const startDate = new Date(investment.start_date);
     const dailyValues = calculateDailyValues(
@@ -68,7 +102,6 @@ export function InvestmentCard({
       ? dailyValues[dailyValues.length - 1].value 
       : 0;
     
-    const totalContributions = calculateContributionTotal(formattedTransactions);
     const returnPercentage = calculateReturn(currentValue, totalContributions);
     const totalReturn = currentValue - totalContributions;
     const dailyChange = calculateDailyChange(currentValue, investment.expected_annual_return);
@@ -79,10 +112,14 @@ export function InvestmentCard({
       returnPercentage,
       totalReturn,
       dailyChange,
+      totalUnits: 0,
+      unitPrice: 0,
+      isLive: false,
     };
-  }, [investment, transactions]);
+  }, [investment, transactions, livePrice]);
 
   const isPositive = metrics.totalReturn >= 0;
+  const isDailyPositive = metrics.dailyChange.amount >= 0;
 
   return (
     <Card 
@@ -91,13 +128,24 @@ export function InvestmentCard({
     >
       <CardHeader className="flex flex-col sm:flex-row sm:items-start justify-between pb-2 gap-2">
         <div className="min-w-0 flex-1">
-          <CardTitle className="text-base sm:text-lg truncate">{investment.name}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base sm:text-lg truncate">{investment.name}</CardTitle>
+            {metrics.isLive && (
+              <Badge variant="outline" className="gap-1 text-[10px] border-success/50 text-success">
+                <Activity className="h-3 w-3" />
+                Live
+              </Badge>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground mt-1">
             {investment.provider && (
               <div className="flex items-center gap-1">
                 <Building className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate">{investment.provider}</span>
               </div>
+            )}
+            {investment.ticker_symbol && (
+              <Badge variant="secondary" className="text-xs py-0">{investment.ticker_symbol}</Badge>
             )}
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3 flex-shrink-0" />
@@ -140,6 +188,11 @@ export function InvestmentCard({
                 maximumFractionDigits: 2 
               })}
             </p>
+            {metrics.isLive && metrics.totalUnits > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {metrics.totalUnits.toFixed(4)} units @ £{metrics.unitPrice.toFixed(2)}
+              </p>
+            )}
           </div>
 
           {/* Total Invested */}
@@ -184,16 +237,23 @@ export function InvestmentCard({
           <div>
             <p className="text-xs text-muted-foreground">Daily Change</p>
             <div className="flex items-center gap-1">
-              <Percent className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <p className="text-base sm:text-xl font-bold text-success">
-                +£{metrics.dailyChange.amount.toLocaleString("en-GB", { 
+              {isDailyPositive ? (
+                <TrendingUp className="h-4 w-4 text-success flex-shrink-0" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-destructive flex-shrink-0" />
+              )}
+              <p className={cn(
+                "text-base sm:text-xl font-bold",
+                isDailyPositive ? "text-success" : "text-destructive"
+              )}>
+                {isDailyPositive ? "+" : "-"}£{Math.abs(metrics.dailyChange.amount).toLocaleString("en-GB", { 
                   minimumFractionDigits: 2, 
                   maximumFractionDigits: 2 
                 })}
               </p>
             </div>
-            <p className="text-xs text-success">
-              +{metrics.dailyChange.percentage.toFixed(3)}%
+            <p className={cn("text-xs", isDailyPositive ? "text-success" : "text-destructive")}>
+              {isDailyPositive ? "+" : ""}{metrics.dailyChange.percentage.toFixed(3)}%
             </p>
           </div>
         </div>

@@ -39,3 +39,6 @@ verify_jwt = false
 [functions.ingest-order-emails]
 verify_jwt = false
 
+[functions.fetch-etf-price]
+verify_jwt = false
+

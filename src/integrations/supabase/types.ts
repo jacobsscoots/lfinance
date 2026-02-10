@@ -1748,6 +1748,7 @@ export type Database = {
           risk_preset: string | null
           start_date: string
           status: string | null
+          ticker_symbol: string | null
           updated_at: string
           user_id: string
         }
@@ -1764,6 +1765,7 @@ export type Database = {
           risk_preset?: string | null
           start_date: string
           status?: string | null
+          ticker_symbol?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1780,6 +1782,7 @@ export type Database = {
           risk_preset?: string | null
           start_date?: string
           status?: string | null
+          ticker_symbol?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1827,6 +1830,7 @@ export type Database = {
           source_transaction_id: string | null
           transaction_date: string
           type: string
+          units: number | null
           updated_at: string
           user_id: string
         }
@@ -1841,6 +1845,7 @@ export type Database = {
           source_transaction_id?: string | null
           transaction_date: string
           type?: string
+          units?: number | null
           updated_at?: string
           user_id: string
         }
@@ -1855,6 +1860,7 @@ export type Database = {
           source_transaction_id?: string | null
           transaction_date?: string
           type?: string
+          units?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -3307,6 +3313,42 @@ export type Database = {
           week_start_date?: string
           zigzag_enabled?: boolean
           zigzag_schedule?: string | null
+        }
+        Relationships: []
+      }
+      yearly_planner_overrides: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          label: string
+          month: number
+          type: string
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          label: string
+          month: number
+          type: string
+          updated_at?: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          label?: string
+          month?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+          year?: number
         }
         Relationships: []
       }

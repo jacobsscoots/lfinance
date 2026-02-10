@@ -11,7 +11,8 @@ import {
   Sparkles,
   PieChart,
   Percent,
-  Wallet2
+  Wallet2,
+  CalendarRange
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ const navigation = [
   // Bills & Savings
   { name: "Bills", href: "/bills", icon: TrendingUp },
   { name: "Cheaper Bills", href: "/cheaper-bills", icon: Percent },
+  { name: "Yearly Planner", href: "/yearly-planner", icon: CalendarRange },
   
   // Investments
   { name: "Investments", href: "/investments", icon: PieChart },
