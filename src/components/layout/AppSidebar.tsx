@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { 
   Home, 
   CreditCard, 
@@ -19,6 +20,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { AccountSettingsDialog } from "@/components/settings/AccountSettingsDialog";
 
 const navGroups = [
   {
@@ -62,6 +64,7 @@ const navGroups = [
 export function AppSidebar() {
   const location = useLocation();
   const { signOut, user } = useAuth();
+  const [accountOpen, setAccountOpen] = useState(false);
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-sidebar">
@@ -125,10 +128,14 @@ export function AppSidebar() {
           Settings
         </NavLink>
         {user && (
-          <div className="px-3 py-1 text-xs text-sidebar-foreground/50 truncate">
+          <button
+            onClick={() => setAccountOpen(true)}
+            className="px-3 py-1 text-xs text-sidebar-foreground/50 truncate w-full text-left hover:text-sidebar-foreground hover:bg-sidebar-accent/50 rounded-lg transition-colors cursor-pointer"
+          >
             {user.email}
-          </div>
+          </button>
         )}
+        <AccountSettingsDialog open={accountOpen} onOpenChange={setAccountOpen} />
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 h-9"
