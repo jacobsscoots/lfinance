@@ -1,53 +1,45 @@
 
-## Fix: Upcoming Bills Showing Wrong Due Dates
+## Plan: Clickable Email with Account Settings Popup
 
-### Root Cause
+### What Changes
 
-The `generateBillOccurrences` function in `src/lib/billOccurrences.ts` has a bug for non-monthly frequencies (quarterly, biannual, yearly). 
+The user's email displayed in the sidebar footer will become clickable. Clicking it opens a dialog/popup where the user can view and edit their account details (email, password) and manage preferences.
 
-For these frequencies, it seeds the occurrence calculation by calling `getDueDateForMonth(bill, rangeStart.year, rangeStart.month)`, which returns `due_day` in the **current month** (e.g., Feb 11 for a bill with `due_day: 11`). It then checks if that date is before `rangeStart` and advances if so.
+### Implementation
 
-The problem: this seed date ignores the bill's frequency entirely. A **yearly** bill due on November 11 gets a seed date of February 11 — which falls within the range and gets output as a valid occurrence. The function never validates that the seed date is an actual scheduled occurrence based on the `start_date` and frequency.
+**1. New Component: `AccountSettingsDialog.tsx`**
 
-### Affected Bills (from your data)
+Create `src/components/settings/AccountSettingsDialog.tsx` with:
+- A responsive dialog (uses `ResponsiveDialog` for mobile support)
+- Sections for:
+  - **Email display** (read-only, shows current email)
+  - **Change password** form (current not required by the auth system, just new password + confirm)
+  - **Sign out** button
+- Uses `useAuth()` to get the current user and the Supabase client's `updateUser` method for password changes
+- Shows toast on success/error
 
-| Bill | Frequency | Start Date | Due Day | Bug Shows | Correct Next |
-|------|-----------|------------|---------|-----------|-------------|
-| Snapchat Premium | yearly | 2025-11-11 | 11 | Feb 11 | Nov 11, 2026 |
-| Purpl Discount | yearly | 2025-10-12 | 12 | Feb 12 | Oct 12, 2026 |
-| Plant with Willow | yearly | 2025-10-17 | 17 | Feb 17 | Oct 17, 2026 |
-| Magnesium | bimonthly | 2025-10-18 | 18 | Depends | Needs validation |
+**2. Sidebar Update: Make Email Clickable**
 
-### Fix
+Modify `src/components/layout/AppSidebar.tsx`:
+- Replace the static email `<div>` (line 128-130) with a clickable button that opens the `AccountSettingsDialog`
+- Style it with a hover effect and cursor pointer so it's clear it's interactive
 
-Rewrite the non-weekly/fortnightly path in `generateBillOccurrences` to use the same forward-walk approach used for weekly bills: start from `billStart`, advance by the correct frequency interval until reaching `rangeStart`, then collect occurrences within the range.
+**3. Account Tab in Settings Page**
 
-This guarantees that only dates that are valid multiples of the frequency from the start date appear as occurrences.
+Update `src/pages/Settings.tsx`:
+- Replace the placeholder "Account Settings" card content (lines 147-156) with the same account settings form inline (or reuse a shared component), so users can also access it from the Settings tab directly
 
-### File Changed
+### Files
 
-**`src/lib/billOccurrences.ts`** (lines 122-149)
+| File | Action |
+|------|--------|
+| `src/components/settings/AccountSettingsDialog.tsx` | Create |
+| `src/components/layout/AppSidebar.tsx` | Modify -- make email clickable, open dialog |
+| `src/pages/Settings.tsx` | Modify -- replace placeholder Account tab with real content |
 
-Replace the current approach:
-```
-// Current (buggy): seeds from current month's due_day
-let currentDate = getDueDateForMonth(bill, rangeStart.getFullYear(), rangeStart.getMonth());
-if (isBefore(currentDate, rangeStart)) {
-  currentDate = getNextOccurrence(bill, currentDate);
-}
-```
+### Technical Details
 
-With the frequency-aware forward walk:
-```
-// Fixed: walk forward from bill start date using correct frequency
-let currentDate = billStart;
-while (isBefore(currentDate, rangeStart)) {
-  currentDate = getNextOccurrence(bill, currentDate);
-}
-```
-
-This is the same pattern already used for weekly/fortnightly bills (lines 95-100) and is correct for all frequencies. It ensures a yearly bill starting Nov 11, 2025 only generates occurrences on Nov 11, 2026, Nov 11, 2027, etc.
-
-### Impact
-
-This fix affects the Dashboard "Upcoming Bills" widget, the yearly planner bill rows, and any other component using `generateBillOccurrences` or `getBillOccurrencesInRange`. All will now correctly skip months where non-monthly bills are not actually due.
+- Password update uses `supabase.auth.updateUser({ password })` 
+- Email is displayed read-only (changing email requires verification flow which adds complexity)
+- The dialog includes: current email display, password change form with validation (min 6 chars, confirm match), and a sign-out button
+- Form validation via simple state checks (no need for react-hook-form for 2 fields)
