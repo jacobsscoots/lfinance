@@ -2947,6 +2947,7 @@ export type Database = {
           contract_end_date: string | null
           contract_start_date: string | null
           created_at: string
+          current_speed_mbps: number | null
           estimated_savings_annual: number | null
           exit_fee: number | null
           id: string
@@ -2957,6 +2958,7 @@ export type Database = {
           monthly_cost: number | null
           notes: string | null
           plan_name: string | null
+          preferred_contract_months: number | null
           provider: string
           service_type: string
           status: string | null
@@ -2967,6 +2969,7 @@ export type Database = {
           contract_end_date?: string | null
           contract_start_date?: string | null
           created_at?: string
+          current_speed_mbps?: number | null
           estimated_savings_annual?: number | null
           exit_fee?: number | null
           id?: string
@@ -2977,6 +2980,7 @@ export type Database = {
           monthly_cost?: number | null
           notes?: string | null
           plan_name?: string | null
+          preferred_contract_months?: number | null
           provider: string
           service_type: string
           status?: string | null
@@ -2987,6 +2991,7 @@ export type Database = {
           contract_end_date?: string | null
           contract_start_date?: string | null
           created_at?: string
+          current_speed_mbps?: number | null
           estimated_savings_annual?: number | null
           exit_fee?: number | null
           id?: string
@@ -2997,6 +3002,7 @@ export type Database = {
           monthly_cost?: number | null
           notes?: string | null
           plan_name?: string | null
+          preferred_contract_months?: number | null
           provider?: string
           service_type?: string
           status?: string | null
@@ -3215,6 +3221,7 @@ export type Database = {
         Row: {
           adjustment_rule: string
           created_at: string
+          daily_budget: number | null
           id: string
           payday_date: number
           updated_at: string
@@ -3223,6 +3230,7 @@ export type Database = {
         Insert: {
           adjustment_rule?: string
           created_at?: string
+          daily_budget?: number | null
           id?: string
           payday_date?: number
           updated_at?: string
@@ -3231,6 +3239,7 @@ export type Database = {
         Update: {
           adjustment_rule?: string
           created_at?: string
+          daily_budget?: number | null
           id?: string
           payday_date?: number
           updated_at?: string

@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { SwitchingPopupDialog } from "@/components/cheaper-bills/SwitchingPopupDialog";
+import { ComparisonResult } from "@/hooks/useComparisonResults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +32,8 @@ export default function CheaperBills() {
   const [readingDialogOpen, setReadingDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
   const [scanningServiceId, setScanningServiceId] = useState<string | null>(null);
+  const [switchingOffer, setSwitchingOffer] = useState<ComparisonResult | null>(null);
+  const [switchingCost, setSwitchingCost] = useState(0);
 
   const { services, isLoading, createService, updateService, deleteService, isCreating } = useTrackedServices();
   const { readings, createReading, isCreating: isCreatingReading, totalKwh, totalCost } = useEnergyReadings();
@@ -136,10 +140,19 @@ export default function CheaperBills() {
           standingCharge: electricityTariff.standing_charge_daily || 0,
         } : undefined,
         postcode: settings?.postcode || "SN2 1FS",
+        currentSpeedMbps: service.current_speed_mbps || undefined,
+        preferredContractMonths: service.preferred_contract_months || undefined,
       });
     } finally {
       setScanningServiceId(null);
     }
+  };
+
+  const handleViewBestDeal = (offer: ComparisonResult) => {
+    // Find the service to get current monthly cost
+    const service = services.find(s => s.last_recommendation === 'switch');
+    setSwitchingCost(service?.monthly_cost || 0);
+    setSwitchingOffer(offer);
   };
 
   const energyServices = services.filter((s) => s.service_type === "energy");
@@ -176,6 +189,7 @@ export default function CheaperBills() {
             onScan={services.length > 0 ? handleScanAll : undefined}
             isScanning={isScanning}
             scanProgress={scanProgress}
+            onViewBestDeal={handleViewBestDeal}
           />
         </div>
 
@@ -425,7 +439,15 @@ export default function CheaperBills() {
           contract_end_date: editingService.contract_end_date ? new Date(editingService.contract_end_date) : undefined,
           exit_fee: editingService.exit_fee || 0,
           notes: editingService.notes || "",
+          current_speed_mbps: editingService.current_speed_mbps || undefined,
+          preferred_contract_months: editingService.preferred_contract_months || undefined,
         } : undefined}
+      />
+      <SwitchingPopupDialog
+        open={!!switchingOffer}
+        onOpenChange={(open) => !open && setSwitchingOffer(null)}
+        result={switchingOffer}
+        currentMonthlyCost={switchingCost}
       />
       <TariffFormDialog
         open={tariffDialogOpen}

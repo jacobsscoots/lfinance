@@ -10,6 +10,7 @@ import { useBills, Bill } from "@/hooks/useBills";
 import { BillListItem } from "@/components/bills/BillListItem";
 import { BillFormDialog } from "@/components/bills/BillFormDialog";
 import { DeleteBillDialog } from "@/components/bills/DeleteBillDialog";
+import { DailyBudgetCard } from "@/components/bills/DailyBudgetCard";
 
 export default function Bills() {
   const { bills, isLoading } = useBills();
@@ -81,6 +82,9 @@ export default function Bills() {
             </Button>
           </div>
         </div>
+
+        {/* Daily Budget Tracker */}
+        <DailyBudgetCard />
 
         {/* Summary Card */}
         <Card>

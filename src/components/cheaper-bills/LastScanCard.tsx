@@ -12,6 +12,7 @@ interface LastScanCardProps {
   onScan?: () => void;
   isScanning?: boolean;
   scanProgress?: string | null;
+  onViewBestDeal?: (offer: ComparisonResult) => void;
 }
 
 export function LastScanCard({ 
@@ -22,6 +23,7 @@ export function LastScanCard({
   onScan,
   isScanning,
   scanProgress,
+  onViewBestDeal,
 }: LastScanCardProps) {
   const getRecommendationDisplay = () => {
     if (!recommendation) {
@@ -98,12 +100,14 @@ export function LastScanCard({
               </p>
             )}
             {/* Best offer link */}
-            {recommendation === 'switch' && bestOffer?.website_url && (
-              <Button asChild size="sm" className="mt-3 w-full sm:w-auto">
-                <a href={bestOffer.website_url} target="_blank" rel="noopener noreferrer">
-                  View Best Deal: {bestOffer.provider}
-                  <ExternalLink className="h-3 w-3 ml-1" />
-                </a>
+            {recommendation === 'switch' && bestOffer && (
+              <Button 
+                size="sm" 
+                className="mt-3 w-full sm:w-auto"
+                onClick={() => onViewBestDeal?.(bestOffer)}
+              >
+                View Best Deal: {bestOffer.provider}
+                <ExternalLink className="h-3 w-3 ml-1" />
               </Button>
             )}
           </>
