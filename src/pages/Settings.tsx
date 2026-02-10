@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Tag, CalendarDays, Package, Target, FileText, Calendar, Mail, Upload, Truck, Activity } from "lucide-react";
+import { User, Tag, CalendarDays, Package, Target, FileText, Calendar, Mail, Upload, Truck, Activity, Lock, LogOut } from "lucide-react";
 import { ExcelImportDialog } from "@/components/settings/ExcelImportDialog";
 import { RetailerProfileSettings } from "@/components/settings/RetailerProfileSettings";
 import { ProductSettings } from "@/components/settings/ProductSettings";
@@ -12,9 +15,75 @@ import { PayslipPreviewDialog } from "@/components/settings/PayslipPreviewDialog
 import { ZigzagCalculator } from "@/components/settings/ZigzagCalculator";
 import { GmailSettings } from "@/components/settings/GmailSettings";
 import { ServiceStatusSettings } from "@/components/settings/ServiceStatusSettings";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Payslip } from "@/hooks/usePayslips";
+
+function AccountSettingsInline() {
+  const { user, signOut } = useAuth();
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Password updated successfully");
+      setNewPassword("");
+      setConfirmPassword("");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account Settings</CardTitle>
+        <CardDescription>Manage your account details</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2 text-muted-foreground">
+            <Mail className="h-4 w-4" />
+            Email
+          </Label>
+          <p className="text-sm font-medium text-foreground">{user?.email}</p>
+        </div>
+        <Separator />
+        <div className="space-y-3">
+          <Label className="flex items-center gap-2">
+            <Lock className="h-4 w-4" />
+            Change Password
+          </Label>
+          <Input type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <Input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+          <Button onClick={handleChangePassword} disabled={loading || !newPassword} className="w-full">
+            {loading ? "Updating…" : "Update Password"}
+          </Button>
+        </div>
+        <Separator />
+        <Button variant="outline" className="w-full text-destructive hover:text-destructive" onClick={signOut}>
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign Out
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Settings() {
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
@@ -145,15 +214,7 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="account">
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-medium mb-2">Account Settings</h3>
-                <p className="text-sm text-muted-foreground text-center max-w-sm">
-                  Manage your profile, email, and account preferences.
-                </p>
-              </CardContent>
-            </Card>
+            <AccountSettingsInline />
           </TabsContent>
         </Tabs>
       </div>
