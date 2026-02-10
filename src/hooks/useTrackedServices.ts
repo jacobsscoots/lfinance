@@ -20,6 +20,8 @@ export interface TrackedService {
   exit_fee: number;
   notes: string | null;
   status: string;
+  current_speed_mbps: number | null;
+  preferred_contract_months: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +35,8 @@ export interface CreateServiceData {
   contract_end_date?: string;
   exit_fee?: number;
   notes?: string;
+  current_speed_mbps?: number;
+  preferred_contract_months?: number;
 }
 
 export function useTrackedServices() {

@@ -40,6 +40,8 @@ export function useBillsScanner() {
       annualConsumptionKwh,
       currentTariff,
       postcode,
+      currentSpeedMbps,
+      preferredContractMonths,
     }: {
       serviceId?: string;
       serviceType: string;
@@ -50,6 +52,8 @@ export function useBillsScanner() {
         standingCharge: number;
       };
       postcode?: string;
+      currentSpeedMbps?: number;
+      preferredContractMonths?: number;
     }) => {
       const { data, error } = await supabase.functions.invoke("compare-energy-deals", {
         body: {
@@ -59,6 +63,8 @@ export function useBillsScanner() {
           annualConsumptionKwh,
           currentTariff,
           postcode,
+          currentSpeedMbps,
+          preferredContractMonths,
         },
       });
 

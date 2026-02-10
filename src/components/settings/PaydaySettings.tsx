@@ -6,6 +6,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePaydaySettings, AdjustmentRule } from "@/hooks/usePaydaySettings";
 import { Loader2, CalendarDays, Info } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const ADJUSTMENT_RULES: { value: AdjustmentRule; label: string; description: string }[] = [
@@ -36,12 +37,14 @@ export function PaydaySettings() {
   
   const [paydayDate, setPaydayDate] = useState<number>(20);
   const [adjustmentRule, setAdjustmentRule] = useState<AdjustmentRule>("previous_working_day");
+  const [dailyBudget, setDailyBudget] = useState<number>(15);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     if (effectiveSettings) {
       setPaydayDate(effectiveSettings.payday_date);
       setAdjustmentRule(effectiveSettings.adjustment_rule);
+      setDailyBudget(effectiveSettings.daily_budget);
     }
   }, [effectiveSettings]);
 
@@ -49,13 +52,14 @@ export function PaydaySettings() {
     if (effectiveSettings) {
       const changed =
         paydayDate !== effectiveSettings.payday_date ||
-        adjustmentRule !== effectiveSettings.adjustment_rule;
+        adjustmentRule !== effectiveSettings.adjustment_rule ||
+        dailyBudget !== effectiveSettings.daily_budget;
       setHasChanges(changed);
     }
-  }, [paydayDate, adjustmentRule, effectiveSettings]);
+  }, [paydayDate, adjustmentRule, dailyBudget, effectiveSettings]);
 
   const handleSave = () => {
-    saveSettings({ payday_date: paydayDate, adjustment_rule: adjustmentRule });
+    saveSettings({ payday_date: paydayDate, adjustment_rule: adjustmentRule, daily_budget: dailyBudget });
     setHasChanges(false);
   };
 
@@ -107,6 +111,26 @@ export function PaydaySettings() {
             <span className="text-muted-foreground">of each month</span>
           </div>
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="daily-budget">Daily Spending Budget (£)</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="daily-budget"
+              type="number"
+              min="1"
+              step="1"
+              value={dailyBudget}
+              onChange={(e) => setDailyBudget(Number(e.target.value))}
+              className="w-24"
+            />
+            <span className="text-muted-foreground">per day</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Your target discretionary spend per day. Tracked on the Bills page.
+          </p>
+        </div>
+
 
         <div className="space-y-3">
           <Label>Adjustment Rule</Label>

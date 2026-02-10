@@ -48,10 +48,20 @@ export function ScanResultsPanel({ results, currentMonthlyCost }: ScanResultsPan
             {result.plan_name && (
               <p className="text-xs text-muted-foreground truncate">{result.plan_name}</p>
             )}
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-sm">
                 £{result.monthly_cost.toFixed(2)}/mo
               </span>
+              {result.features?.speed && (
+                <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                  {result.features.speed}Mbps
+                </span>
+              )}
+              {result.features?.contract !== undefined && (
+                <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                  {result.features.contract === 0 ? 'No contract' : `${result.features.contract}mo`}
+                </span>
+              )}
               <span className="text-sm text-success font-medium flex items-center gap-1">
                 <TrendingDown className="h-3 w-3" />
                 Save £{Math.round(result.savings)}/yr

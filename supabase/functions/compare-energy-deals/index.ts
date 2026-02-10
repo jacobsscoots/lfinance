@@ -28,7 +28,7 @@ interface TariffComparison {
 // Provider website URLs
 const PROVIDER_URLS: Record<string, string> = {
   // Energy
-  'Octopus Energy': 'https://octopus.energy/dashboard/new-quote/',
+  'Octopus Energy': 'https://octopus.energy/smart/flexible-octopus/',
   'British Gas': 'https://www.britishgas.co.uk/energy.html',
   'EDF': 'https://www.edfenergy.com/gas-electricity',
   'E.ON Next': 'https://www.eonnext.com/',
@@ -223,39 +223,52 @@ async function scanEnergyDeals(
 
 function scanBroadbandDeals(
   currentMonthlyCost: number,
-  savingsThreshold: number
+  savingsThreshold: number,
+  currentSpeedMbps?: number,
+  preferredContractMonths?: number
 ): TariffComparison[] {
   const currentAnnualCost = currentMonthlyCost * 12;
 
-  return BROADBAND_PLANS.map(plan => {
-    const annualCost = plan.monthlyCost * 12;
-    const savings = Math.round((currentAnnualCost - annualCost) * 100) / 100;
+  return BROADBAND_PLANS
+    .filter(plan => {
+      // Filter out plans slower than current speed if specified
+      if (currentSpeedMbps && plan.speed < currentSpeedMbps) return false;
+      return true;
+    })
+    .map(plan => {
+      const annualCost = plan.monthlyCost * 12;
+      const savings = Math.round((currentAnnualCost - annualCost) * 100) / 100;
 
-    let recommend = false;
-    let reason = '';
+      let recommend = false;
+      let reason = '';
 
-    if (savings < savingsThreshold) {
-      reason = `Net savings (£${savings.toFixed(0)}) below your £${savingsThreshold} threshold`;
-    } else if (savings > 0) {
-      recommend = true;
-      reason = `Switch to save £${savings.toFixed(0)}/year (${plan.speed}Mbps)`;
-    } else {
-      reason = 'No savings available with this plan';
-    }
+      const speedLabel = `${plan.speed}Mbps`;
+      const contractLabel = plan.contract === 0 ? 'No contract' : `${plan.contract}mo contract`;
 
-    return {
-      provider: plan.provider,
-      planName: plan.planName,
-      monthlyCost: plan.monthlyCost,
-      annualCost,
-      savings,
-      recommend,
-      reason,
-      source: plan.source,
-      features: { speed: plan.speed, contract: plan.contract },
-      websiteUrl: PROVIDER_URLS[plan.provider],
-    };
-  }).sort((a, b) => b.savings - a.savings);
+      if (savings < savingsThreshold) {
+        reason = `Net savings (£${savings.toFixed(0)}) below your £${savingsThreshold} threshold`;
+      } else if (preferredContractMonths && plan.contract > 0 && plan.contract > preferredContractMonths) {
+        reason = `${contractLabel} exceeds your ${preferredContractMonths}mo preference (${speedLabel}, saves £${savings.toFixed(0)}/yr)`;
+      } else if (savings > 0) {
+        recommend = true;
+        reason = `Switch to save £${savings.toFixed(0)}/year (${speedLabel}, ${contractLabel})`;
+      } else {
+        reason = 'No savings available with this plan';
+      }
+
+      return {
+        provider: plan.provider,
+        planName: plan.planName,
+        monthlyCost: plan.monthlyCost,
+        annualCost,
+        savings,
+        recommend,
+        reason,
+        source: plan.source,
+        features: { speed: plan.speed, contract: plan.contract },
+        websiteUrl: PROVIDER_URLS[plan.provider],
+      };
+    }).sort((a, b) => b.savings - a.savings);
 }
 
 function scanMobileDeals(
@@ -325,6 +338,8 @@ serve(async (req) => {
       annualConsumptionKwh = 2900, // UK average
       currentTariff,
       postcode,
+      currentSpeedMbps,
+      preferredContractMonths,
     } = body;
 
     console.log(`Scanning ${serviceType} deals for user ${user.id}, serviceId: ${serviceId}, postcode: ${postcode}`);
@@ -365,7 +380,7 @@ serve(async (req) => {
         );
         break;
       case 'broadband':
-        comparisons = scanBroadbandDeals(currentMonthlyCost, savingsThreshold);
+        comparisons = scanBroadbandDeals(currentMonthlyCost, savingsThreshold, currentSpeedMbps, preferredContractMonths);
         break;
       case 'mobile':
         comparisons = scanMobileDeals(currentMonthlyCost, savingsThreshold);

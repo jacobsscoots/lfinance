@@ -14,6 +14,7 @@ export interface PaydaySettings {
   user_id: string;
   payday_date: number;
   adjustment_rule: AdjustmentRule;
+  daily_budget: number;
   created_at: string;
   updated_at: string;
 }
@@ -21,11 +22,13 @@ export interface PaydaySettings {
 export interface PaydaySettingsInput {
   payday_date: number;
   adjustment_rule: AdjustmentRule;
+  daily_budget?: number;
 }
 
 const DEFAULT_SETTINGS: Omit<PaydaySettings, "id" | "user_id" | "created_at" | "updated_at"> = {
   payday_date: 19,
   adjustment_rule: "previous_working_day",
+  daily_budget: 15,
 };
 
 export function usePaydaySettings() {
@@ -53,16 +56,18 @@ export function usePaydaySettings() {
     mutationFn: async (input: PaydaySettingsInput) => {
       if (!user?.id) throw new Error("Not authenticated");
 
+      const upsertData: any = {
+        user_id: user.id,
+        payday_date: input.payday_date,
+        adjustment_rule: input.adjustment_rule,
+      };
+      if (input.daily_budget !== undefined) {
+        upsertData.daily_budget = input.daily_budget;
+      }
+
       const { data, error } = await supabase
         .from("user_payday_settings")
-        .upsert(
-          {
-            user_id: user.id,
-            payday_date: input.payday_date,
-            adjustment_rule: input.adjustment_rule,
-          },
-          { onConflict: "user_id" }
-        )
+        .upsert(upsertData, { onConflict: "user_id" })
         .select()
         .single();
 
@@ -81,9 +86,9 @@ export function usePaydaySettings() {
   });
 
   // Return effective settings (user settings or defaults)
-  const effectiveSettings: PaydaySettingsInput = settings 
-    ? { payday_date: settings.payday_date, adjustment_rule: settings.adjustment_rule as AdjustmentRule }
-    : DEFAULT_SETTINGS;
+  const effectiveSettings: PaydaySettingsInput & { daily_budget: number } = settings 
+    ? { payday_date: settings.payday_date, adjustment_rule: settings.adjustment_rule as AdjustmentRule, daily_budget: Number(settings.daily_budget) || 15 }
+    : { ...DEFAULT_SETTINGS };
 
   return {
     settings,

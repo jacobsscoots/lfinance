@@ -50,6 +50,8 @@ const formSchema = z.object({
   contract_end_date: z.date().optional(),
   exit_fee: z.coerce.number().min(0).optional(),
   notes: z.string().optional(),
+  current_speed_mbps: z.coerce.number().min(0).optional(),
+  preferred_contract_months: z.coerce.number().min(0).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -101,6 +103,8 @@ export function ServiceFormDialog({
       contract_end_date: defaultValues?.contract_end_date,
       exit_fee: defaultValues?.exit_fee || 0,
       notes: defaultValues?.notes || "",
+      current_speed_mbps: (defaultValues as any)?.current_speed_mbps || undefined,
+      preferred_contract_months: (defaultValues as any)?.preferred_contract_months || undefined,
     },
   });
 
@@ -288,6 +292,38 @@ export function ServiceFormDialog({
                 )}
               />
             </div>
+
+            {/* Broadband-specific fields */}
+            {serviceType === "broadband" && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="current_speed_mbps"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Current Speed (Mbps)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" placeholder="e.g., 67" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="preferred_contract_months"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max Contract (months)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" placeholder="e.g., 18" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
