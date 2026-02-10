@@ -12,6 +12,19 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Verify webhook secret to prevent unauthorized calls
+    const webhookSecret = Deno.env.get("TRACKING_WEBHOOK_SECRET");
+    if (webhookSecret) {
+      const url = new URL(req.url);
+      const providedSecret = url.searchParams.get("secret") || req.headers.get("x-webhook-secret");
+      if (providedSecret !== webhookSecret) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -65,9 +78,9 @@ Deno.serve(async (req) => {
     }
 
     if (!shipment) {
-      // Tracking number not found — not an error, just ignore
+      // Tracking number not found — return identical success response to prevent enumeration
       return new Response(
-        JSON.stringify({ message: "Tracking number not found, ignored" }),
+        JSON.stringify({ success: true }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -83,8 +96,9 @@ Deno.serve(async (req) => {
         .eq("id", shipment.order_id);
     }
 
+    // Return identical response shape regardless of outcome to prevent enumeration
     return new Response(
-      JSON.stringify({ success: true, shipment_id: shipment.id, status: mappedStatus }),
+      JSON.stringify({ success: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

@@ -3449,7 +3449,7 @@ export type Database = {
       }
     }
     Functions: {
-      is_viewing_via_safe_view: { Args: never; Returns: boolean }
+      [_ in never]: never
     }
     Enums: {
       bill_frequency:
