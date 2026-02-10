@@ -48,3 +48,6 @@ verify_jwt = false
 [functions.trackingmore-poll]
 verify_jwt = false
 
+[functions.gmail-tracking-sync]
+verify_jwt = false
+
