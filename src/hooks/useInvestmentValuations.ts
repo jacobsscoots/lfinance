@@ -95,13 +95,43 @@ export function useInvestmentValuations(investmentAccountId?: string) {
     },
   });
 
+  const fetchLivePriceMutation = useMutation({
+    mutationFn: async ({ ticker, investment_account_id }: { ticker: string; investment_account_id: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-etf-price`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ ticker, investment_account_id }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || 'Failed to fetch price');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["investment-valuations"] });
+    },
+  });
+
   return {
     valuations,
     isLoading,
     error,
     createValuation: createMutation.mutate,
     deleteValuation: deleteMutation.mutate,
+    fetchLivePrice: fetchLivePriceMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isFetchingPrice: fetchLivePriceMutation.isPending,
   };
 }

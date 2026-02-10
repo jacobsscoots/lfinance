@@ -10,6 +10,7 @@ export interface InvestmentTransaction {
   transaction_date: string;
   type: 'deposit' | 'withdrawal' | 'fee' | 'dividend';
   amount: number;
+  units: number | null;
   is_recurring: boolean;
   recurring_frequency: string | null;
   notes: string | null;
@@ -22,6 +23,7 @@ export interface CreateTransactionData {
   transaction_date: string;
   type: 'deposit' | 'withdrawal' | 'fee' | 'dividend';
   amount: number;
+  units?: number;
   is_recurring?: boolean;
   recurring_frequency?: string;
   notes?: string;
@@ -66,6 +68,7 @@ export function useInvestmentTransactions(investmentAccountId?: string) {
           transaction_date: data.transaction_date,
           type: data.type,
           amount: Math.abs(data.amount),
+          units: data.units || null,
           is_recurring: data.is_recurring || false,
           recurring_frequency: data.recurring_frequency || null,
           notes: data.notes || null,
@@ -96,6 +99,7 @@ export function useInvestmentTransactions(investmentAccountId?: string) {
         transaction_date: data.transaction_date,
         type: data.type,
         amount: Math.abs(data.amount),
+        units: data.units || null,
         is_recurring: data.is_recurring || false,
         recurring_frequency: data.recurring_frequency || null,
         notes: data.notes || null,

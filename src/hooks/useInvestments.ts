@@ -16,6 +16,7 @@ export interface InvestmentAccount {
   notes: string | null;
   status: string;
   monthly_contribution: number | null;
+  ticker_symbol: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +25,7 @@ export interface CreateInvestmentData {
   name: string;
   provider?: string;
   fund_type?: string;
+  ticker_symbol?: string;
   start_date: string;
   expected_annual_return?: number;
   compounding_method?: string;
@@ -67,6 +69,7 @@ export function useInvestments() {
           name: data.name,
           provider: data.provider || null,
           fund_type: data.fund_type || 'fund',
+          ticker_symbol: data.ticker_symbol || null,
           start_date: data.start_date,
           expected_annual_return: data.expected_annual_return || 8,
           compounding_method: data.compounding_method || 'daily',

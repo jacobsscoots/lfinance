@@ -37,6 +37,7 @@ const formSchema = z.object({
   transaction_date: z.date({ required_error: "Date is required" }),
   type: z.enum(["deposit", "withdrawal", "fee", "dividend"]),
   amount: z.coerce.number().positive("Amount must be positive"),
+  units: z.coerce.number().min(0).optional(),
   is_recurring: z.boolean().optional(),
   recurring_frequency: z.string().optional(),
   notes: z.string().optional(),
@@ -168,6 +169,20 @@ export function ContributionFormDialog({
                   <FormLabel>Amount (£)</FormLabel>
                   <FormControl>
                     <Input type="number" step="0.01" min="0" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="units"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Units / Shares (optional)</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.0001" min="0" placeholder="e.g. 12.3456" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

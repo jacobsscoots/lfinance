@@ -38,6 +38,7 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   provider: z.string().optional(),
   fund_type: z.string().optional(),
+  ticker_symbol: z.string().optional(),
   start_date: z.date({ required_error: "Start date is required" }),
   expected_annual_return: z.coerce.number().min(0).max(100),
   risk_preset: z.string().optional(),
@@ -72,6 +73,7 @@ export function InvestmentFormDialog({
       name: defaultValues?.name || "ChipX AI Fund",
       provider: defaultValues?.provider || "Chip",
       fund_type: defaultValues?.fund_type || "fund",
+      ticker_symbol: defaultValues?.ticker_symbol || "",
       start_date: defaultValues?.start_date || new Date(),
       expected_annual_return: defaultValues?.expected_annual_return ?? 8,
       risk_preset: defaultValues?.risk_preset || "medium",
@@ -89,6 +91,7 @@ export function InvestmentFormDialog({
         name: defaultValues.name || "ChipX AI Fund",
         provider: defaultValues.provider || "Chip",
         fund_type: defaultValues.fund_type || "fund",
+        ticker_symbol: defaultValues.ticker_symbol || "",
         start_date: defaultValues.start_date || new Date(),
         expected_annual_return: defaultValues.expected_annual_return ?? 8,
         risk_preset: defaultValues.risk_preset || "medium",
@@ -102,6 +105,7 @@ export function InvestmentFormDialog({
         name: "ChipX AI Fund",
         provider: "Chip",
         fund_type: "fund",
+        ticker_symbol: "",
         start_date: new Date(),
         expected_annual_return: 8,
         risk_preset: "medium",
@@ -170,6 +174,20 @@ export function InvestmentFormDialog({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="ticker_symbol"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ticker Symbol (optional)</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. INTL.L for WisdomTree AI" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
