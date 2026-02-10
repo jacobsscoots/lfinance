@@ -32,9 +32,51 @@ const ORDER_PATTERNS = [
 ];
 
 const TRACKING_PATTERNS = [
-  { carrier: "Royal Mail", pattern: /\b([A-Z]{2}\d{9}GB)\b/i },
-  { carrier: null, pattern: /tracking\s*(?:#|number|no\.?)\s*[:.]?\s*([A-Z0-9]{8,30})/i },
+  { carrier: "Royal Mail", courierCode: "royal-mail", pattern: /\b([A-Z]{2}\d{9}GB)\b/i },
+  { carrier: "DPD", courierCode: "dpd", pattern: /\b(\d{14})\b/ },
+  { carrier: "Evri", courierCode: "evri", pattern: /\b(H[A-Z0-9]{15,20})\b/i },
+  { carrier: "Yodel", courierCode: "yodel", pattern: /\b(JD\d{16,18})\b/i },
+  { carrier: null, courierCode: null, pattern: /tracking\s*(?:#|number|no\.?)\s*[:.]?\s*([A-Z0-9]{8,30})/i },
 ];
+
+// Register a tracking number with TrackingMore API
+async function registerWithTrackingMore(trackingNumber: string, courierCode: string | null): Promise<void> {
+  const apiKey = Deno.env.get("TRACKINGMORE_API_KEY");
+  if (!apiKey) {
+    console.warn("TRACKINGMORE_API_KEY not set, skipping registration");
+    return;
+  }
+
+  try {
+    const body: Record<string, string> = { tracking_number: trackingNumber };
+    if (courierCode) {
+      body.courier_code = courierCode;
+    }
+
+    const res = await fetch("https://api.trackingmore.com/v4/trackings/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Tracking-Api-Key": apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      console.log(`TrackingMore: registered ${trackingNumber}`, data?.data?.courier_code);
+    } else {
+      // 4016 = already exists, which is fine
+      if (data?.meta?.code === 4016) {
+        console.log(`TrackingMore: ${trackingNumber} already registered`);
+      } else {
+        console.error(`TrackingMore registration failed for ${trackingNumber}:`, data);
+      }
+    }
+  } catch (err) {
+    console.error(`TrackingMore registration error for ${trackingNumber}:`, err);
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -152,11 +194,13 @@ Deno.serve(async (req) => {
       // Extract tracking number
       let trackingNumber: string | null = null;
       let carrier: string | null = null;
-      for (const { carrier: c, pattern } of TRACKING_PATTERNS) {
+      let courierCode: string | null = null;
+      for (const { carrier: c, courierCode: cc, pattern } of TRACKING_PATTERNS) {
         const match = fullText.match(pattern);
         if (match?.[1]) {
           trackingNumber = match[1].trim();
           carrier = c;
+          courierCode = cc;
           break;
         }
       }
@@ -178,11 +222,17 @@ Deno.serve(async (req) => {
               order_id: order.id,
               tracking_number: trackingNumber,
               carrier,
-              tracking_provider: "manual",
+              tracking_provider: "trackingmore",
               status: status === "delivered" ? "delivered" : "pending",
             });
 
-          if (!shipError) shipmentsCreated++;
+          if (!shipError) {
+            shipmentsCreated++;
+            // Register with TrackingMore for live updates (don't await to avoid slowing down)
+            if (status !== "delivered") {
+              registerWithTrackingMore(trackingNumber, courierCode);
+            }
+          }
         }
       }
     }
