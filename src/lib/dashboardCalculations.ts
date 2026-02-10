@@ -299,7 +299,7 @@ export function formatCurrency(amount: number, showSign: boolean = false): strin
 export function getValueColorClass(value: number, inverse: boolean = false): string {
   if (value === 0) return "text-muted-foreground";
   const isPositive = inverse ? value < 0 : value > 0;
-  return isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400";
+  return isPositive ? "text-success" : "text-destructive";
 }
 
 /**

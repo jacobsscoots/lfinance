@@ -54,17 +54,7 @@ export function useAccounts() {
         .order('name');
 
       if (error) throw error;
-      
-      // DEFENSIVE ONLY:
-      // Database uniqueness on (provider, external_id) is the source of truth.
-      // This client-side deduplication is a safety net for rare edge cases
-      // and should not be relied upon to fix data integrity issues.
-      // See: bank_accounts_provider_external_id_key unique index
-      const uniqueAccounts = Array.from(
-        new Map((data || []).map(a => [a.external_id || a.id, a])).values()
-      ) as BankAccount[];
-      
-      return uniqueAccounts;
+      return (data || []) as BankAccount[];
     },
     enabled: !!user,
     // Auto-refresh every 5 minutes (matches bank connection auto-sync interval)
