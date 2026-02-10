@@ -71,7 +71,7 @@ export function useYearlyPlannerData(year: number) {
       const accountIds = accounts.map(a => a.id);
       const { data, error } = await supabase
         .from("transactions")
-        .select("transaction_date, type, amount, bill_id")
+        .select("transaction_date, type, amount, bill_id, description")
         .in("account_id", accountIds)
         .gte("transaction_date", `${year}-01-01`)
         .lte("transaction_date", `${year}-12-31`);
@@ -207,9 +207,20 @@ export function useYearlyPlannerData(year: number) {
     onError: (e) => toast.error(e.message),
   });
 
+  // Build income breakdown: source name -> per-month amounts
+  const incomeBreakdown: Record<string, number[]> = {};
+  yearTransactions.forEach(t => {
+    if (t.type !== 'income') return;
+    const monthIdx = parseInt(t.transaction_date.substring(5, 7), 10) - 1;
+    const source = t.description || 'Other Income';
+    if (!incomeBreakdown[source]) incomeBreakdown[source] = new Array(12).fill(0);
+    incomeBreakdown[source][monthIdx] += Math.abs(Number(t.amount));
+  });
+
   return {
     monthData,
     overrides,
+    incomeBreakdown,
     createOverride: createOverride.mutate,
     deleteOverride: deleteOverride.mutate,
     isCreating: createOverride.isPending,

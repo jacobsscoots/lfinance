@@ -26,7 +26,8 @@ export default function Accounts() {
     deleteAccount,
     toggleHidden 
   } = useAccounts();
-  const { connections, completeConnection } = useBankConnections();
+  const { connections, completeConnection, autoSync } = useBankConnections();
+  const mountSyncRef = useRef(false);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
@@ -40,6 +41,14 @@ export default function Accounts() {
   const connectionStatusMap = new Map(
     connections.map(conn => [conn.id, conn.status])
   );
+
+  // Sync on page load (once)
+  useEffect(() => {
+    if (!mountSyncRef.current) {
+      mountSyncRef.current = true;
+      autoSync();
+    }
+  }, [autoSync]);
 
   // Handle TrueLayer OAuth callback - with double-processing prevention
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,8 +12,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, Trash2, Building2, Link } from "lucide-react";
-import { useBankConnections } from "@/hooks/useBankConnections";
+import { Loader2, RefreshCw, Trash2, Building2, Link, Radio } from "lucide-react";
+import { useBankConnections, AUTO_SYNC_INTERVAL_MS } from "@/hooks/useBankConnections";
 import { useAccounts } from "@/hooks/useAccounts";
 import { getProviderLabel } from "@/lib/bankProviders";
 import { format } from "date-fns";
@@ -25,6 +25,8 @@ export function BankConnectionCard() {
     startConnection,
     syncConnection,
     deleteConnection,
+    isAutoSyncing,
+    lastAutoSyncAt,
   } = useBankConnections();
   const { allAccounts } = useAccounts();
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -105,7 +107,6 @@ export function BankConnectionCard() {
                         {(() => {
                           const linkedAccounts = allAccounts.filter(a => a.connection_id === connection.id);
                           if (linkedAccounts.length > 0) {
-                            // Use the first linked account's provider for a proper bank name
                             const bankName = linkedAccounts.find(a => a.provider)?.provider;
                             return bankName ? getProviderLabel(bankName) : getProviderLabel(connection.provider);
                           }
@@ -160,6 +161,11 @@ export function BankConnectionCard() {
               ))}
             </div>
           )}
+
+          {/* Auto-sync status bar */}
+          {connections.some(c => c.status === "connected") && (
+            <AutoSyncStatus isAutoSyncing={isAutoSyncing} lastAutoSyncAt={lastAutoSyncAt} />
+          )}
         </CardContent>
       </Card>
 
@@ -183,5 +189,42 @@ export function BankConnectionCard() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function AutoSyncStatus({ isAutoSyncing, lastAutoSyncAt }: { isAutoSyncing: boolean; lastAutoSyncAt: Date | null }) {
+  const [countdown, setCountdown] = useState("");
+
+  useEffect(() => {
+    if (!lastAutoSyncAt || isAutoSyncing) return;
+    const tick = () => {
+      const nextSync = lastAutoSyncAt.getTime() + AUTO_SYNC_INTERVAL_MS;
+      const remaining = Math.max(0, nextSync - Date.now());
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      setCountdown(`${mins}:${String(secs).padStart(2, "0")}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lastAutoSyncAt, isAutoSyncing]);
+
+  return (
+    <div className="flex items-center gap-2 pt-3 mt-3 border-t border-border text-xs text-muted-foreground">
+      {isAutoSyncing ? (
+        <>
+          <RefreshCw className="h-3 w-3 animate-spin text-primary" />
+          <span className="text-primary font-medium">Syncing…</span>
+        </>
+      ) : (
+        <>
+          <Radio className="h-3 w-3 text-primary" />
+          <span>Auto-sync every 5 min</span>
+          {lastAutoSyncAt && countdown && (
+            <span className="ml-auto tabular-nums">Next in {countdown}</span>
+          )}
+        </>
+      )}
+    </div>
   );
 }

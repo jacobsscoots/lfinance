@@ -15,7 +15,7 @@ export default function YearlyPlanner() {
   const [overrideMonth, setOverrideMonth] = useState<number | null>(null);
   const [view, setView] = useState<"cards" | "table">("table");
 
-  const { monthData, createOverride, deleteOverride, isCreating } = useYearlyPlannerData(year);
+  const { monthData, incomeBreakdown, createOverride, deleteOverride, isCreating } = useYearlyPlannerData(year);
   const { bills } = useBills();
 
   return (
@@ -84,6 +84,7 @@ export default function YearlyPlanner() {
             year={year}
             onAddOverride={(month) => setOverrideMonth(month)}
             onDeleteOverride={deleteOverride}
+            incomeBreakdown={incomeBreakdown}
           />
         )}
       </div>

@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
 import type { Bill } from "@/hooks/useBills";
@@ -10,12 +11,25 @@ import type { MonthData, YearlyOverride } from "@/hooks/useYearlyPlannerData";
 const MONTH_NAMES = ["Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan"];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+const FREQ_LABELS: Record<string, string> = {
+  weekly: "Wk",
+  biweekly: "2wk",
+  "4weekly": "4wk",
+  monthly: "Mo",
+  bimonthly: "2mo",
+  quarterly: "3mo",
+  biannual: "6mo",
+  annual: "Yr",
+  daily: "Day",
+};
+
 interface DetailedYearlyTableProps {
   months: MonthData[];
   bills: Bill[];
   year: number;
   onAddOverride: (month: number) => void;
   onDeleteOverride: (id: string) => void;
+  incomeBreakdown?: Record<string, number[]>;
 }
 
 function fmt(n: number) {
@@ -29,13 +43,15 @@ function fmtShort(n: number) {
 interface BillRow {
   id: string;
   name: string;
+  frequency: string;
   amounts: number[]; // 12 months
   total: number;
   priority: number;
 }
 
-export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDeleteOverride }: DetailedYearlyTableProps) {
+export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDeleteOverride, incomeBreakdown = {} }: DetailedYearlyTableProps) {
   const activeBills = useMemo(() => bills.filter(b => b.is_active), [bills]);
+  const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
 
   // Priority keywords for bill sorting (lower number = higher priority)
   const getBillPriority = (name: string): number => {
@@ -54,6 +70,7 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
 
   // Build per-bill, per-month amounts
   const billRows: BillRow[] = useMemo(() => {
+    const billFreqMap = new Map(activeBills.map(b => [b.id, b.frequency]));
     return activeBills.map(bill => {
       const amounts: number[] = [];
       for (let month = 0; month < 12; month++) {
@@ -63,6 +80,7 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
       return {
         id: bill.id,
         name: bill.name,
+        frequency: bill.frequency,
         amounts,
         total: amounts.reduce((s, v) => s + v, 0),
         priority: getBillPriority(bill.name),
@@ -122,7 +140,18 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
           <tbody>
             {/* INCOME ROW */}
             <tr className="border-b border-border bg-success/5">
-              <td className={cn(labelClass, "text-success bg-success/5")}>Income</td>
+              <td className={cn(labelClass, "text-success bg-success/5")}>
+                <span className="flex items-center gap-1.5">
+                  Income
+                  <button
+                    onClick={() => setShowIncomeBreakdown(!showIncomeBreakdown)}
+                    className="text-muted-foreground hover:text-success transition-colors"
+                    title={showIncomeBreakdown ? "Hide income breakdown" : "Show income breakdown"}
+                  >
+                    {showIncomeBreakdown ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </span>
+              </td>
               {months.map((m) => (
                 <td key={m.month} className={cn(cellClass, "text-success font-medium")}>
                   {m.totalIncome > 0 ? fmt(m.totalIncome) : "—"}
@@ -132,6 +161,23 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                 {fmt(months.reduce((s, m) => s + m.totalIncome, 0))}
               </td>
             </tr>
+
+            {/* INCOME BREAKDOWN ROWS */}
+            {showIncomeBreakdown && Object.entries(incomeBreakdown).map(([source, amounts]) => (
+              <tr key={source} className="border-b border-border/30 bg-success/3">
+                <td className={cn(labelClass, "font-normal text-success/80 pl-6 bg-success/3 text-[11px]")}>
+                  {source}
+                </td>
+                {amounts.map((amt, i) => (
+                  <td key={i} className={cn(cellClass, "text-[11px]", amt > 0 ? "text-success/70" : "text-muted-foreground/30")}>
+                    {amt > 0 ? fmt(amt) : "—"}
+                  </td>
+                ))}
+                <td className={cn(cellClass, "text-[11px] font-medium bg-muted/50 text-success/70")}>
+                  {fmt(amounts.reduce((s, v) => s + v, 0))}
+                </td>
+              </tr>
+            ))}
 
             {/* SECTION: OUTGOINGS */}
             <tr className="border-b border-border">
@@ -143,7 +189,16 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
             {/* Individual bill rows */}
             {billRows.map((row) => (
               <tr key={row.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                <td className={cn(labelClass, "font-normal")}>{row.name}</td>
+                <td className={cn(labelClass, "font-normal")}>
+                  <span className="flex items-center gap-1.5">
+                    {row.name}
+                    {row.frequency && row.frequency !== "monthly" && (
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-muted-foreground">
+                        {FREQ_LABELS[row.frequency] || row.frequency}
+                      </Badge>
+                    )}
+                  </span>
+                </td>
                 {row.amounts.map((amt, i) => (
                   <td key={i} className={cn(cellClass, amt > 0 ? "text-foreground" : "text-muted-foreground/40")}>
                     {amt > 0 ? fmt(amt) : "—"}
