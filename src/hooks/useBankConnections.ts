@@ -1,10 +1,10 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 
-const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+export const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface BankConnection {
   id: string;
@@ -248,6 +248,8 @@ export function useBankConnections() {
   // Auto-sync all connected banks every 5 minutes
   const syncingRef = useRef(false);
   const connections = connectionsQuery.data || [];
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+  const [lastAutoSyncAt, setLastAutoSyncAt] = useState<Date | null>(null);
 
   const autoSync = useCallback(async () => {
     if (syncingRef.current || !user) return;
@@ -257,6 +259,7 @@ export function useBankConnections() {
     if (connectedIds.length === 0) return;
 
     syncingRef.current = true;
+    setIsAutoSyncing(true);
     try {
       for (const id of connectedIds) {
         await supabase.functions.invoke("truelayer-sync", {
@@ -272,6 +275,8 @@ export function useBankConnections() {
       // Background sync failures are silent — user can manually sync
     } finally {
       syncingRef.current = false;
+      setIsAutoSyncing(false);
+      setLastAutoSyncAt(new Date());
     }
   }, [connections, user, queryClient]);
 
@@ -288,5 +293,8 @@ export function useBankConnections() {
     completeConnection,
     syncConnection,
     deleteConnection,
+    autoSync,
+    isAutoSyncing,
+    lastAutoSyncAt,
   };
 }
