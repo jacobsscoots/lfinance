@@ -1,78 +1,94 @@
 
 
-## Plan: Three Improvements
+## Plan: Investment Live Pricing, Yearly Planner, and Apple Transaction Notes
 
-### 1. Fix "View Best Deal" 404 Link (Cheaper Bills)
+### 1. Live Investment Pricing (WisdomTree AI ETF)
 
-**Problem**: The Octopus Energy "View Best Deal" button links to `https://octopus.energy/dashboard/new-quote/` which returns a 404.
+**What changes**: Your investment page will show real daily values based on actual ETF prices instead of estimated compound growth. When you enter transactions (buys/sells with unit quantities), the system calculates your holdings and multiplies by the latest unit price.
 
-**Fix**: Update the `PROVIDER_URLS` map in the `compare-energy-deals` edge function to use a working URL: `https://octopus.energy/smart/flexible-octopus/`. Also update the `LastScanCard` component so the "View Best Deal" button opens the `SwitchingPopupDialog` (with full details and working link) instead of navigating directly to a potentially broken URL.
+**How it works**:
+- A new backend function fetches the daily closing price for the WisdomTree AI ETF (ticker INTL on LSE, GBP-denominated) from Yahoo Finance's public endpoint
+- The function runs when you open the Investments page (cached for 24 hours) and stores the latest price in the `investment_valuations` table
+- A new `ticker_symbol` column on `investment_accounts` lets you assign a ticker to any investment (e.g. "INTL.L" for your ChipX AI Fund)
+- A new `units` column on `investment_transactions` records how many shares/units each deposit or withdrawal represents
+- Current value = units held x latest unit price
+- Daily change shows yesterday's close vs today's close (real data, not estimated)
 
-**Files**:
-- `supabase/functions/compare-energy-deals/index.ts` -- update the Octopus Energy URL
-- `src/components/cheaper-bills/LastScanCard.tsx` -- open switching dialog instead of direct link
+**Database changes**:
+- Add `ticker_symbol` (text, nullable) to `investment_accounts`
+- Add `units` (numeric, nullable) to `investment_transactions`
 
----
+**New files**:
+- `supabase/functions/fetch-etf-price/index.ts` -- edge function that calls Yahoo Finance API for a given ticker, returns latest price, and upserts into `investment_valuations`
 
-### 2. Broadband Comparisons with Speed and Contract Length (Cheaper Bills)
-
-**Problem**: Broadband deals are compared on price only; speed and contract length are stored in `features` but not shown or factored in.
-
-**Fix**:
-- **Service form**: Add optional `current_speed_mbps` and `contract_length_months` fields to the broadband service form so users can record their current speed and contract preference.
-- **Database**: Add `current_speed_mbps` (integer, nullable) and `preferred_contract_months` (integer, nullable) columns to `tracked_services`.
-- **Edge function**: Update `scanBroadbandDeals` to accept and use current speed + preferred contract length. Only recommend plans that match or exceed the user's current speed. Penalise longer contracts or highlight no-contract flexibility. Show speed and contract info in comparison reason text.
-- **UI**: Show speed (e.g., "132 Mbps") and contract length (e.g., "18 months") in the `ScanResultsPanel` and `SwitchingPopupDialog` for broadband results.
-
-**Files**:
-- Migration: add columns to `tracked_services`
-- `src/components/cheaper-bills/ServiceFormDialog.tsx` -- conditional speed/contract fields for broadband
-- `src/hooks/useTrackedServices.ts` -- update interface
-- `supabase/functions/compare-energy-deals/index.ts` -- update `scanBroadbandDeals` to filter by speed and factor contract
-- `src/components/cheaper-bills/ScanResultsPanel.tsx` -- show speed/contract badges
-- `src/components/cheaper-bills/SwitchingPopupDialog.tsx` -- show speed/contract in details
+**Modified files**:
+- `src/hooks/useInvestments.ts` -- include `ticker_symbol` in type
+- `src/hooks/useInvestmentTransactions.ts` -- include `units` in type and forms
+- `src/hooks/useInvestmentValuations.ts` -- add a `fetchLatestPrice` function that calls the edge function
+- `src/components/investments/InvestmentCard.tsx` -- use latest valuation price x total units instead of estimated compound growth
+- `src/components/investments/ContributionFormDialog.tsx` -- add optional "units" field
+- `src/components/investments/InvestmentFormDialog.tsx` -- add optional "ticker symbol" field
+- `src/pages/Investments.tsx` -- trigger price fetch on load for investments with tickers; use real valuations in portfolio summary
 
 ---
 
-### 3. Daily Budget Tracker on Bills Page
+### 2. Yearly Planner Page
 
-**Problem**: The user has a GBP 15/day discretionary budget concept and wants to see on the Bills page how actual daily spending tracks against it -- including accumulated surplus/deficit over time.
+**What it does**: A new "Yearly Planner" page showing a 12-month calendar-year grid (Jan-Dec 2026, extendable). Each month column shows:
+- Expected income (from your payday settings / historical income transactions)
+- Committed outgoings (auto-populated from your active bills and subscriptions, adjusted by frequency)
+- Discretionary spend (from historical data for past months, editable forecast for future months)
+- Net position (income minus total outgoings)
+- Running surplus/deficit that carries forward month to month
+- Colour-coded: green months are fine, amber months are tight, red months show a shortfall
 
-**Fix**: Add a "Daily Budget Tracker" card at the top of the Bills page that shows:
-- The daily budget amount (GBP 15, configurable via a setting or hardcoded initially)
-- How many days into the current pay cycle
-- Total budget available so far (GBP 15 x days elapsed)
-- Total discretionary spend so far (transactions minus committed bills/subs)
-- Surplus or deficit (green/red) -- e.g., "You have GBP 23 extra saved up" or "You're GBP 12 over budget"
-- A mini progress bar or simple visual
+This lets you spot problem months like December and plan savings in advance.
 
-This uses existing data from `usePayCycleData` which already calculates `safeToSpendPerDay`, `totalSpent`, `daysPassed`, etc. The GBP 15 daily budget will be stored in `user_payday_settings` as a new `daily_budget` column (default 15).
+**Auto-population logic**:
+- For past months: pull actual income and expense totals from the `transactions` table
+- For future months: calculate expected bills by expanding each active bill's frequency across the year
+- Income: use the most recent monthly income figure as a baseline (editable)
+- Users can add manual overrides for any month (e.g. "Christmas spending +GBP200" in December)
 
-**Files**:
-- Migration: add `daily_budget` column to `user_payday_settings` (numeric, default 15)
-- `src/hooks/usePaydaySettings.ts` -- include `daily_budget` in types/defaults
-- `src/components/bills/DailyBudgetCard.tsx` -- new component showing the tracker
-- `src/pages/Bills.tsx` -- integrate the card above the bill list
-- `src/components/settings/PaydaySettings.tsx` -- add field to configure the daily budget amount
+**Database changes**:
+- New table `yearly_planner_overrides`: stores user adjustments per month (user_id, year, month, label, amount, type: 'income'|'expense')
+- RLS: users can only access their own rows
+
+**New files**:
+- `src/pages/YearlyPlanner.tsx` -- the main page with a responsive grid/table
+- `src/hooks/useYearlyPlannerData.ts` -- fetches transactions, bills, and overrides; computes the 12-month grid
+- `src/components/yearly-planner/MonthColumn.tsx` -- individual month card showing breakdown
+- `src/components/yearly-planner/OverrideFormDialog.tsx` -- dialog to add/edit manual adjustments
+- `src/components/yearly-planner/YearlySummaryBar.tsx` -- top-level summary (total income, total outgoings, net)
+
+**Modified files**:
+- `src/App.tsx` -- add route `/yearly-planner`
+- `src/components/layout/AppSidebar.tsx` -- add "Yearly Planner" nav item (CalendarRange icon, under Bills section)
+- `src/components/layout/MobileNav.tsx` -- add nav item
 
 ---
 
-### 4. Fix Build Error (send-bills-notification)
+### 3. Apple Purchase Tracking
 
-**Problem**: `npm:resend@2.0.0` import syntax doesn't work in the Deno edge function environment.
+**The reality**: Apple does not provide a public API for purchase history. There is no way to programmatically pull your App Store, Apple Music, iCloud, etc. transactions.
 
-**Fix**: Change `import { Resend } from "npm:resend@2.0.0"` to `import { Resend } from "https://esm.sh/resend@2.0.0"`.
+**What we can do instead**: Since Apple charges show up on your bank statement as generic "APPLE.COM/BILL" transactions, we can add a feature to help you categorise them:
+- When you see an Apple transaction in your transactions list, you can tag it with a sub-category (e.g. "iCloud Storage", "App Store", "Apple Music", "Apple TV+", "Apple One")
+- A quick-tag dropdown appears for any transaction where the merchant contains "APPLE"
+- Over time this builds a clear picture of where your Apple spending goes
+- Auto-link known recurring amounts to the right subscription (e.g. GBP 6.99 = Apple Music)
 
-**File**: `supabase/functions/send-bills-notification/index.ts`
+**Modified files**:
+- `src/components/transactions/TransactionList.tsx` -- detect Apple merchant and show quick-tag chips
+- `src/hooks/useAutoLinkTransactions.ts` -- add Apple-specific matching rules for known subscription amounts
 
 ---
 
 ### Technical Summary
 
-| Change | Files Modified | Files Created |
-|--------|---------------|---------------|
-| Fix Octopus 404 | edge function, LastScanCard | -- |
-| Broadband speed/contract | edge function, ServiceFormDialog, ScanResultsPanel, SwitchingPopupDialog, useTrackedServices | 1 migration |
-| Daily budget tracker | Bills.tsx, usePaydaySettings, PaydaySettings | DailyBudgetCard.tsx, 1 migration |
-| Fix build error | send-bills-notification/index.ts | -- |
+| Change | New Files | Modified Files | Migrations |
+|--------|-----------|----------------|------------|
+| Live ETF pricing | 1 edge function | 6 components/hooks | 1 (ticker + units columns) |
+| Yearly Planner | 5 files (page + components + hook) | 3 (routing + nav) | 1 (overrides table) |
+| Apple tagging | 0 | 2 | 0 |
 
