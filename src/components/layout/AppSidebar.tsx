@@ -81,7 +81,7 @@ export function AppSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-4 space-y-4 overflow-y-auto">
+      <nav className="flex-1 px-4 py-4 space-y-4 overflow-y-auto scrollbar-hide">
         {navGroups.map((group, gi) => (
           <div key={gi}>
             {group.label && (
