@@ -31,10 +31,26 @@ interface BillRow {
   name: string;
   amounts: number[]; // 12 months
   total: number;
+  priority: number;
 }
 
 export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDeleteOverride }: DetailedYearlyTableProps) {
   const activeBills = useMemo(() => bills.filter(b => b.is_active), [bills]);
+
+  // Priority keywords for bill sorting (lower number = higher priority)
+  const getBillPriority = (name: string): number => {
+    const n = name.toLowerCase();
+    if (/rent|mortgage/.test(n)) return 0;
+    if (/council\s*tax/.test(n)) return 1;
+    if (/electric|gas|energy|water|sewage/.test(n)) return 2;
+    if (/broadband|internet|wifi|fibre/.test(n)) return 3;
+    if (/phone|mobile|sim/.test(n)) return 4;
+    if (/insurance/.test(n)) return 5;
+    if (/car|petrol|fuel|transport|train/.test(n)) return 6;
+    if (/tv\s*licen|netflix|disney|spotify|apple|amazon\s*prime|youtube/.test(n)) return 8;
+    if (/gym|subscription|membership/.test(n)) return 9;
+    return 7; // Everything else between utilities and subscriptions
+  };
 
   // Build per-bill, per-month amounts
   const billRows: BillRow[] = useMemo(() => {
@@ -49,8 +65,11 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
         name: bill.name,
         amounts,
         total: amounts.reduce((s, v) => s + v, 0),
+        priority: getBillPriority(bill.name),
       };
-    }).filter(row => row.total > 0); // Only show bills that have at least one occurrence
+    })
+    .filter(row => row.total > 0)
+    .sort((a, b) => a.priority - b.priority || b.total - a.total);
   }, [activeBills, year]);
 
   // Override rows grouped by month

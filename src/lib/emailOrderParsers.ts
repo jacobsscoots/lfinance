@@ -20,6 +20,8 @@ const RETAILER_DOMAINS: Record<string, string> = {
   "sainsburys.co.uk": "Sainsburys",
   "wilko.com": "Wilko",
   "bodyshop.com": "The Body Shop",
+  "myprotein.com": "MyProtein",
+  "myprotein.co.uk": "MyProtein",
 };
 
 export function matchRetailerFromEmail(fromEmail: string): RetailerMatch | null {
