@@ -13,6 +13,7 @@ import {
   subDays,
 } from "date-fns";
 import { getPayCycleForDate, toPaydaySettings, type PayCycle } from "@/lib/payCycle";
+import { generateBillOccurrences } from "@/lib/billOccurrences";
 import {
   calculateSafeToSpend,
   calculateProjectedEndBalance,
@@ -71,30 +72,6 @@ export interface PayCycleDataResult {
   isLoading: boolean;
 }
 
-// Helper to get next occurrence of a bill within a date range
-function getBillOccurrenceInRange(
-  bill: Bill,
-  rangeStart: Date,
-  rangeEnd: Date
-): Date | null {
-  const today = new Date();
-  
-  // Start from the range start date
-  let checkDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), bill.due_day);
-  
-  // If that date is before range start, move to next month
-  if (isBefore(checkDate, rangeStart)) {
-    checkDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, bill.due_day);
-  }
-  
-  // Check if within range and respects bill's start/end dates
-  if (isAfter(checkDate, rangeEnd)) return null;
-  
-  if (bill.start_date && isBefore(checkDate, new Date(bill.start_date))) return null;
-  if (bill.end_date && isAfter(checkDate, new Date(bill.end_date))) return null;
-  
-  return checkDate;
-}
 
 export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataResult {
   const { user } = useAuth();
@@ -173,14 +150,15 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   // Calculate start balance (current + expenses - income since cycle start)
   const startBalance = totalBalance + totalSpent - totalIncome;
   
-  // Get bills due in remaining cycle
+  // Get bills due in remaining cycle using proper frequency-aware occurrence generator
   const upcomingBills: BillWithDueDate[] = bills
-    .map(bill => {
-      const dueDate = getBillOccurrenceInRange(bill, today, cycle.end);
-      if (!dueDate) return null;
-      return { ...bill, dueDate };
+    .flatMap(bill => {
+      const occurrences = generateBillOccurrences(bill as any, today, cycle.end);
+      return occurrences.map(occ => ({
+        ...bill,
+        dueDate: occ.dueDate,
+      }));
     })
-    .filter((b): b is BillWithDueDate => b !== null)
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   
   // Split bills by timeframe

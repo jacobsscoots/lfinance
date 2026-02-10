@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet, Mail } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet, Mail, RefreshCw, CheckCircle } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useGmailConnection } from "@/hooks/useGmailConnection";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { TransactionFilters as FilterType } from "@/hooks/useTransactions";
 import { 
@@ -45,6 +47,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
   const { accounts } = useAccounts();
   const { effectiveSettings } = usePaydaySettings();
   const isMobile = useIsMobile();
+  const { isConnected, connection, sync, connect, isSyncing, isConnecting } = useGmailConnection();
   const [searchValue, setSearchValue] = useState(filters.search || "");
   const [viewMode, setViewMode] = useState<ViewMode>("paycycle");
   const [currentPayCycle, setCurrentPayCycle] = useState<PayCycle | null>(null);
@@ -302,27 +305,38 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
           </Select>
         </div>
 
-        {/* Gmail Integration Placeholder */}
+        {/* Gmail Integration */}
         <div className="pt-2 border-t">
-          <Tooltip>
-            <TooltipTrigger asChild>
+          {isConnected ? (
+            <div className="space-y-1.5">
               <Button 
                 variant="outline" 
                 className="w-full gap-2" 
-                disabled
-                onClick={() => toast.info("Gmail integration coming soon!")}
+                disabled={isSyncing}
+                onClick={() => sync()}
               >
-                <Mail className="h-4 w-4" />
-                Connect Gmail (Coming Soon)
+                <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+                {isSyncing ? "Syncing..." : "Sync Receipts"}
               </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="text-sm">
-                Auto-import receipts from your email. Requires Gmail OAuth access 
-                (gmail.readonly scope) to scan for order confirmations and receipt attachments.
-              </p>
-            </TooltipContent>
-          </Tooltip>
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
+                <CheckCircle className="h-3 w-3 text-success" />
+                <span>Gmail connected</span>
+                {connection?.last_synced_at && (
+                  <span>· Last sync {format(new Date(connection.last_synced_at), "d MMM HH:mm")}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <Button 
+              variant="outline" 
+              className="w-full gap-2" 
+              disabled={isConnecting}
+              onClick={() => connect()}
+            >
+              <Mail className="h-4 w-4" />
+              {isConnecting ? "Connecting..." : "Connect Gmail"}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
