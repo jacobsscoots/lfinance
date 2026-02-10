@@ -1,75 +1,121 @@
 
 
-## Plan: Auto-Sync Indicator, Page-Load Sync, and Yearly Planner Income Breakdown
+## Plan: Custom Projections, Service Status Page, Nav Redesign, and Net Worth Tracker
 
-### 1. Auto-Sync Status Indicator on Bank Connections Card
+### 1. Customisable Projection Periods (Investments)
 
-**What changes**: The Bank Connections card will show a live countdown timer ("Next sync in 4:32") and a subtle pulsing animation when a background sync is running.
+**What changes**: Replace the hardcoded "3 Months / 6 Months / 1 Year" projection grid with user-editable time periods. Each of the 3 columns will have a small dropdown or input allowing you to pick from options like 1m, 3m, 6m, 1y, 2y, 3y, 5y, 10y.
 
 **How it works**:
-- The `useBankConnections` hook will be updated to expose two new pieces of state: `isSyncing` (boolean, true while background auto-sync runs) and `lastAutoSyncAt` (timestamp of last completed auto-sync)
-- The `BankConnectionCard` will display a small status bar at the bottom showing:
-  - When idle: "Auto-syncing every 5 min -- Next in X:XX" with a countdown timer
-  - When syncing: "Syncing..." with a spinning RefreshCw icon and a subtle purple pulse animation on the card border
-- The countdown is calculated from `lastAutoSyncAt + 5 minutes` vs `now`, updated every second via a local `setInterval`
+- Add local state in `ProjectionCard` for the 3 selected periods (defaulting to 3, 6, 12 months)
+- Replace the static labels with a small Select dropdown per column offering: 1m, 3m, 6m, 1y, 2y, 3y, 5y, 10y
+- The `calculateProjectionScenarios` function already accepts any month count, so no calculation changes needed
+- The projections object becomes dynamic based on the 3 selected values
 
-**Files modified**:
-- `src/hooks/useBankConnections.ts` -- expose `isSyncing` and `lastAutoSyncAt` state
-- `src/components/accounts/BankConnectionCard.tsx` -- add auto-sync status bar with countdown timer and sync animation
+**File**: `src/components/investments/ProjectionCard.tsx`
 
 ---
 
-### 2. Sync on Page Load (Accounts Page)
+### 2. Service Status Page (Settings)
 
-**What changes**: When you open the Accounts page, all connected banks will immediately sync, in addition to the existing 5-minute interval.
+**What changes**: A new "Services" tab in Settings showing the connection status of all external integrations in one place, with quick-action buttons.
 
-**How it works**:
-- The `useBankConnections` hook will expose the `autoSync` function
-- The `Accounts.tsx` page will call `autoSync()` once on mount (using a ref guard to prevent double-firing in React StrictMode)
-- This is a silent sync (no toast), same as the interval-based one
+**Services to display**:
+- **Bank Connections (TrueLayer)** -- uses `useBankConnections` hook: shows connected banks count, last sync time, status
+- **Gmail** -- uses `useGmailConnection` hook: connected/disconnected, email address, last sync
+- **Smart Meter (Bright/Hildebrand)** -- uses `useBrightConnection` hook: connected/expired/disconnected
+- **Bill Comparison Scanner** -- uses `useBillsScanner` hook: last scan date, services tracked count
+- **Live Pricing (Yahoo Finance)** -- static info card showing it's used for investment tickers
 
-**Files modified**:
-- `src/hooks/useBankConnections.ts` -- expose `autoSync` in the return object
-- `src/pages/Accounts.tsx` -- call `autoSync()` on mount
+**Each service card shows**:
+- Service name and icon
+- Status badge (Connected / Disconnected / Error / Expired) with colour coding
+- Last synced/scanned timestamp
+- Quick action button (Connect / Sync / View Settings)
 
----
-
-### 3. Yearly Planner: Income Breakdown Toggle
-
-**What changes**: An eye icon button next to the "Income" row label in the detailed table. Clicking it expands the income row into a breakdown showing individual income sources (from transaction data for past months, or the projected average for future months).
-
-**How it works**:
-- For past/current months: group income transactions by merchant/description to show where income came from (e.g., "Employer Name: GBP2,400", "Side Hustle: GBP300")
-- For future months: show the projected average as a single "Projected Income" line
-- Income override rows already exist and will continue to display separately
-- The eye icon toggles between collapsed (single "Income" row showing totals) and expanded (individual income source rows)
-- State is local to the component (no database change needed)
-
-**Data source**: The `useYearlyPlannerData` hook already fetches all transactions for the year. We will add income grouping logic to extract unique income sources and their monthly amounts.
-
-**Files modified**:
-- `src/hooks/useYearlyPlannerData.ts` -- add `incomeBreakdown` to the return: a map of income source name to per-month amounts
-- `src/components/yearly-planner/DetailedYearlyTable.tsx` -- add eye icon toggle on Income row, render expanded income source rows when toggled
+**Files**:
+- New file: `src/components/settings/ServiceStatusSettings.tsx`
+- Modified: `src/pages/Settings.tsx` -- add "Services" tab with Activity icon
 
 ---
 
-### 4. Fix Bill Frequency Display in Yearly Planner
+### 3. Redesigned Navigation Bar
 
-**Investigation**: The Dentist bill is correctly stored as "biannual" (every 6 months) with a start date of May 2026. The `getBillOccurrencesForMonth` function correctly handles biannual frequency and should only place the dentist in May and November 2026.
+**What changes**: Group navigation items under collapsible section headers to reduce visual clutter. Instead of 13 flat links, organise into 5 groups with subtle section labels. The sidebar will feel cleaner while keeping everything accessible.
 
-**What I will do**: Add a small frequency badge (e.g., "6mo", "Yr", "2wk") next to each bill name in the detailed table so you can instantly verify the frequency is correct. If a bill genuinely appears in the wrong months, this will make the discrepancy immediately obvious and actionable (you can edit the bill's frequency from the Bills page). I will also double-check the rendering to ensure no bills are incorrectly duplicated across months.
+**New structure**:
+```text
+[Dashboard]                    (always visible, top-level)
 
-**Files modified**:
-- `src/components/yearly-planner/DetailedYearlyTable.tsx` -- add frequency badge next to bill names, verify month-cell rendering
+MONEY
+  Accounts
+  Transactions
+  Debt Tracker
+
+BILLS
+  Bills
+  Cheaper Bills
+  Yearly Planner
+
+INVESTMENTS
+  Investments
+  Net Worth          (new -- see item 4)
+
+LIFESTYLE
+  Calendar
+  Groceries
+  Meal Plan
+  Toiletries
+
+[Settings]                     (always visible, bottom area)
+```
+
+**Design details**:
+- Section headers are small, uppercase, muted-grey text (like "MONEY", "BILLS") with no click interaction
+- Dashboard stays at the very top as the primary landing page
+- Settings stays pinned to the bottom footer area (already is)
+- Same changes mirrored in `MobileNav.tsx`
+
+**Files**:
+- `src/components/layout/AppSidebar.tsx`
+- `src/components/layout/MobileNav.tsx`
+
+---
+
+### 4. Net Worth Tracker
+
+**What changes**: A new page that aggregates your total financial position across all account types into a single view.
+
+**How it works**:
+- **Data sources** (all already exist in the app):
+  - Bank accounts: from `useAccounts` hook (current/savings balances)
+  - Investments: from `useInvestments` + live prices (portfolio value)
+  - Debts: from `useDebts` hook (outstanding balances as liabilities)
+- **No new database tables needed** -- this is a read-only aggregation view
+
+**Page layout**:
+- **Net Worth headline**: Total Assets minus Total Liabilities, large prominent number
+- **Breakdown cards**: Assets card (bank accounts + investments) and Liabilities card (debts)
+- **Accounts list**: Each account/investment/debt shown with its current balance and a green/red indicator
+- **Net Worth trend chart**: Using a Recharts line chart. Data points calculated from existing account balance history, investment valuations, and debt payment records over time
+
+**Database consideration**: The schema already supports future net worth tracking (per memory note). For the initial version, we will calculate net worth on-the-fly from current balances. A `net_worth_snapshots` table can be added later for historical tracking if needed.
+
+**Files**:
+- New file: `src/pages/NetWorth.tsx`
+- New file: `src/hooks/useNetWorthData.ts` -- aggregates data from useAccounts, useInvestments, useDebts
+- Modified: `src/App.tsx` -- add `/net-worth` route
+- Modified: `src/components/layout/AppSidebar.tsx` -- already covered in nav redesign (item 3)
+- Modified: `src/components/layout/MobileNav.tsx` -- already covered in nav redesign (item 3)
 
 ---
 
 ### Technical Summary
 
-| Change | Files Modified |
-|--------|---------------|
-| Auto-sync indicator + countdown | `useBankConnections.ts`, `BankConnectionCard.tsx` |
-| Sync on page load | `useBankConnections.ts`, `Accounts.tsx` |
-| Income breakdown toggle | `useYearlyPlannerData.ts`, `DetailedYearlyTable.tsx` |
-| Bill frequency badges | `DetailedYearlyTable.tsx` |
+| Change | Files | Type |
+|--------|-------|------|
+| Custom projection periods | `ProjectionCard.tsx` | Modify |
+| Service status page | `ServiceStatusSettings.tsx` (new), `Settings.tsx` | New + Modify |
+| Nav redesign (grouped sections) | `AppSidebar.tsx`, `MobileNav.tsx` | Modify |
+| Net Worth page | `NetWorth.tsx` (new), `useNetWorthData.ts` (new), `App.tsx` | New + Modify |
 
