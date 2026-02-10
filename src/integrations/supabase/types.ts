@@ -1115,6 +1115,59 @@ export type Database = {
         }
         Relationships: []
       }
+      email_tracking_extractions: {
+        Row: {
+          created_at: string
+          created_shipment_id: string | null
+          extracted_carrier_code: string | null
+          extracted_tracking_number: string | null
+          from_email: string | null
+          id: string
+          parse_confidence: number | null
+          provider_message_id: string
+          raw_excerpt: string | null
+          received_at: string | null
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_shipment_id?: string | null
+          extracted_carrier_code?: string | null
+          extracted_tracking_number?: string | null
+          from_email?: string | null
+          id?: string
+          parse_confidence?: number | null
+          provider_message_id: string
+          raw_excerpt?: string | null
+          received_at?: string | null
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_shipment_id?: string | null
+          extracted_carrier_code?: string | null
+          extracted_tracking_number?: string | null
+          from_email?: string | null
+          id?: string
+          parse_confidence?: number | null
+          provider_message_id?: string
+          raw_excerpt?: string | null
+          received_at?: string | null
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_tracking_extractions_created_shipment_id_fkey"
+            columns: ["created_shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       energy_profiles: {
         Row: {
           created_at: string
@@ -2650,6 +2703,7 @@ export type Database = {
           last_synced_at: string | null
           order_id: string | null
           raw_latest: Json | null
+          source: string | null
           status: string
           tracking_number: string
           trackingmore_id: string | null
@@ -2665,6 +2719,7 @@ export type Database = {
           last_synced_at?: string | null
           order_id?: string | null
           raw_latest?: Json | null
+          source?: string | null
           status?: string
           tracking_number: string
           trackingmore_id?: string | null
@@ -2680,6 +2735,7 @@ export type Database = {
           last_synced_at?: string | null
           order_id?: string | null
           raw_latest?: Json | null
+          source?: string | null
           status?: string
           tracking_number?: string
           trackingmore_id?: string | null

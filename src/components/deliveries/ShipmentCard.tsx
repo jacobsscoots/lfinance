@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { Package, Copy, ChevronDown, ChevronUp, MapPin, Clock, Truck, CheckCircle2, AlertTriangle, Circle } from "lucide-react";
+import { Package, Copy, ChevronDown, ChevronUp, MapPin, Clock, Truck, CheckCircle2, AlertTriangle, Circle, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,10 +64,17 @@ export function ShipmentCard({ shipment, events, onDelete }: ShipmentCardProps) 
             {getStatusLabel(shipment.status)}
           </Badge>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          <Clock className="h-3 w-3 inline mr-1" />
-          Updated {formatDistanceToNow(new Date(lastUpdate), { addSuffix: true })}
-        </p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <p className="text-xs text-muted-foreground">
+            <Clock className="h-3 w-3 inline mr-1" />
+            Updated {formatDistanceToNow(new Date(lastUpdate), { addSuffix: true })}
+          </p>
+          {(shipment as any).source === "gmail" && (
+            <Badge variant="secondary" className="text-[10px] gap-0.5 px-1.5 py-0">
+              <Mail className="h-3 w-3" /> Auto-added from email
+            </Badge>
+          )}
+        </div>
       </CardHeader>
 
       {shipmentEvents.length > 0 && (
