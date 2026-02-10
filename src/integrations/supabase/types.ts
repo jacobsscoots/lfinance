@@ -2599,6 +2599,103 @@ export type Database = {
           },
         ]
       }
+      shipment_events: {
+        Row: {
+          created_at: string
+          event_time: string
+          id: string
+          location: string | null
+          message: string | null
+          raw: Json | null
+          shipment_id: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_time: string
+          id?: string
+          location?: string | null
+          message?: string | null
+          raw?: Json | null
+          shipment_id: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_time?: string
+          id?: string
+          location?: string | null
+          message?: string | null
+          raw?: Json | null
+          shipment_id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipment_events_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipments: {
+        Row: {
+          carrier_code: string | null
+          created_at: string
+          delivered_at: string | null
+          id: string
+          last_event_at: string | null
+          last_synced_at: string | null
+          order_id: string | null
+          raw_latest: Json | null
+          status: string
+          tracking_number: string
+          trackingmore_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          carrier_code?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          last_event_at?: string | null
+          last_synced_at?: string | null
+          order_id?: string | null
+          raw_latest?: Json | null
+          status?: string
+          tracking_number: string
+          trackingmore_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          carrier_code?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          last_event_at?: string | null
+          last_synced_at?: string | null
+          order_id?: string | null
+          raw_latest?: Json | null
+          status?: string
+          tracking_number?: string
+          trackingmore_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "online_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       toiletry_items: {
         Row: {
           brand: string | null

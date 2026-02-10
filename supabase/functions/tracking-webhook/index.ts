@@ -6,22 +6,31 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function mapStatus(tmStatus: string): string {
+  const s = (tmStatus || "").toLowerCase();
+  if (["delivered", "signed", "pickup"].includes(s)) return "delivered";
+  if (["transit", "intransit", "in_transit", "in transit"].includes(s)) return "in_transit";
+  if (["outfordelivery", "out_for_delivery"].includes(s)) return "out_for_delivery";
+  if (["exception", "failed", "expired", "undelivered"].includes(s)) return "exception";
+  if (["notfound", "not_found", "pending"].includes(s)) return "pending";
+  return "unknown";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify webhook secret to prevent unauthorized calls
+    // Verify webhook secret
     const webhookSecret = Deno.env.get("TRACKING_WEBHOOK_SECRET");
     if (webhookSecret) {
       const url = new URL(req.url);
       const providedSecret = url.searchParams.get("secret") || req.headers.get("x-webhook-secret");
       if (providedSecret !== webhookSecret) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -31,85 +40,103 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
 
-    // Support TrackingMore V4 webhook format and generic formats
-    // TrackingMore V4 sends: { data: { tracking_number, courier_code, delivery_status, ... } }
+    // TrackingMore V4 webhook: { data: { tracking_number, courier_code, delivery_status, ... } }
     const tmData = body.data;
-    const trackingNumber = tmData?.tracking_number || body.tracking_number || body.msg?.tracking_number;
-    const status = tmData?.delivery_status || body.status || body.msg?.tag;
-    const carrier = tmData?.courier_code || body.carrier || body.msg?.slug;
-    const eventTime = tmData?.latest_event_time || body.event_time || body.msg?.updated_at;
+    const trackingNumber = tmData?.tracking_number || body.tracking_number;
+    const rawStatus = tmData?.delivery_status || body.status;
+    const carrierCode = tmData?.courier_code || body.carrier;
+    const latestEventTime = tmData?.latest_event_time || body.event_time;
+    const trackingmoreId = tmData?.id || null;
 
     if (!trackingNumber) {
-      return new Response(
-        JSON.stringify({ error: "Missing tracking_number" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Missing tracking_number" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Map provider statuses to our statuses (includes TrackingMore V4 statuses)
-    let mappedStatus = "pending";
-    const rawStatus = (status || "").toLowerCase();
-    if (["delivered", "signed", "pickup"].includes(rawStatus)) {
-      mappedStatus = "delivered";
-    } else if (["intransit", "in_transit", "in transit", "outfordelivery", "out_for_delivery", "transit"].includes(rawStatus)) {
-      mappedStatus = "in_transit";
-    } else if (["exception", "failed", "expired", "undelivered"].includes(rawStatus)) {
-      mappedStatus = "exception";
-    } else if (["notfound", "not_found", "pending"].includes(rawStatus)) {
-      mappedStatus = "pending";
+    const mappedStatus = mapStatus(rawStatus);
+    const now = new Date().toISOString();
+
+    // Find shipment by trackingmore_id first, then tracking_number
+    let shipment = null;
+    if (trackingmoreId) {
+      const { data } = await supabase
+        .from("shipments")
+        .select("id, order_id, status")
+        .eq("trackingmore_id", trackingmoreId)
+        .maybeSingle();
+      shipment = data;
     }
-
-    // Update the shipment
-    const { data: shipment, error: shipmentError } = await supabase
-      .from("order_shipments")
-      .update({
-        status: mappedStatus,
-        carrier: carrier || undefined,
-        last_event_at: eventTime || new Date().toISOString(),
-        last_payload: body,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("tracking_number", trackingNumber)
-      .select("id, order_id")
-      .maybeSingle();
-
-    if (shipmentError) {
-      console.error("Shipment update error:", shipmentError);
-      return new Response(
-        JSON.stringify({ error: "Failed to update shipment" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!shipment) {
+      const { data } = await supabase
+        .from("shipments")
+        .select("id, order_id, status")
+        .eq("tracking_number", trackingNumber)
+        .maybeSingle();
+      shipment = data;
     }
 
     if (!shipment) {
-      // Tracking number not found — return identical success response to prevent enumeration
-      return new Response(
-        JSON.stringify({ success: true }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Return success to prevent enumeration
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // If delivered, also update the parent order
+    // Update shipment
+    const updatePayload: Record<string, unknown> = {
+      status: mappedStatus,
+      last_event_at: latestEventTime || now,
+      last_synced_at: now,
+      raw_latest: body,
+      carrier_code: carrierCode || undefined,
+    };
+    if (trackingmoreId) updatePayload.trackingmore_id = trackingmoreId;
+    if (mappedStatus === "delivered") updatePayload.delivered_at = latestEventTime || now;
+
+    await supabase.from("shipments").update(updatePayload).eq("id", shipment.id);
+
+    // Insert events from webhook payload
+    const allEvents = [
+      ...(tmData?.origin_info?.trackinfo || []),
+      ...(tmData?.destination_info?.trackinfo || []),
+    ];
+
+    for (const evt of allEvents) {
+      const eventTime = evt.Date || evt.checkpoint_date;
+      const message = evt.StatusDescription || evt.checkpoint_delivery_status || evt.Details || "";
+      const location = evt.Details || evt.location || null;
+
+      if (!eventTime) continue;
+
+      await supabase.from("shipment_events").upsert(
+        {
+          shipment_id: shipment.id,
+          event_time: eventTime,
+          message,
+          location,
+          status: evt.checkpoint_delivery_status || null,
+          raw: evt,
+        },
+        { onConflict: "shipment_id,event_time,message" }
+      ).select().maybeSingle();
+    }
+
+    // If delivered, update parent order too
     if (mappedStatus === "delivered" && shipment.order_id) {
       await supabase
         .from("online_orders")
-        .update({
-          status: "delivered",
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: "delivered", updated_at: now })
         .eq("id", shipment.order_id);
     }
 
-    // Return identical response shape regardless of outcome to prevent enumeration
-    return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error("Webhook error:", err);
-    return new Response(
-      JSON.stringify({ error: "Internal error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Internal error" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
