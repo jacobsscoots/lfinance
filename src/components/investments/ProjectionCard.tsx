@@ -1,14 +1,26 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Calculator, Target } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   calculateProjectionScenarios, 
   RISK_PRESETS 
 } from "@/lib/investmentCalculations";
+
+const PERIOD_OPTIONS = [
+  { value: "1", label: "1 Month" },
+  { value: "3", label: "3 Months" },
+  { value: "6", label: "6 Months" },
+  { value: "12", label: "1 Year" },
+  { value: "24", label: "2 Years" },
+  { value: "36", label: "3 Years" },
+  { value: "60", label: "5 Years" },
+  { value: "120", label: "10 Years" },
+];
 
 interface ProjectionCardProps {
   currentValue: number;
@@ -25,13 +37,22 @@ export function ProjectionCard({
   onReturnChange,
   onContributionChange,
 }: ProjectionCardProps) {
+  const [periods, setPeriods] = useState<[string, string, string]>(["3", "6", "12"]);
+
   const projections = useMemo(() => {
-    return {
-      "3m": calculateProjectionScenarios(currentValue, monthlyContribution, expectedAnnualReturn, 3),
-      "6m": calculateProjectionScenarios(currentValue, monthlyContribution, expectedAnnualReturn, 6),
-      "12m": calculateProjectionScenarios(currentValue, monthlyContribution, expectedAnnualReturn, 12),
-    };
-  }, [currentValue, monthlyContribution, expectedAnnualReturn]);
+    return periods.map((p) => ({
+      months: parseInt(p),
+      data: calculateProjectionScenarios(currentValue, monthlyContribution, expectedAnnualReturn, parseInt(p)),
+    }));
+  }, [currentValue, monthlyContribution, expectedAnnualReturn, periods]);
+
+  const updatePeriod = (index: number, value: string) => {
+    setPeriods((prev) => {
+      const next = [...prev] as [string, string, string];
+      next[index] = value;
+      return next;
+    });
+  };
 
   const formatCurrency = (value: number) => {
     return `£${value.toLocaleString("en-GB", { 
@@ -88,17 +109,24 @@ export function ProjectionCard({
 
         {/* Projection Grid */}
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {(["3m", "6m", "12m"] as const).map((period) => {
-            const data = projections[period];
-            const contributionGrowth = monthlyContribution * parseInt(period);
+          {projections.map(({ months, data }, index) => {
+            const contributionGrowth = monthlyContribution * months;
             const growthOnly = data.expected - currentValue - contributionGrowth;
             
             return (
-              <div key={period} className="text-center p-2 sm:p-3 rounded-lg bg-muted/50">
-                <p className="text-xs text-muted-foreground uppercase mb-1">
-                  <span className="hidden sm:inline">{period === "3m" ? "3 Months" : period === "6m" ? "6 Months" : "1 Year"}</span>
-                  <span className="sm:hidden">{period.toUpperCase()}</span>
-                </p>
+              <div key={index} className="text-center p-2 sm:p-3 rounded-lg bg-muted/50">
+                <Select value={periods[index]} onValueChange={(v) => updatePeriod(index, v)}>
+                  <SelectTrigger className="h-7 text-xs border-dashed mx-auto mb-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {PERIOD_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-sm sm:text-lg font-bold text-foreground">
                   {formatCurrency(data.expected)}
                 </p>
