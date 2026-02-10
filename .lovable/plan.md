@@ -1,121 +1,53 @@
 
+## Fix: Upcoming Bills Showing Wrong Due Dates
 
-## Plan: Custom Projections, Service Status Page, Nav Redesign, and Net Worth Tracker
+### Root Cause
 
-### 1. Customisable Projection Periods (Investments)
+The `generateBillOccurrences` function in `src/lib/billOccurrences.ts` has a bug for non-monthly frequencies (quarterly, biannual, yearly). 
 
-**What changes**: Replace the hardcoded "3 Months / 6 Months / 1 Year" projection grid with user-editable time periods. Each of the 3 columns will have a small dropdown or input allowing you to pick from options like 1m, 3m, 6m, 1y, 2y, 3y, 5y, 10y.
+For these frequencies, it seeds the occurrence calculation by calling `getDueDateForMonth(bill, rangeStart.year, rangeStart.month)`, which returns `due_day` in the **current month** (e.g., Feb 11 for a bill with `due_day: 11`). It then checks if that date is before `rangeStart` and advances if so.
 
-**How it works**:
-- Add local state in `ProjectionCard` for the 3 selected periods (defaulting to 3, 6, 12 months)
-- Replace the static labels with a small Select dropdown per column offering: 1m, 3m, 6m, 1y, 2y, 3y, 5y, 10y
-- The `calculateProjectionScenarios` function already accepts any month count, so no calculation changes needed
-- The projections object becomes dynamic based on the 3 selected values
+The problem: this seed date ignores the bill's frequency entirely. A **yearly** bill due on November 11 gets a seed date of February 11 — which falls within the range and gets output as a valid occurrence. The function never validates that the seed date is an actual scheduled occurrence based on the `start_date` and frequency.
 
-**File**: `src/components/investments/ProjectionCard.tsx`
+### Affected Bills (from your data)
 
----
+| Bill | Frequency | Start Date | Due Day | Bug Shows | Correct Next |
+|------|-----------|------------|---------|-----------|-------------|
+| Snapchat Premium | yearly | 2025-11-11 | 11 | Feb 11 | Nov 11, 2026 |
+| Purpl Discount | yearly | 2025-10-12 | 12 | Feb 12 | Oct 12, 2026 |
+| Plant with Willow | yearly | 2025-10-17 | 17 | Feb 17 | Oct 17, 2026 |
+| Magnesium | bimonthly | 2025-10-18 | 18 | Depends | Needs validation |
 
-### 2. Service Status Page (Settings)
+### Fix
 
-**What changes**: A new "Services" tab in Settings showing the connection status of all external integrations in one place, with quick-action buttons.
+Rewrite the non-weekly/fortnightly path in `generateBillOccurrences` to use the same forward-walk approach used for weekly bills: start from `billStart`, advance by the correct frequency interval until reaching `rangeStart`, then collect occurrences within the range.
 
-**Services to display**:
-- **Bank Connections (TrueLayer)** -- uses `useBankConnections` hook: shows connected banks count, last sync time, status
-- **Gmail** -- uses `useGmailConnection` hook: connected/disconnected, email address, last sync
-- **Smart Meter (Bright/Hildebrand)** -- uses `useBrightConnection` hook: connected/expired/disconnected
-- **Bill Comparison Scanner** -- uses `useBillsScanner` hook: last scan date, services tracked count
-- **Live Pricing (Yahoo Finance)** -- static info card showing it's used for investment tickers
+This guarantees that only dates that are valid multiples of the frequency from the start date appear as occurrences.
 
-**Each service card shows**:
-- Service name and icon
-- Status badge (Connected / Disconnected / Error / Expired) with colour coding
-- Last synced/scanned timestamp
-- Quick action button (Connect / Sync / View Settings)
+### File Changed
 
-**Files**:
-- New file: `src/components/settings/ServiceStatusSettings.tsx`
-- Modified: `src/pages/Settings.tsx` -- add "Services" tab with Activity icon
+**`src/lib/billOccurrences.ts`** (lines 122-149)
 
----
-
-### 3. Redesigned Navigation Bar
-
-**What changes**: Group navigation items under collapsible section headers to reduce visual clutter. Instead of 13 flat links, organise into 5 groups with subtle section labels. The sidebar will feel cleaner while keeping everything accessible.
-
-**New structure**:
-```text
-[Dashboard]                    (always visible, top-level)
-
-MONEY
-  Accounts
-  Transactions
-  Debt Tracker
-
-BILLS
-  Bills
-  Cheaper Bills
-  Yearly Planner
-
-INVESTMENTS
-  Investments
-  Net Worth          (new -- see item 4)
-
-LIFESTYLE
-  Calendar
-  Groceries
-  Meal Plan
-  Toiletries
-
-[Settings]                     (always visible, bottom area)
+Replace the current approach:
+```
+// Current (buggy): seeds from current month's due_day
+let currentDate = getDueDateForMonth(bill, rangeStart.getFullYear(), rangeStart.getMonth());
+if (isBefore(currentDate, rangeStart)) {
+  currentDate = getNextOccurrence(bill, currentDate);
+}
 ```
 
-**Design details**:
-- Section headers are small, uppercase, muted-grey text (like "MONEY", "BILLS") with no click interaction
-- Dashboard stays at the very top as the primary landing page
-- Settings stays pinned to the bottom footer area (already is)
-- Same changes mirrored in `MobileNav.tsx`
+With the frequency-aware forward walk:
+```
+// Fixed: walk forward from bill start date using correct frequency
+let currentDate = billStart;
+while (isBefore(currentDate, rangeStart)) {
+  currentDate = getNextOccurrence(bill, currentDate);
+}
+```
 
-**Files**:
-- `src/components/layout/AppSidebar.tsx`
-- `src/components/layout/MobileNav.tsx`
+This is the same pattern already used for weekly/fortnightly bills (lines 95-100) and is correct for all frequencies. It ensures a yearly bill starting Nov 11, 2025 only generates occurrences on Nov 11, 2026, Nov 11, 2027, etc.
 
----
+### Impact
 
-### 4. Net Worth Tracker
-
-**What changes**: A new page that aggregates your total financial position across all account types into a single view.
-
-**How it works**:
-- **Data sources** (all already exist in the app):
-  - Bank accounts: from `useAccounts` hook (current/savings balances)
-  - Investments: from `useInvestments` + live prices (portfolio value)
-  - Debts: from `useDebts` hook (outstanding balances as liabilities)
-- **No new database tables needed** -- this is a read-only aggregation view
-
-**Page layout**:
-- **Net Worth headline**: Total Assets minus Total Liabilities, large prominent number
-- **Breakdown cards**: Assets card (bank accounts + investments) and Liabilities card (debts)
-- **Accounts list**: Each account/investment/debt shown with its current balance and a green/red indicator
-- **Net Worth trend chart**: Using a Recharts line chart. Data points calculated from existing account balance history, investment valuations, and debt payment records over time
-
-**Database consideration**: The schema already supports future net worth tracking (per memory note). For the initial version, we will calculate net worth on-the-fly from current balances. A `net_worth_snapshots` table can be added later for historical tracking if needed.
-
-**Files**:
-- New file: `src/pages/NetWorth.tsx`
-- New file: `src/hooks/useNetWorthData.ts` -- aggregates data from useAccounts, useInvestments, useDebts
-- Modified: `src/App.tsx` -- add `/net-worth` route
-- Modified: `src/components/layout/AppSidebar.tsx` -- already covered in nav redesign (item 3)
-- Modified: `src/components/layout/MobileNav.tsx` -- already covered in nav redesign (item 3)
-
----
-
-### Technical Summary
-
-| Change | Files | Type |
-|--------|-------|------|
-| Custom projection periods | `ProjectionCard.tsx` | Modify |
-| Service status page | `ServiceStatusSettings.tsx` (new), `Settings.tsx` | New + Modify |
-| Nav redesign (grouped sections) | `AppSidebar.tsx`, `MobileNav.tsx` | Modify |
-| Net Worth page | `NetWorth.tsx` (new), `useNetWorthData.ts` (new), `App.tsx` | New + Modify |
-
+This fix affects the Dashboard "Upcoming Bills" widget, the yearly planner bill rows, and any other component using `generateBillOccurrences` or `getBillOccurrencesInRange`. All will now correctly skip months where non-monthly bills are not actually due.
