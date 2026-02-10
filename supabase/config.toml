@@ -42,3 +42,9 @@ verify_jwt = false
 [functions.fetch-etf-price]
 verify_jwt = false
 
+[functions.trackingmore-register]
+verify_jwt = false
+
+[functions.trackingmore-poll]
+verify_jwt = false
+
