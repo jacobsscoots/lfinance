@@ -119,11 +119,9 @@ export function generateBillOccurrences(
     return occurrences;
   }
   
-  // For monthly/quarterly/yearly, calculate by month
-  let currentDate = getDueDateForMonth(bill, rangeStart.getFullYear(), rangeStart.getMonth());
-  
-  // If this month's occurrence is before range start, move to next
-  if (isBefore(currentDate, rangeStart)) {
+  // For monthly/quarterly/biannual/yearly, walk forward from bill start date
+  let currentDate = billStart;
+  while (isBefore(currentDate, rangeStart)) {
     currentDate = getNextOccurrence(bill, currentDate);
   }
   
