@@ -1,94 +1,65 @@
 
 
-## Plan: Investment Live Pricing, Yearly Planner, and Apple Transaction Notes
+## Plan: Fix 4 Issues
 
-### 1. Live Investment Pricing (WisdomTree AI ETF)
+### 1. Fix Upcoming Bills Showing Wrong Due Dates (Dashboard)
 
-**What changes**: Your investment page will show real daily values based on actual ETF prices instead of estimated compound growth. When you enter transactions (buys/sells with unit quantities), the system calculates your holdings and multiplies by the latest unit price.
+**Problem**: The `getBillOccurrenceInRange` function in `usePayCycleData.ts` (line 75-97) is too simplistic. It only checks the bill's `due_day` in the current or next month, ignoring the bill's actual `frequency`. So a yearly bill like "Snapchat Premium" (due in December) gets placed in the current month because its `due_day` falls within the pay cycle range, even though it shouldn't recur until December 2026.
 
-**How it works**:
-- A new backend function fetches the daily closing price for the WisdomTree AI ETF (ticker INTL on LSE, GBP-denominated) from Yahoo Finance's public endpoint
-- The function runs when you open the Investments page (cached for 24 hours) and stores the latest price in the `investment_valuations` table
-- A new `ticker_symbol` column on `investment_accounts` lets you assign a ticker to any investment (e.g. "INTL.L" for your ChipX AI Fund)
-- A new `units` column on `investment_transactions` records how many shares/units each deposit or withdrawal represents
-- Current value = units held x latest unit price
-- Daily change shows yesterday's close vs today's close (real data, not estimated)
+**Fix**: Replace `getBillOccurrenceInRange` with the existing, properly-tested `generateBillOccurrences` function from `src/lib/billOccurrences.ts`, which correctly handles all frequencies (weekly, fortnightly, monthly, quarterly, biannual, yearly) and respects start/end dates.
 
-**Database changes**:
-- Add `ticker_symbol` (text, nullable) to `investment_accounts`
-- Add `units` (numeric, nullable) to `investment_transactions`
-
-**New files**:
-- `supabase/functions/fetch-etf-price/index.ts` -- edge function that calls Yahoo Finance API for a given ticker, returns latest price, and upserts into `investment_valuations`
-
-**Modified files**:
-- `src/hooks/useInvestments.ts` -- include `ticker_symbol` in type
-- `src/hooks/useInvestmentTransactions.ts` -- include `units` in type and forms
-- `src/hooks/useInvestmentValuations.ts` -- add a `fetchLatestPrice` function that calls the edge function
-- `src/components/investments/InvestmentCard.tsx` -- use latest valuation price x total units instead of estimated compound growth
-- `src/components/investments/ContributionFormDialog.tsx` -- add optional "units" field
-- `src/components/investments/InvestmentFormDialog.tsx` -- add optional "ticker symbol" field
-- `src/pages/Investments.tsx` -- trigger price fetch on load for investments with tickers; use real valuations in portfolio summary
+**File**: `src/hooks/usePayCycleData.ts`
+- Remove the inline `getBillOccurrenceInRange` helper (lines 75-97)
+- Import `generateBillOccurrences` from `@/lib/billOccurrences`
+- Replace the `upcomingBills` mapping (lines 177-184) to use `generateBillOccurrences(bill, today, cycle.end)` instead, which returns only the occurrences that genuinely fall within the remaining cycle window
 
 ---
 
-### 2. Yearly Planner Page
+### 2. Fix Gmail Button Still Showing "Coming Soon" (Transactions)
 
-**What it does**: A new "Yearly Planner" page showing a 12-month calendar-year grid (Jan-Dec 2026, extendable). Each month column shows:
-- Expected income (from your payday settings / historical income transactions)
-- Committed outgoings (auto-populated from your active bills and subscriptions, adjusted by frequency)
-- Discretionary spend (from historical data for past months, editable forecast for future months)
-- Net position (income minus total outgoings)
-- Running surplus/deficit that carries forward month to month
-- Colour-coded: green months are fine, amber months are tight, red months show a shortfall
+**Problem**: The Gmail button in `TransactionFilters.tsx` (line 316) is hardcoded as disabled with "Coming Soon" text. It never checks whether Gmail is actually connected.
 
-This lets you spot problem months like December and plan savings in advance.
+**Fix**: Import `useGmailConnection` and conditionally render either a "Sync Receipts" button (if connected) or a "Connect Gmail" button (if not connected, linking to the OAuth flow).
 
-**Auto-population logic**:
-- For past months: pull actual income and expense totals from the `transactions` table
-- For future months: calculate expected bills by expanding each active bill's frequency across the year
-- Income: use the most recent monthly income figure as a baseline (editable)
-- Users can add manual overrides for any month (e.g. "Christmas spending +GBP200" in December)
-
-**Database changes**:
-- New table `yearly_planner_overrides`: stores user adjustments per month (user_id, year, month, label, amount, type: 'income'|'expense')
-- RLS: users can only access their own rows
-
-**New files**:
-- `src/pages/YearlyPlanner.tsx` -- the main page with a responsive grid/table
-- `src/hooks/useYearlyPlannerData.ts` -- fetches transactions, bills, and overrides; computes the 12-month grid
-- `src/components/yearly-planner/MonthColumn.tsx` -- individual month card showing breakdown
-- `src/components/yearly-planner/OverrideFormDialog.tsx` -- dialog to add/edit manual adjustments
-- `src/components/yearly-planner/YearlySummaryBar.tsx` -- top-level summary (total income, total outgoings, net)
-
-**Modified files**:
-- `src/App.tsx` -- add route `/yearly-planner`
-- `src/components/layout/AppSidebar.tsx` -- add "Yearly Planner" nav item (CalendarRange icon, under Bills section)
-- `src/components/layout/MobileNav.tsx` -- add nav item
+**File**: `src/components/transactions/TransactionFilters.tsx`
+- Import `useGmailConnection` hook
+- Replace the static disabled button (lines 305-326) with conditional rendering:
+  - If connected: Show "Sync Receipts" button that triggers `sync()`, with a "Connected" badge and last-synced timestamp
+  - If not connected: Show "Connect Gmail" button that triggers `connect()` (no longer disabled, no "Coming Soon")
 
 ---
 
-### 3. Apple Purchase Tracking
+### 3. Add MyProtein to Email Order Parsers
 
-**The reality**: Apple does not provide a public API for purchase history. There is no way to programmatically pull your App Store, Apple Music, iCloud, etc. transactions.
+**Problem**: The `RETAILER_DOMAINS` map in `emailOrderParsers.ts` doesn't include MyProtein, so order confirmation emails from MyProtein are not detected.
 
-**What we can do instead**: Since Apple charges show up on your bank statement as generic "APPLE.COM/BILL" transactions, we can add a feature to help you categorise them:
-- When you see an Apple transaction in your transactions list, you can tag it with a sub-category (e.g. "iCloud Storage", "App Store", "Apple Music", "Apple TV+", "Apple One")
-- A quick-tag dropdown appears for any transaction where the merchant contains "APPLE"
-- Over time this builds a clear picture of where your Apple spending goes
-- Auto-link known recurring amounts to the right subscription (e.g. GBP 6.99 = Apple Music)
+**Fix**: Add MyProtein's domain to the retailer detection map.
 
-**Modified files**:
-- `src/components/transactions/TransactionList.tsx` -- detect Apple merchant and show quick-tag chips
-- `src/hooks/useAutoLinkTransactions.ts` -- add Apple-specific matching rules for known subscription amounts
+**File**: `src/lib/emailOrderParsers.ts`
+- Add `"myprotein.com": "MyProtein"` and `"myprotein.co.uk": "MyProtein"` to the `RETAILER_DOMAINS` object
+
+---
+
+### 4. Sort Bills by Importance in Yearly Planner
+
+**Problem**: Bills in the `DetailedYearlyTable` are listed in whatever order they come from the database, not by importance (rent first, then utilities, then subscriptions, etc.).
+
+**Fix**: Add a priority-based sort to the `billRows` array in `DetailedYearlyTable.tsx`. Bills will be sorted by:
+1. Category-based priority (Rent/Mortgage at top, then Council Tax, Utilities, Insurance, Transport, then everything else, with subscriptions at bottom)
+2. Amount descending within each priority tier (highest cost bills first)
+
+**File**: `src/components/yearly-planner/DetailedYearlyTable.tsx`
+- Add a `BILL_PRIORITY` map that assigns priority numbers based on bill name keywords and category
+- Sort `billRows` by priority tier first, then by total amount descending
 
 ---
 
 ### Technical Summary
 
-| Change | New Files | Modified Files | Migrations |
-|--------|-----------|----------------|------------|
-| Live ETF pricing | 1 edge function | 6 components/hooks | 1 (ticker + units columns) |
-| Yearly Planner | 5 files (page + components + hook) | 3 (routing + nav) | 1 (overrides table) |
-| Apple tagging | 0 | 2 | 0 |
+| Issue | File(s) | Change |
+|-------|---------|--------|
+| Upcoming bills wrong dates | `usePayCycleData.ts` | Use `generateBillOccurrences` instead of broken inline helper |
+| Gmail "Coming Soon" | `TransactionFilters.tsx` | Check connection status, show Sync/Connect accordingly |
+| MyProtein not detected | `emailOrderParsers.ts` | Add domain to retailer map |
+| Yearly Planner bill sort | `DetailedYearlyTable.tsx` | Sort by category priority, then amount |
 
