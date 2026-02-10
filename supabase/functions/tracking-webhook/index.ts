@@ -31,11 +31,13 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
 
-    // Support both AfterShip and generic tracking webhook formats
-    const trackingNumber = body.tracking_number || body.msg?.tracking_number;
-    const status = body.status || body.msg?.tag;
-    const carrier = body.carrier || body.msg?.slug;
-    const eventTime = body.event_time || body.msg?.updated_at;
+    // Support TrackingMore V4 webhook format and generic formats
+    // TrackingMore V4 sends: { data: { tracking_number, courier_code, delivery_status, ... } }
+    const tmData = body.data;
+    const trackingNumber = tmData?.tracking_number || body.tracking_number || body.msg?.tracking_number;
+    const status = tmData?.delivery_status || body.status || body.msg?.tag;
+    const carrier = tmData?.courier_code || body.carrier || body.msg?.slug;
+    const eventTime = tmData?.latest_event_time || body.event_time || body.msg?.updated_at;
 
     if (!trackingNumber) {
       return new Response(
@@ -44,15 +46,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Map provider statuses to our statuses
+    // Map provider statuses to our statuses (includes TrackingMore V4 statuses)
     let mappedStatus = "pending";
     const rawStatus = (status || "").toLowerCase();
-    if (["delivered", "signed"].includes(rawStatus)) {
+    if (["delivered", "signed", "pickup"].includes(rawStatus)) {
       mappedStatus = "delivered";
-    } else if (["intransit", "in_transit", "in transit", "outfordelivery", "out_for_delivery"].includes(rawStatus)) {
+    } else if (["intransit", "in_transit", "in transit", "outfordelivery", "out_for_delivery", "transit"].includes(rawStatus)) {
       mappedStatus = "in_transit";
-    } else if (["exception", "failed", "expired"].includes(rawStatus)) {
+    } else if (["exception", "failed", "expired", "undelivered"].includes(rawStatus)) {
       mappedStatus = "exception";
+    } else if (["notfound", "not_found", "pending"].includes(rawStatus)) {
+      mappedStatus = "pending";
     }
 
     // Update the shipment
