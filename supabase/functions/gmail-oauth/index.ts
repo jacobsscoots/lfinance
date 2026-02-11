@@ -47,8 +47,19 @@ serve(async (req) => {
       const code = url.searchParams.get('code');
       const state = url.searchParams.get('state');
       const error = url.searchParams.get('error');
-      
-      const appUrl = getAppUrl();
+
+      // Try to extract origin from state, fall back to getAppUrl()
+      let appUrl = getAppUrl();
+      if (state) {
+        try {
+          const stateData = JSON.parse(atob(state));
+          if (stateData.origin) {
+            appUrl = stateData.origin;
+          }
+        } catch (e) {
+          // Fall through to use default appUrl
+        }
+      }
 
       if (error) {
         // User denied access or other error
@@ -161,8 +172,9 @@ serve(async (req) => {
         throw new Error('Unauthorized');
       }
 
-      // Generate state with user ID for callback
-      const state = btoa(JSON.stringify({ userId: user.id, timestamp: Date.now() }));
+      // Generate state with user ID and origin for callback redirect
+      const appOrigin = body.origin || getAppUrl();
+      const state = btoa(JSON.stringify({ userId: user.id, timestamp: Date.now(), origin: appOrigin }));
 
       // Generate OAuth URL for Gmail
       const scopes = [

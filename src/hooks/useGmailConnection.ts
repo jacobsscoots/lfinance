@@ -65,7 +65,7 @@ export function useGmailConnection() {
     mutationFn: async () => {
       // Call the gmail-oauth edge function to get the OAuth URL
       const { data, error } = await supabase.functions.invoke('gmail-oauth', {
-        body: { action: 'get_auth_url' },
+        body: { action: 'get_auth_url', origin: window.location.origin },
       });
 
       if (error) throw error;
