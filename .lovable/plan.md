@@ -1,45 +1,28 @@
 
-## Plan: Clickable Email with Account Settings Popup
 
-### What Changes
+## Fix: Gmail OAuth redirect and build errors
 
-The user's email displayed in the sidebar footer will become clickable. Clicking it opens a dialog/popup where the user can view and edit their account details (email, password) and manage preferences.
+### Problem
+Two issues need fixing:
 
-### Implementation
+1. **Gmail OAuth redirects to wrong URL**: After connecting Gmail, the OAuth callback redirects to `ekahzylmgbngjngkirhl.lovableproject.com` (which shows "Publish or update your Lovable project"). The `getAppUrl()` fallback in the `gmail-oauth` edge function constructs this incorrect URL. It should use the preview URL as the fallback instead.
 
-**1. New Component: `AccountSettingsDialog.tsx`**
+2. **Build errors**: Five edge functions have `error.message` on a value of type `unknown` -- a TypeScript strict mode issue.
 
-Create `src/components/settings/AccountSettingsDialog.tsx` with:
-- A responsive dialog (uses `ResponsiveDialog` for mobile support)
-- Sections for:
-  - **Email display** (read-only, shows current email)
-  - **Change password** form (current not required by the auth system, just new password + confirm)
-  - **Sign out** button
-- Uses `useAuth()` to get the current user and the Supabase client's `updateUser` method for password changes
-- Shows toast on success/error
+### Changes
 
-**2. Sidebar Update: Make Email Clickable**
+**1. Fix `supabase/functions/gmail-oauth/index.ts`**
+- Change `getAppUrl()` fallback from `lovableproject.com` to use the preview URL format: `https://id-preview--{projectId}.lovable.app` (matching the actual preview URL pattern).
+- Also fix the `error.message` TypeScript error on the catch block (cast error to `Error`).
 
-Modify `src/components/layout/AppSidebar.tsx`:
-- Replace the static email `<div>` (line 128-130) with a clickable button that opens the `AccountSettingsDialog`
-- Style it with a hover effect and cursor pointer so it's clear it's interactive
+**2. Fix TypeScript errors in 4 other edge functions**
+- `supabase/functions/analyze-usage-ai/index.ts` (line 369)
+- `supabase/functions/compare-energy-deals/index.ts` (line 493)
+- `supabase/functions/fetch-etf-price/index.ts` (line 137)
+- `supabase/functions/gmail-sync-receipts/index.ts` (line 392)
 
-**3. Account Tab in Settings Page**
+For each, change `error.message` to `(error as Error).message` or use a ternary with `instanceof Error`.
 
-Update `src/pages/Settings.tsx`:
-- Replace the placeholder "Account Settings" card content (lines 147-156) with the same account settings form inline (or reuse a shared component), so users can also access it from the Settings tab directly
+### Technical detail
+The `getAppUrl()` function is only a fallback -- the client already sends `window.location.origin` in the OAuth state parameter, and the callback extracts it. However, if state parsing fails for any reason, the fallback kicks in. Fixing the fallback URL ensures robustness.
 
-### Files
-
-| File | Action |
-|------|--------|
-| `src/components/settings/AccountSettingsDialog.tsx` | Create |
-| `src/components/layout/AppSidebar.tsx` | Modify -- make email clickable, open dialog |
-| `src/pages/Settings.tsx` | Modify -- replace placeholder Account tab with real content |
-
-### Technical Details
-
-- Password update uses `supabase.auth.updateUser({ password })` 
-- Email is displayed read-only (changing email requires verification flow which adds complexity)
-- The dialog includes: current email display, password change form with validation (min 6 chars, confirm match), and a sign-out button
-- Form validation via simple state checks (no need for react-hook-form for 2 fields)
