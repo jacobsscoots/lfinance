@@ -13,11 +13,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 // Get the app URL from environment or construct from Supabase URL
 function getAppUrl(): string {
-  const projectRef = SUPABASE_URL.match(/https:\/\/([^.]+)/)?.[1];
-  if (projectRef) {
-    return `https://${projectRef}.lovableproject.com`;
-  }
-  return 'http://localhost:5173';
+  return 'https://id-preview--36524aa1-2514-4747-886c-3289071195f0.lovable.app';
 }
 
 serve(async (req) => {
@@ -318,7 +314,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Gmail OAuth error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
