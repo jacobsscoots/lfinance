@@ -210,19 +210,6 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
               </tr>
             ))}
 
-            {/* Discretionary spending row */}
-            <tr className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-              <td className={cn(labelClass, "font-normal")}>Discretionary</td>
-              {months.map((m) => (
-                <td key={m.month} className={cn(cellClass)}>
-                  {m.discretionary > 0 ? fmt(m.discretionary) : "—"}
-                </td>
-              ))}
-              <td className={cn(cellClass, "font-semibold bg-muted/50")}>
-                {fmt(months.reduce((s, m) => s + m.discretionary, 0))}
-              </td>
-            </tr>
-
             {/* Override adjustments */}
             {overrideRows.filter(o => o.type === 'expense').map((row) => (
               <tr key={row.label} className="border-b border-border/50 hover:bg-muted/20 transition-colors">

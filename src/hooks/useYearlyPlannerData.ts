@@ -81,13 +81,21 @@ export function useYearlyPlannerData(year: number) {
     enabled: !!user,
   });
 
-  // Compute monthly income baseline from transactions
+  // Only count tracked income sources for the planner
+  const TRACKED_INCOME_PATTERNS = [
+    /thames\s*water/i,
+    /rent\s*from\s*sarah/i,
+  ];
+
+  const isTrackedIncome = (description: string): boolean =>
+    TRACKED_INCOME_PATTERNS.some(p => p.test(description));
+
+  // Compute monthly income baseline from tracked income transactions only
   const getMonthlyIncome = (): number => {
-    // Get average monthly income from past transaction months
     const incomeByMonth: Record<string, number> = {};
     yearTransactions.forEach(t => {
-      if (t.type === 'income') {
-        const m = t.transaction_date.substring(0, 7); // YYYY-MM
+      if (t.type === 'income' && isTrackedIncome(t.description)) {
+        const m = t.transaction_date.substring(0, 7);
         incomeByMonth[m] = (incomeByMonth[m] || 0) + Math.abs(Number(t.amount));
       }
     });
@@ -116,28 +124,23 @@ export function useYearlyPlannerData(year: number) {
     let billsTotal = 0;
 
     if (isPast || isCurrent) {
-      // Use actual data
+      // Use actual data - only tracked income sources
       const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
       yearTransactions.forEach(t => {
         if (t.transaction_date.startsWith(monthStr)) {
           const amt = Math.abs(Number(t.amount));
-          if (t.type === 'income') {
+          if (t.type === 'income' && isTrackedIncome(t.description)) {
             income += amt;
-          } else if (t.bill_id) {
+          } else if (t.type === 'expense' && t.bill_id) {
             billsTotal += amt;
-          } else {
-            discretionary += amt;
           }
         }
       });
     } else {
-      // Future: use projected bills + average income
+      // Future: use projected bills + tracked income average
       income = averageIncome;
       const occurrences = getBillOccurrencesForMonth(activeBills, year, month);
       billsTotal = occurrences.reduce((s, o) => s + o.expectedAmount, 0);
-      // Estimate discretionary from daily budget
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      discretionary = (effectiveSettings.daily_budget || 15) * daysInMonth;
     }
 
     const overrideIncome = monthOverrides
@@ -148,7 +151,7 @@ export function useYearlyPlannerData(year: number) {
       .reduce((s, o) => s + Number(o.amount), 0);
 
     const totalIncome = income + overrideIncome;
-    const totalOutgoings = billsTotal + discretionary + overrideExpense;
+    const totalOutgoings = billsTotal + overrideExpense;
     const net = totalIncome - totalOutgoings;
     runningSurplus += net;
 
@@ -207,10 +210,10 @@ export function useYearlyPlannerData(year: number) {
     onError: (e) => toast.error(e.message),
   });
 
-  // Build income breakdown: source name -> per-month amounts
+  // Build income breakdown: source name -> per-month amounts (tracked sources only)
   const incomeBreakdown: Record<string, number[]> = {};
   yearTransactions.forEach(t => {
-    if (t.type !== 'income') return;
+    if (t.type !== 'income' || !isTrackedIncome(t.description)) return;
     const monthIdx = parseInt(t.transaction_date.substring(5, 7), 10) - 1;
     const source = t.description || 'Other Income';
     if (!incomeBreakdown[source]) incomeBreakdown[source] = new Array(12).fill(0);
