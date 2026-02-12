@@ -82,21 +82,16 @@ export function useBankConnections() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Query from secure view that excludes sensitive token columns
+  // Query from secure RPC function that excludes sensitive token columns
   // SECURITY: The base table SELECT is blocked by RLS for authenticated users
-  // We MUST use the bank_connections_safe view which excludes tokens
   const connectionsQuery = useQuery({
     queryKey: ["bank-connections", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      // CRITICAL: Use the secure view that excludes access_token/refresh_token
-      // The base table blocks SELECT for authenticated users (service_role only)
+      // CRITICAL: Use the secure RPC that excludes access_token/refresh_token
       const { data, error } = await supabase
-        .from("bank_connections_safe")
-        .select("id, user_id, provider, status, last_synced_at, created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .rpc("get_bank_connections_safe");
 
       if (error) throw error;
       return (data || []) as BankConnection[];
