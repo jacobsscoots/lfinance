@@ -131,7 +131,11 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
               {months.map((m) => (
                 <th key={m.month} className={cn(headerClass, m.isPast && "text-muted-foreground")}>
                   {MONTH_FULL[m.month].substring(0, 3)}
-                  {m.isPast && <span className="block text-[9px] text-muted-foreground">Actual</span>}
+                  {m.isPast ? (
+                    <span className="block text-[9px] text-muted-foreground">Actual</span>
+                  ) : m.isEstimated ? (
+                    <span className="block text-[9px] text-primary/70">Est.</span>
+                  ) : null}
                 </th>
               ))}
               <th className={cn(headerClass, "bg-muted/50")}>Total</th>
