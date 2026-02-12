@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format, parse } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +51,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [copyToDateOpen, setCopyToDateOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
+  const [aiFailInfo, setAiFailInfo] = useState<{ failed: boolean; message?: string; suggestions?: string[] } | null>(null);
   
   const { updateMealStatus, removeItem, updateItem, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay, aiPlanDay } = useMealPlanItems(weekStart);
   
@@ -72,10 +73,17 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   // Use unified getDailyTargets for single source of truth
   const targets: MacroTotals = getDailyTargets(date, settings, weeklyOverride, previousWeekOverride);
   
-  // Check if there are uncalculated items
-  const hasUncalculatedItems = items.some(item => 
+  // Check if there are uncalculated items — ONLY for genuinely fresh items
+  // (all editable items are 0g AND no AI fail has occurred)
+  const hasUncalculatedItems = !aiFailInfo && items.some(item => 
     item.quantity_grams === 0 && item.product?.product_type === "editable"
   );
+
+  // Clear AI fail banner when items change (user modified the day)
+  useEffect(() => {
+    if (aiFailInfo) setAiFailInfo(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
 
   // If this is a blackout day, show holiday card
   if (isBlackout) {
@@ -186,7 +194,23 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
 
   const handleAiPlan = () => {
     if (!settings) return;
-    aiPlanDay.mutate({ planId: plan.id, settings, weeklyOverride, previousWeekOverride });
+    setAiFailInfo(null); // Clear previous fail state
+    aiPlanDay.mutate(
+      { planId: plan.id, settings, weeklyOverride, previousWeekOverride },
+      {
+        onSuccess: (result) => {
+          if (result.failed) {
+            setAiFailInfo({
+              failed: true,
+              message: result.violations?.join(", ") || "Targets not achievable",
+              suggestions: result.suggested_fixes?.filter((s: string) => !!s) || [],
+            });
+          } else {
+            setAiFailInfo(null);
+          }
+        },
+      }
+    );
   };
 
   return (
@@ -290,13 +314,19 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
           
           {/* Macro Summary */}
           <div className="mt-2">
-          {hasUncalculatedItems && isTargetMode ? (
+          {aiFailInfo?.failed ? (
+              <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 text-center space-y-1">
+                <div className="flex items-center justify-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span className="font-medium">AI Plan failed — no changes saved</span>
+                </div>
+                {aiFailInfo.message && (
+                  <div className="text-[10px] text-destructive/80">{aiFailInfo.message}</div>
+                )}
+              </div>
+            ) : hasUncalculatedItems && isTargetMode ? (
               <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1.5 text-center">
                 <span className="font-medium">Add items → click Generate</span>
-              </div>
-            ) : aiPlanDay.data?.failed ? (
-              <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 text-center">
-                <span className="font-medium">AI Plan failed — no changes saved</span>
               </div>
             ) : (
               <DayMacroSummary

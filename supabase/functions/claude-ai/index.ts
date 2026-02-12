@@ -1001,17 +1001,17 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
         );
       }
 
-      // Are there high-fat foods eating the fat budget?
+      // Are there high-fat foods eating the fat budget? Use savedG for suggestions.
       const highFatFoods = foodStates
-        .filter(f => !f.isSeasoning && f.fPer1g > 0.03 && f.solverG > 0)
-        .map(f => ({ ...f, fatContrib: f.fPer1g * f.solverG }))
+        .filter(f => !f.isSeasoning && f.fPer1g > 0.03 && (f.savedG > 0 || f.solverG > 0))
+        .map(f => ({ ...f, fatContrib: f.fPer1g * (f.savedG > 0 ? f.savedG : f.solverG) }))
         .sort((a, b) => b.fatContrib - a.fatContrib);
       for (const hf of highFatFoods.slice(0, 1)) {
         if (hf.cPer1g < 0.1) {
-          // High fat, low carb food — removing it frees fat budget for carbs
+          const refG = hf.savedG > 0 ? hf.savedG : hf.solverG;
           suggested_fixes.push(
-            `${hf.name} uses ${hf.fatContrib.toFixed(1)}g of the ${fullFTarget}g fat budget ` +
-            `but adds only ${(hf.cPer1g * hf.solverG).toFixed(0)}g carbs. ` +
+            `${hf.name} (${refG}g) uses ${hf.fatContrib.toFixed(1)}g of the ${fullFTarget}g fat budget ` +
+            `but adds only ${(hf.cPer1g * refG).toFixed(0)}g carbs. ` +
             `Remove or replace with a lower-fat option to free fat budget for carb foods.`
           );
         }
@@ -1025,14 +1025,14 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     }
 
     if (isFatOver && !isCarbsUnder && !isCalUnder) {
-      // Pure fat overshoot (not caused by trying to hit carbs)
+      // Pure fat overshoot — reference savedG only (what user sees)
       const fatContribs = foodStates
-        .filter(f => !f.isSeasoning && f.solverG > 0)
-        .map(f => ({ ...f, fatContrib: f.fPer1g * f.solverG }))
+        .filter(f => !f.isSeasoning && f.savedG > 0)
+        .map(f => ({ ...f, fatContrib: f.fPer1g * f.savedG }))
         .sort((a, b) => b.fatContrib - a.fatContrib);
       for (const fc of fatContribs.slice(0, 2)) {
         suggested_fixes.push(
-          `${fc.name} contributes ${fc.fatContrib.toFixed(1)}g fat. Replace with a lower-fat alternative.`
+          `${fc.name} (${fc.savedG}g saved) contributes ${fc.fatContrib.toFixed(1)}g fat. Replace with a lower-fat alternative.`
         );
       }
     }
