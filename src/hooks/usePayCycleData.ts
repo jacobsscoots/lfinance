@@ -201,9 +201,19 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     .filter(a => !a.is_hidden && a.account_type !== 'credit')
     .reduce((sum, a) => sum + Number(a.balance), 0);
   
-  // Safe-to-spend: (current non-credit balance - upcoming bills) / days remaining
-  const discretionaryRemaining = Math.max(0, nonCreditBalance - committedRemaining);
-  const safeToSpendPerDay = daysRemaining > 0 ? discretionaryRemaining / daysRemaining : 0;
+  // "Restart from today" runway calculation
+  // Today's spend from non-credit accounts (local timezone)
+  const todayStr = format(today, "yyyy-MM-dd");
+  const spentToday = nonCreditExpenses
+    .filter(t => t.transaction_date === todayStr)
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  
+  // Anchor balance = what we had at start of today (current balance + what we spent today)
+  const anchorBalance = nonCreditBalance + spentToday;
+  
+  // Safe-to-spend: current balance / days remaining (balance already reflects posted transactions)
+  const safeToSpendPerDay = daysRemaining > 0 ? nonCreditBalance / daysRemaining : 0;
+  const discretionaryRemaining = nonCreditBalance;
   
   // Budget for pace calculation (income if available, otherwise start balance)
   const effectiveBudget = totalIncome > 0 ? totalIncome : startBalance;
@@ -237,6 +247,9 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     startBalance,
     currentBalance: nonCreditBalance,
     projectedEndBalance,
+    anchorBalance,
+    spentToday,
+    remainingBalance: nonCreditBalance,
     totalSpent,
     totalIncome,
     expectedSpentByNow,

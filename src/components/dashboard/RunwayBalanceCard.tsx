@@ -134,7 +134,26 @@ export function RunwayBalanceCard({ metrics, isLoading }: RunwayBalanceCardProps
             )}>
               {formatCurrency(metrics.safeToSpendPerDay)}<span className="text-sm font-normal">/day</span>
             </p>
-            <p className="text-[10px] text-muted-foreground">Excl. bills &amp; credit cards</p>
+          </div>
+        </div>
+
+        {/* Runway breakdown */}
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Start of today</span>
+            <span className="font-medium">{formatCurrency(metrics.anchorBalance)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Spent today</span>
+            <span className="font-medium text-destructive">−{formatCurrency(metrics.spentToday)}</span>
+          </div>
+          <div className="border-t pt-1.5 flex justify-between font-medium">
+            <span>Remaining</span>
+            <span>{formatCurrency(metrics.remainingBalance)}</span>
+          </div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>÷ {metrics.daysRemaining} days left</span>
+            <span>= {formatCurrency(metrics.safeToSpendPerDay)}/day</span>
           </div>
         </div>
         
