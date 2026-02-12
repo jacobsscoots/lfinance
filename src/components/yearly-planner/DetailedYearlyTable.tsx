@@ -68,14 +68,43 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
     return 7; // Everything else between utilities and subscriptions
   };
 
+  // April 2026 inflation adjustments (must match useYearlyPlannerData.ts)
+  const APRIL_2026_INFLATION: Record<string, { type: 'percent' | 'flat' | 'fixed'; value: number }> = {
+    'Council Tax':      { type: 'percent', value: 5 },
+    'TV License':       { type: 'fixed',   value: 180 },
+    'TV Licence':       { type: 'fixed',   value: 180 },
+    'EE Phone Payment': { type: 'flat',    value: 4 },
+  };
+
+  const applyInflation = (billName: string, baseAmount: number, yr: number, mo: number): number => {
+    if (yr < 2026 || (yr === 2026 && mo < 3)) return baseAmount; // April = month index 3
+    if (baseAmount === 0) return 0;
+    const rule = APRIL_2026_INFLATION[billName];
+    if (!rule) return baseAmount;
+    if (rule.type === 'percent') return baseAmount * (1 + rule.value / 100);
+    if (rule.type === 'flat') return baseAmount + rule.value;
+    if (rule.type === 'fixed') return rule.value;
+    return baseAmount;
+  };
+
   // Build per-bill, per-month amounts
   const billRows: BillRow[] = useMemo(() => {
-    const billFreqMap = new Map(activeBills.map(b => [b.id, b.frequency]));
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
     return activeBills.map(bill => {
       const amounts: number[] = [];
       for (let month = 0; month < 12; month++) {
+        const isPast = year < currentYear || (year === currentYear && month < currentMonth);
+        const isCurrent = year === currentYear && month === currentMonth;
         const occs = getBillOccurrencesForMonth([bill], year, month);
-        amounts.push(occs.reduce((s, o) => s + o.expectedAmount, 0));
+        let monthTotal = occs.reduce((s, o) => s + o.expectedAmount, 0);
+        // Apply inflation for future months only
+        if (!isPast && !isCurrent && monthTotal > 0) {
+          monthTotal = applyInflation(bill.name, monthTotal, year, month);
+        }
+        amounts.push(monthTotal);
       }
       return {
         id: bill.id,
@@ -118,10 +147,20 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
   const labelClass = "px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-card z-10";
   const headerClass = "px-2 py-2 text-center text-xs font-semibold whitespace-nowrap";
 
+  // Check if any months have inflation applied
+  const hasInflation = year >= 2026;
+
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Detailed Breakdown</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Detailed Breakdown</CardTitle>
+          {hasInflation && (
+            <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">
+              📈 Apr 2026+: Council Tax +5%, TV Licence →£180, EE +£4/mo | Broadband & Electric protected by contract
+            </span>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
         <table className="w-full border-collapse min-w-[900px]">
