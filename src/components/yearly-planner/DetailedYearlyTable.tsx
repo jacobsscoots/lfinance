@@ -70,10 +70,11 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
 
   // April 2026 inflation adjustments (must match useYearlyPlannerData.ts)
   const APRIL_2026_INFLATION: Record<string, { type: 'percent' | 'flat' | 'fixed'; value: number }> = {
-    'Council Tax':      { type: 'percent', value: 5 },
-    'TV License':       { type: 'fixed',   value: 180 },
-    'TV Licence':       { type: 'fixed',   value: 180 },
-    'EE Phone Payment': { type: 'flat',    value: 4 },
+    'Council Tax':           { type: 'percent', value: 5 },
+    'TV License':            { type: 'fixed',   value: 180 },
+    'TV Licence':            { type: 'fixed',   value: 180 },
+    'EE Phone Payment':      { type: 'flat',    value: 2.50 },
+    'Santander Premium Bank': { type: 'percent', value: 25 },
   };
 
   const applyInflation = (billName: string, baseAmount: number, yr: number, mo: number): number => {
@@ -81,7 +82,7 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
     if (baseAmount === 0) return 0;
     const rule = APRIL_2026_INFLATION[billName];
     if (!rule) return baseAmount;
-    if (rule.type === 'percent') return baseAmount * (1 + rule.value / 100);
+    if (rule.type === 'percent') return Math.round(baseAmount * (1 + rule.value / 100) * 100) / 100;
     if (rule.type === 'flat') return baseAmount + rule.value;
     if (rule.type === 'fixed') return rule.value;
     return baseAmount;
@@ -156,9 +157,9 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Detailed Breakdown</CardTitle>
           {hasInflation && (
-            <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">
-              📈 Apr 2026+: Council Tax +5%, TV Licence →£180, EE +£4/mo | Broadband & Electric protected by contract
-            </span>
+             <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">
+               📈 Apr 2026+: Council Tax +5%, TV Licence →£180, EE +£2.50/mo, Santander +25% | Salary +3.4% | Broadband & Electric protected by contract
+             </span>
           )}
         </div>
       </CardHeader>

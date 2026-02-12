@@ -135,10 +135,20 @@ export function useYearlyPlannerData(year: number) {
   };
 
   // Get estimated salary from latest payslip
-  const estimatedSalary = payslips.length > 0 && payslips[0].net_pay
+  const baseSalary = payslips.length > 0 && payslips[0].net_pay
     ? Number(payslips[0].net_pay)
     : 0;
   const salaryEmployer = payslips.length > 0 ? payslips[0].employer_name || "Salary" : "Salary";
+
+  // Thames Water confirmed 3.4% pay increase from April 2026
+  const SALARY_INCREASE_APRIL_2026 = 0.034;
+
+  const getEstimatedSalary = (yr: number, mo: number): number => {
+    if (yr > 2026 || (yr === 2026 && mo >= 3)) {
+      return Math.round(baseSalary * (1 + SALARY_INCREASE_APRIL_2026) * 100) / 100;
+    }
+    return baseSalary;
+  };
 
   // Build month data
   const monthData: MonthData[] = [];
@@ -151,23 +161,33 @@ export function useYearlyPlannerData(year: number) {
   // April 2026 inflation adjustments (researched from official/reputable sources)
   // Bills in a fixed-term contract are excluded (Broadband/Fibrely, Electric)
   const APRIL_2026_INFLATION: Record<string, { type: 'percent' | 'flat' | 'fixed'; value: number; source: string }> = {
-    'Council Tax':        { type: 'percent', value: 5,    source: 'Gov 5% referendum cap 2026/27' },
-    'TV License':         { type: 'fixed',   value: 180,  source: 'BBC/Gov confirmed £180 from Apr 2026' },
-    'TV Licence':         { type: 'fixed',   value: 180,  source: 'BBC/Gov confirmed £180 from Apr 2026' },
-    'EE Phone Payment':   { type: 'flat',    value: 4,    source: 'EE handset plan +£4/mo (Uswitch/EE confirmed)' },
-    // Protected by contract — NO increase:
-    // 'Broadband' (Fibrely, in 18-month contract)
-    // 'Electric' (in fixed-term contract)
+    // --- Confirmed increases ---
+    'Council Tax':           { type: 'percent', value: 5,     source: 'Gov 5% referendum cap 2026/27' },
+    'TV License':            { type: 'fixed',   value: 180,   source: 'BBC/Gov confirmed £180/yr from Apr 2026' },
+    'TV Licence':            { type: 'fixed',   value: 180,   source: 'BBC/Gov confirmed £180/yr from Apr 2026' },
+    'EE Phone Payment':      { type: 'flat',    value: 2.50,  source: 'EE confirmed +£2.50/mo from Apr 2026 (Bristol Live/Uswitch)' },
+    'Santander Premium Bank': { type: 'percent', value: 25,   source: 'Santander 25% fee hike on premium accounts (The Sun, Jan 2026)' },
+    // --- No change confirmed (frozen / contract-protected / no announcement) ---
+    // 'Broadband' — Fibrely, in fixed-term contract
+    // 'Electric' — in fixed-term contract
+    // 'Spotify' — UK already at £12.99 since Nov 2024, no Apr 2026 UK increase
+    // 'iCloud+' — no UK increase announced for 2026
+    // '1p Mobile' — no mid-contract price rises policy
+    // 'Monzo Premium Bank' — no increase announced
+    // 'NHS Prepaid Prescriptions' — frozen for 2026/27 (Gov confirmed)
+    // 'Gym' — no increase announced
+    // 'Rent' — not specified as changing
   };
 
   const getInflationAdjustedAmount = (billName: string, baseAmount: number, yr: number, mo: number): number => {
     // Only apply from April 2026 onwards
     if (yr < 2026 || (yr === 2026 && mo < 3)) return baseAmount; // mo is 0-indexed, April = 3
+    if (baseAmount === 0) return 0;
     const rule = APRIL_2026_INFLATION[billName];
     if (!rule) return baseAmount;
-    if (rule.type === 'percent') return baseAmount * (1 + rule.value / 100);
+    if (rule.type === 'percent') return Math.round(baseAmount * (1 + rule.value / 100) * 100) / 100;
     if (rule.type === 'flat') return baseAmount + rule.value;
-    if (rule.type === 'fixed') return rule.value / (billName.toLowerCase().includes('tv') ? 1 : 1); // fixed annual → return as-is, occurrence engine handles frequency
+    if (rule.type === 'fixed') return rule.value; // occurrence engine handles frequency
     return baseAmount;
   };
 
@@ -211,12 +231,12 @@ export function useYearlyPlannerData(year: number) {
       );
 
       // If current month and no salary yet, add estimated salary
-      if (isCurrent && !hasSalaryTransaction && estimatedSalary > 0) {
-        income += estimatedSalary;
+      if (isCurrent && !hasSalaryTransaction && baseSalary > 0) {
+        income += getEstimatedSalary(year, month);
       }
     } else {
-      // Future: use projected salary + tracked income average + projected bills + grocery forecast
-      income = estimatedSalary + averageTrackedIncome;
+      // Future: use projected salary (with Apr 2026 increase) + tracked income average + projected bills + grocery forecast
+      income = getEstimatedSalary(year, month) + averageTrackedIncome;
       const occurrences = getBillOccurrencesForMonth(activeBills, year, month);
       billsTotal = occurrences.reduce((s, o) => s + getInflationAdjustedAmount(o.billName, o.expectedAmount, year, month), 0);
       groceryForecast = groceryMonthlyForecast;
@@ -304,7 +324,7 @@ export function useYearlyPlannerData(year: number) {
   });
 
   // Add salary row - actual from transactions for past, estimated for future
-  if (estimatedSalary > 0) {
+  if (baseSalary > 0) {
     const salaryLabel = `${salaryEmployer} (Salary)`;
     if (!incomeBreakdown[salaryLabel]) incomeBreakdown[salaryLabel] = new Array(12).fill(0);
 
@@ -344,11 +364,11 @@ export function useYearlyPlannerData(year: number) {
             incomeBreakdown[salaryLabel][month] += Math.abs(Number(t.amount));
           });
         } else {
-          incomeBreakdown[salaryLabel][month] = estimatedSalary;
+          incomeBreakdown[salaryLabel][month] = getEstimatedSalary(year, month);
         }
       } else {
         // Future months: use estimated salary
-        incomeBreakdown[salaryLabel][month] = estimatedSalary;
+        incomeBreakdown[salaryLabel][month] = getEstimatedSalary(year, month);
       }
     }
 
