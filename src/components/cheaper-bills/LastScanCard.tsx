@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, CheckCircle2, XCircle, Clock, Loader2, ExternalLink } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ComparisonResult } from "@/hooks/useComparisonResults";
 
@@ -99,15 +99,15 @@ export function LastScanCard({
                 {recommendationReason}
               </p>
             )}
-            {/* Best offer link */}
-            {recommendation === 'switch' && bestOffer && (
+            {/* Compare deals link */}
+            {recommendation === 'switch' && onViewBestDeal && (
               <Button 
                 size="sm" 
                 className="mt-3 w-full sm:w-auto"
-                onClick={() => onViewBestDeal?.(bestOffer)}
+                onClick={() => onViewBestDeal?.(bestOffer!)}
               >
-                View Best Deal: {bestOffer.provider}
-                <ExternalLink className="h-3 w-3 ml-1" />
+                Compare Deals
+                <Search className="h-3 w-3 ml-1" />
               </Button>
             )}
           </>
