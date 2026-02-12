@@ -81,6 +81,32 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
         .gte("due_date", format(calendarGridStart, "yyyy-MM-dd"))
         .lte("due_date", format(calendarGridEnd, "yyyy-MM-dd"));
 
+      // Fetch transactions that are already linked to bills (via auto-link or manual link)
+      const { data: accounts } = await supabase
+        .from("bank_accounts")
+        .select("id")
+        .eq("user_id", user.id);
+
+      let linkedTransactions: { bill_id: string; transaction_date: string; id: string }[] = [];
+      if (accounts?.length) {
+        const accountIds = accounts.map(a => a.id);
+        const { data: txns } = await supabase
+          .from("transactions")
+          .select("id, bill_id, transaction_date")
+          .in("account_id", accountIds)
+          .not("bill_id", "is", null)
+          .gte("transaction_date", format(calendarGridStart, "yyyy-MM-dd"))
+          .lte("transaction_date", format(calendarGridEnd, "yyyy-MM-dd"));
+        linkedTransactions = (txns || []) as typeof linkedTransactions;
+      }
+
+      // Build a set of "billId-date" from linked transactions for quick lookup
+      const linkedTxnMap = new Map<string, string>();
+      linkedTransactions.forEach(txn => {
+        // A linked transaction marks the bill as paid around that date
+        linkedTxnMap.set(`${txn.bill_id}-${txn.transaction_date}`, txn.id);
+      });
+
       // Create a map for quick lookup: "billId-dueDate" -> occurrence
       const occurrenceMap = new Map<string, (typeof storedOccurrences)[0]>();
       (storedOccurrences || []).forEach(occ => {
@@ -129,8 +155,23 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
             }
             isPaid = storedStatus === "paid";
             matchConfidence = storedOcc.match_confidence || undefined;
-          } else if (isBefore(date, today) && !isSameDay(date, today)) {
-            status = "overdue";
+          } else {
+            // Check if a linked transaction exists for this bill within ±3 days
+            const dueDateMs = date.getTime();
+            const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+            const foundLinked = linkedTransactions.find(txn => {
+              if (txn.bill_id !== occ.billId) return false;
+              const txnDate = new Date(txn.transaction_date + "T12:00:00").getTime();
+              return Math.abs(txnDate - dueDateMs) <= threeDaysMs;
+            });
+
+            if (foundLinked) {
+              status = "paid";
+              isPaid = true;
+              matchConfidence = "auto";
+            } else if (isBefore(date, today) && !isSameDay(date, today)) {
+              status = "overdue";
+            }
           }
 
           return {
