@@ -112,6 +112,16 @@ export function NotificationSettingsCard() {
               placeholder="your@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => {
+                if (email !== (settings?.notification_email || "")) {
+                  handleSave();
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSave();
+                }
+              }}
               className="flex-1"
             />
             <Button
@@ -129,7 +139,7 @@ export function NotificationSettingsCard() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Leave empty to use your account email
+            Leave empty to use your account email. Press Enter or click away to save.
           </p>
         </div>
 

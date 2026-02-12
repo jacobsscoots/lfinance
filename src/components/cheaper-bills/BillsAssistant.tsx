@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,7 +134,7 @@ export function BillsAssistant() {
 
         {/* Messages */}
         {messages.length > 0 && (
-          <ScrollArea className="h-[200px] pr-4">
+          <ScrollArea className="max-h-[400px] pr-4">
             <div className="space-y-3">
               {messages.map((msg, i) => (
                 <div
@@ -147,7 +148,13 @@ export function BillsAssistant() {
                         : 'bg-muted'
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === 'assistant' ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none [&>h1]:text-base [&>h2]:text-sm [&>h3]:text-sm [&>p]:mb-2 [&>ul]:mb-2 [&>ol]:mb-2 [&>li]:mb-0.5">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
                   </div>
                 </div>
               ))}
