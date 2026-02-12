@@ -10,9 +10,9 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const AI_MODEL = 'google/gemini-3-flash-preview';
 
 // ─── Schemas ───────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ const inputSchema = z.discriminatedUnion("feature", [
   }),
 ]);
 
-// ─── Recommendation keys (same as analyze-usage-ai) ──────
+// ─── Recommendation keys ──────────────────────────────────
 
 const RECOMMENDATION_KEYS = {
   eco_dishwasher: 'eco_dishwasher',
@@ -95,37 +95,36 @@ const RECOMMENDATION_KEYS = {
   switch_tariff: 'switch_tariff',
 };
 
-// ─── Claude API helper ───────────────────────────────────
+// ─── Lovable AI Gateway helper ────────────────────────────
 
-async function callClaude(opts: {
+async function callAI(opts: {
   system: string;
   userMessage: string;
-  maxTokens?: number;
   tools?: any[];
   toolChoice?: any;
 }): Promise<any> {
   const body: any = {
-    model: CLAUDE_MODEL,
-    max_tokens: opts.maxTokens || 1024,
-    system: opts.system,
-    messages: [{ role: 'user', content: opts.userMessage }],
+    model: AI_MODEL,
+    messages: [
+      { role: 'system', content: opts.system },
+      { role: 'user', content: opts.userMessage },
+    ],
   };
   if (opts.tools) body.tools = opts.tools;
   if (opts.toolChoice) body.tool_choice = opts.toolChoice;
 
-  const response = await fetch(ANTHROPIC_API_URL, {
+  const response = await fetch(AI_GATEWAY_URL, {
     method: 'POST',
     headers: {
-      'x-api-key': ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`Claude API error: ${response.status}`, errorText);
+    console.error(`AI Gateway error: ${response.status}`, errorText);
     throw { status: response.status, message: errorText };
   }
 
@@ -298,15 +297,14 @@ async function handleCheaperBills(
 
   const userMessage = question || "Analyze my energy usage and give me your top personalized insight.";
 
-  const aiData = await callClaude({
+  const aiData = await callAI({
     system: systemPrompt,
     userMessage,
-    maxTokens: 800,
   });
 
-  console.log(`[claude-ai] provider=claude feature=cheaper_bills model=${CLAUDE_MODEL} input_tokens=${aiData.usage?.input_tokens} output_tokens=${aiData.usage?.output_tokens}`);
+  console.log(`[claude-ai] provider=lovable-ai feature=cheaper_bills model=${AI_MODEL} usage=${JSON.stringify(aiData.usage || {})}`);
 
-  const response = aiData.content?.[0]?.text ||
+  const response = aiData.choices?.[0]?.message?.content ||
     "I couldn't analyze your usage right now. Try adding more readings for better insights.";
 
   return {
@@ -366,51 +364,64 @@ async function handleMealPlanner(
 
   const tools = [
     {
-      name: "set_portions",
-      description: "Set the gram portions for each food item",
-      input_schema: {
-        type: "object",
-        properties: {
-          portions: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string", description: "The item ID" },
-                quantity_grams: { type: "number", description: "Portion in grams" },
+      type: "function",
+      function: {
+        name: "set_portions",
+        description: "Set the gram portions for each food item",
+        parameters: {
+          type: "object",
+          properties: {
+            portions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string", description: "The item ID" },
+                  quantity_grams: { type: "number", description: "Portion in grams" },
+                },
+                required: ["id", "quantity_grams"],
               },
-              required: ["id", "quantity_grams"],
             },
           },
+          required: ["portions"],
         },
-        required: ["portions"],
       },
     },
   ];
 
-  const aiData = await callClaude({
+  const aiData = await callAI({
     system: systemPrompt,
     userMessage: "Calculate portions for these foods to hit the macro targets. Use the set_portions tool.",
-    maxTokens: 1024,
     tools,
-    toolChoice: { type: "tool", name: "set_portions" },
+    toolChoice: { type: "function", function: { name: "set_portions" } },
   });
 
-  console.log(`[claude-ai] provider=claude feature=meal_planner model=${CLAUDE_MODEL} input_tokens=${aiData.usage?.input_tokens} output_tokens=${aiData.usage?.output_tokens}`);
+  console.log(`[claude-ai] provider=lovable-ai feature=meal_planner model=${AI_MODEL} usage=${JSON.stringify(aiData.usage || {})}`);
 
-  // Extract tool call result
-  const toolUse = aiData.content?.find((block: any) => block.type === 'tool_use');
-  if (!toolUse?.input?.portions) {
-    throw new Error("Claude did not return portions via tool call");
+  // Extract tool call result (OpenAI-compatible format)
+  const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+  if (!toolCall?.function?.arguments) {
+    throw new Error("AI did not return portions via tool call");
   }
 
-  const portions: Array<{ id: string; quantity_grams: number }> = toolUse.input.portions;
+  let parsed: any;
+  try {
+    parsed = JSON.parse(toolCall.function.arguments);
+  } catch {
+    throw new Error("AI returned invalid JSON in tool call");
+  }
+
+  if (!parsed.portions || !Array.isArray(parsed.portions)) {
+    throw new Error("AI response missing portions array");
+  }
+
+  const portions: Array<{ id: string; quantity_grams: number }> = parsed.portions;
 
   // Validate: cap seasonings, respect min/max
   const validatedPortions = portions.map((p: any) => {
     const item = items.find((i: any) => i.id === p.id);
     if (!item) return p;
-    let qty = Math.round(p.quantity_grams / 5) * 5; // round to 5g
+    let qty = Math.round(p.quantity_grams / 5) * 5;
     const isSeasoning = item.food_type === 'seasoning';
     if (isSeasoning && qty > 15) qty = 15;
     const minG = item.min_portion_grams || 0;
@@ -448,8 +459,8 @@ serve(async (req) => {
       });
     }
 
-    if (!ANTHROPIC_API_KEY) {
-      console.error('ANTHROPIC_API_KEY is not configured');
+    if (!LOVABLE_API_KEY) {
+      console.error('LOVABLE_API_KEY is not configured');
       return new Response(JSON.stringify({ error: 'AI backend is not configured.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -493,16 +504,15 @@ serve(async (req) => {
   } catch (error: any) {
     console.error('[claude-ai] error:', error);
 
-    // Handle Claude API errors
     if (error.status === 429) {
       return new Response(JSON.stringify({ error: 'AI is rate-limited right now — please try again in a minute.' }), {
         status: 429,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (error.status === 401) {
-      return new Response(JSON.stringify({ error: 'AI API key is invalid. Check your ANTHROPIC_API_KEY.' }), {
-        status: 500,
+    if (error.status === 402) {
+      return new Response(JSON.stringify({ error: 'AI credits exhausted. Please add funds in your workspace settings.' }), {
+        status: 402,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
