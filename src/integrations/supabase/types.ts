@@ -74,13 +74,6 @@ export type Database = {
             referencedRelation: "bank_connections"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "bank_accounts_connection_id_fkey"
-            columns: ["connection_id"]
-            isOneToOne: false
-            referencedRelation: "bank_connections_safe"
-            referencedColumns: ["id"]
-          },
         ]
       }
       bank_connections: {
@@ -1591,13 +1584,6 @@ export type Database = {
             columns: ["gmail_connection_id"]
             isOneToOne: false
             referencedRelation: "gmail_connections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gmail_receipts_gmail_connection_id_fkey"
-            columns: ["gmail_connection_id"]
-            isOneToOne: false
-            referencedRelation: "gmail_connections_safe"
             referencedColumns: ["id"]
           },
           {
@@ -3599,101 +3585,46 @@ export type Database = {
       }
     }
     Views: {
-      bank_connections_safe: {
-        Row: {
-          created_at: string | null
-          id: string | null
-          last_synced_at: string | null
-          provider: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string | null
-          last_synced_at?: string | null
-          provider?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string | null
-          last_synced_at?: string | null
-          provider?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      bright_connections_safe: {
-        Row: {
-          created_at: string | null
-          electricity_resource_id: string | null
-          gas_resource_id: string | null
-          id: string | null
-          last_synced_at: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          electricity_resource_id?: string | null
-          gas_resource_id?: string | null
-          id?: string | null
-          last_synced_at?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          electricity_resource_id?: string | null
-          gas_resource_id?: string | null
-          id?: string | null
-          last_synced_at?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      gmail_connections_safe: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          id: string | null
-          last_synced_at: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          id?: string | null
-          last_synced_at?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          id?: string | null
-          last_synced_at?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
+      get_bank_connections_safe: {
+        Args: never
+        Returns: {
+          created_at: string
+          id: string
+          last_synced_at: string
+          provider: string
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      get_bright_connections_safe: {
+        Args: never
+        Returns: {
+          created_at: string
+          electricity_resource_id: string
+          gas_resource_id: string
+          id: string
+          last_synced_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      get_gmail_connections_safe: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          id: string
+          last_synced_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
       get_requesting_user_id: { Args: never; Returns: string }
     }
     Enums: {

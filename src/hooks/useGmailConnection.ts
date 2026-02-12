@@ -33,13 +33,11 @@ export function useGmailConnection() {
       if (!user) return null;
       
       const { data, error } = await supabase
-        .from("gmail_connections_safe")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .rpc("get_gmail_connections_safe");
 
       if (error) throw error;
-      return data as GmailConnection | null;
+      const rows = data as GmailConnection[] | null;
+      return rows && rows.length > 0 ? rows[0] : null;
     },
     enabled: !!user,
   });
