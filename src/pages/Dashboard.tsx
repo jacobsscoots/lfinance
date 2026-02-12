@@ -23,16 +23,14 @@ export default function Dashboard() {
     billsRestOfCycle,
     totalNext7Days,
     totalRestOfCycle,
+    billLinkedSpent,
+    discretionarySpent,
     alerts,
     accounts,
     isLoading,
   } = usePayCycleData();
   
   const { data: historicalData, isLoading: historicalLoading } = useHistoricalPayCycles(6);
-  
-  // Calculate bills vs other spending for outgoings chart
-  const billsTotalSpent = totalNext7Days + totalRestOfCycle; // This is committed, not yet spent
-  const otherSpending = Math.max(0, metrics.totalSpent - billsTotalSpent);
   
   return (
     <AppLayout>
@@ -69,8 +67,8 @@ export default function Dashboard() {
                 />
               </div>
               <OutgoingsBreakdownChart 
-                billsTotal={metrics.committedRemaining}
-                otherTotal={otherSpending}
+                billsTotal={billLinkedSpent}
+                otherTotal={discretionarySpent}
                 isLoading={isLoading} 
               />
               <NetTrendChart 
