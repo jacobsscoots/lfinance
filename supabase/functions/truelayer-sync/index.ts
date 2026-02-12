@@ -282,49 +282,41 @@ serve(async (req) => {
             let insertedCount = 0;
             let skippedCount = 0;
             for (const tx of (transactions || [])) {
-              const { data: existingTx } = await supabase
+              const txType = tx.amount < 0 ? 'expense' : 'income';
+              const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
+              const { data: newTx, error: insertErr } = await supabase
                 .from('transactions')
-                .select('id')
-                .eq('external_id', tx.transaction_id)
-                .eq('account_id', bankAccount.id)
-                .maybeSingle();
-
-              if (!existingTx) {
-                const txType = tx.amount < 0 ? 'expense' : 'income';
-                const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
-                const { data: newTx, error: insertErr } = await supabase
-                  .from('transactions')
-                  .insert({
-                    account_id: bankAccount.id,
-                    external_id: tx.transaction_id,
-                    description: tx.description || 'Bank transaction',
-                    amount: Math.abs(tx.amount),
-                    type: txType,
-                    transaction_date: txDate,
-                    merchant: tx.merchant_name || null,
-                  })
-                  .select('id')
-                  .single();
-
-                if (insertErr) {
-                  console.error(`[sync] Failed to insert tx ${tx.transaction_id}:`, insertErr.message);
-                } else {
-                  insertedCount++;
-                }
-
-                allNewTransactions.push({
+                .upsert({
                   account_id: bankAccount.id,
                   external_id: tx.transaction_id,
+                  description: tx.description || 'Bank transaction',
                   amount: Math.abs(tx.amount),
                   type: txType,
                   transaction_date: txDate,
-                  description: tx.description || '',
                   merchant: tx.merchant_name || null,
-                  db_id: newTx?.id,
-                });
+                }, { onConflict: 'account_id,external_id', ignoreDuplicates: true })
+                .select('id')
+                .maybeSingle();
+
+              if (insertErr) {
+                console.error(`[sync] Failed to upsert tx ${tx.transaction_id}:`, insertErr.message);
+                skippedCount++;
+              } else if (newTx) {
+                insertedCount++;
               } else {
                 skippedCount++;
               }
+
+              allNewTransactions.push({
+                account_id: bankAccount.id,
+                external_id: tx.transaction_id,
+                amount: Math.abs(tx.amount),
+                type: txType,
+                transaction_date: txDate,
+                description: tx.description || '',
+                merchant: tx.merchant_name || null,
+                db_id: newTx?.id,
+              });
             }
             console.log(`[sync] Account ${account.account_id}: ${insertedCount} inserted, ${skippedCount} skipped (already exist)`);
 
@@ -335,30 +327,23 @@ serve(async (req) => {
               let pendingInserted = 0;
               for (const tx of (pendingTxs || [])) {
                 const pendingExtId = `pending_${tx.transaction_id}`;
-                const { data: existingTx } = await supabase
+                const txType = tx.amount < 0 ? 'expense' : 'income';
+                const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
+                const { data: inserted } = await supabase
                   .from('transactions')
+                  .upsert({
+                    account_id: bankAccount.id,
+                    external_id: pendingExtId,
+                    description: tx.description || 'Pending transaction',
+                    amount: Math.abs(tx.amount),
+                    type: txType,
+                    transaction_date: txDate,
+                    merchant: tx.merchant_name || null,
+                    is_pending: true,
+                  }, { onConflict: 'account_id,external_id', ignoreDuplicates: true })
                   .select('id')
-                  .eq('external_id', pendingExtId)
-                  .eq('account_id', bankAccount.id)
                   .maybeSingle();
-
-                if (!existingTx) {
-                  const txType = tx.amount < 0 ? 'expense' : 'income';
-                  const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
-                  await supabase
-                    .from('transactions')
-                    .insert({
-                      account_id: bankAccount.id,
-                      external_id: pendingExtId,
-                      description: tx.description || 'Pending transaction',
-                      amount: Math.abs(tx.amount),
-                      type: txType,
-                      transaction_date: txDate,
-                      merchant: tx.merchant_name || null,
-                      is_pending: true,
-                    });
-                  pendingInserted++;
-                }
+                if (inserted) pendingInserted++;
               }
               if (pendingInserted > 0) {
                 console.log(`[sync] Account ${account.account_id}: ${pendingInserted} pending inserted`);
@@ -456,50 +441,42 @@ serve(async (req) => {
             let insertedCount = 0;
             let skippedCount = 0;
             for (const tx of (transactions || [])) {
-              const { data: existingTx } = await supabase
+              // Credit card: positive amount = purchase (expense), negative = payment/refund (income)
+              const txType = tx.amount > 0 ? 'expense' : 'income';
+              const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
+              const { data: newTx, error: insertErr } = await supabase
                 .from('transactions')
-                .select('id')
-                .eq('external_id', tx.transaction_id)
-                .eq('account_id', bankAccount.id)
-                .maybeSingle();
-
-              if (!existingTx) {
-                // Credit card: positive amount = purchase (expense), negative = payment/refund (income)
-                const txType = tx.amount > 0 ? 'expense' : 'income';
-                const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
-                const { data: newTx, error: insertErr } = await supabase
-                  .from('transactions')
-                  .insert({
-                    account_id: bankAccount.id,
-                    external_id: tx.transaction_id,
-                    description: tx.description || 'Card transaction',
-                    amount: Math.abs(tx.amount),
-                    type: txType,
-                    transaction_date: txDate,
-                    merchant: tx.merchant_name || null,
-                  })
-                  .select('id')
-                  .single();
-
-                if (insertErr) {
-                  console.error(`[sync] Failed to insert card tx ${tx.transaction_id}:`, insertErr.message);
-                } else {
-                  insertedCount++;
-                }
-
-                allNewTransactions.push({
+                .upsert({
                   account_id: bankAccount.id,
                   external_id: tx.transaction_id,
+                  description: tx.description || 'Card transaction',
                   amount: Math.abs(tx.amount),
                   type: txType,
                   transaction_date: txDate,
-                  description: tx.description || '',
                   merchant: tx.merchant_name || null,
-                  db_id: newTx?.id,
-                });
+                }, { onConflict: 'account_id,external_id', ignoreDuplicates: true })
+                .select('id')
+                .maybeSingle();
+
+              if (insertErr) {
+                console.error(`[sync] Failed to upsert card tx ${tx.transaction_id}:`, insertErr.message);
+                skippedCount++;
+              } else if (newTx) {
+                insertedCount++;
               } else {
                 skippedCount++;
               }
+
+              allNewTransactions.push({
+                account_id: bankAccount.id,
+                external_id: tx.transaction_id,
+                amount: Math.abs(tx.amount),
+                type: txType,
+                transaction_date: txDate,
+                description: tx.description || '',
+                merchant: tx.merchant_name || null,
+                db_id: newTx?.id,
+              });
             }
             console.log(`[sync] Card ${card.account_id}: ${insertedCount} inserted, ${skippedCount} skipped`);
           }
