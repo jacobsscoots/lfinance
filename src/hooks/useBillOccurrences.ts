@@ -2,34 +2,37 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBills } from "@/hooks/useBills";
-import { getBillOccurrencesForMonth, BillOccurrence } from "@/lib/billOccurrences";
+import { getBillOccurrencesForMonth, getBillOccurrencesInRange, BillOccurrence } from "@/lib/billOccurrences";
 import { autoMatchTransactions, Transaction } from "@/lib/transactionMatcher";
 import { toast } from "@/hooks/use-toast";
-import { format, isBefore, startOfDay } from "date-fns";
+import { format, isBefore, startOfDay, startOfMonth, endOfMonth } from "date-fns";
 
-export function useBillOccurrences(year: number, month: number) {
+export function useBillOccurrences(year: number, month: number, rangeStart?: Date, rangeEnd?: Date) {
   const { user } = useAuth();
   const { bills } = useBills();
   const queryClient = useQueryClient();
 
-  // Generate occurrences from bills
-  const computedOccurrences = getBillOccurrencesForMonth(bills, year, month);
+  // Generate occurrences from bills — use range if provided, else single month
+  const computedOccurrences = rangeStart && rangeEnd
+    ? getBillOccurrencesInRange(bills, rangeStart, rangeEnd)
+    : getBillOccurrencesForMonth(bills, year, month);
+
+  // Date range for DB queries
+  const queryStart = rangeStart ? format(rangeStart, "yyyy-MM-dd") : format(new Date(year, month, 1), "yyyy-MM-dd");
+  const queryEnd = rangeEnd ? format(rangeEnd, "yyyy-MM-dd") : format(new Date(year, month + 1, 0), "yyyy-MM-dd");
 
   // Fetch stored occurrence statuses (paid/skipped)
   const storedOccurrencesQuery = useQuery({
-    queryKey: ["bill-occurrences", user?.id, year, month],
+    queryKey: ["bill-occurrences", user?.id, queryStart, queryEnd],
     queryFn: async () => {
       if (!user) return [];
-      
-      const startDate = format(new Date(year, month, 1), "yyyy-MM-dd");
-      const endDate = format(new Date(year, month + 1, 0), "yyyy-MM-dd");
       
       const { data, error } = await supabase
         .from("bill_occurrences")
         .select("*")
         .eq("user_id", user.id)
-        .gte("due_date", startDate)
-        .lte("due_date", endDate);
+        .gte("due_date", queryStart)
+        .lte("due_date", queryEnd);
       
       if (error) throw error;
       return data || [];
@@ -39,11 +42,10 @@ export function useBillOccurrences(year: number, month: number) {
 
   // Fetch transactions for auto-matching
   const transactionsQuery = useQuery({
-    queryKey: ["transactions-for-matching", user?.id, year, month],
+    queryKey: ["transactions-for-matching", user?.id, queryStart, queryEnd],
     queryFn: async () => {
       if (!user) return [];
       
-      // Get user's accounts
       const { data: accounts } = await supabase
         .from("bank_accounts")
         .select("id")
@@ -52,15 +54,13 @@ export function useBillOccurrences(year: number, month: number) {
       if (!accounts?.length) return [];
       
       const accountIds = accounts.map(a => a.id);
-      const startDate = format(new Date(year, month, 1), "yyyy-MM-dd");
-      const endDate = format(new Date(year, month + 1, 0), "yyyy-MM-dd");
       
       const { data, error } = await supabase
         .from("transactions")
         .select("id, amount, merchant, description, transaction_date, account_id, bill_id, is_pending")
         .in("account_id", accountIds)
-        .gte("transaction_date", startDate)
-        .lte("transaction_date", endDate)
+        .gte("transaction_date", queryStart)
+        .lte("transaction_date", queryEnd)
         .eq("type", "expense");
       
       if (error) throw error;
@@ -85,7 +85,6 @@ export function useBillOccurrences(year: number, month: number) {
       };
     }
     
-    // Check if overdue (due date in the past and not paid)
     const today = startOfDay(new Date());
     if (occ.status === "due" && isBefore(occ.dueDate, today)) {
       return { ...occ, status: "overdue" as const };
@@ -107,6 +106,21 @@ export function useBillOccurrences(year: number, month: number) {
     ? autoMatchTransactions(mergedOccurrences, transactionsQuery.data, existingLinks)
     : { autoApply: [], forReview: [] };
 
+  /**
+   * Parse an occurrence ID ("uuid-yyyy-MM-dd") back to billId + dueDate.
+   * UUID is 36 chars, then a dash, then 10-char date.
+   */
+  const parseOccurrenceId = (occurrenceId: string): { billId: string; dueDate: string } | null => {
+    // Occurrence IDs are formatted as `${billId}-${format(dueDate, "yyyy-MM-dd")}`
+    // UUIDs are 36 chars (8-4-4-4-12), so the date starts at position 37
+    const dateStr = occurrenceId.slice(-10); // last 10 chars = yyyy-MM-dd
+    const billId = occurrenceId.slice(0, -11); // everything before the last dash + date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr) && billId.length === 36) {
+      return { billId, dueDate: dateStr };
+    }
+    return null;
+  };
+
   // Mark occurrence as paid
   const markPaid = useMutation({
     mutationFn: async ({ 
@@ -120,8 +134,27 @@ export function useBillOccurrences(year: number, month: number) {
     }) => {
       if (!user) throw new Error("Not authenticated");
       
-      const occurrence = mergedOccurrences.find(o => o.id === occurrenceId);
-      if (!occurrence) throw new Error("Occurrence not found");
+      // Try finding in merged occurrences first
+      let occurrence = mergedOccurrences.find(o => o.id === occurrenceId);
+      
+      // If not found, parse the ID directly (handles cross-month pay cycles)
+      if (!occurrence) {
+        const parsed = parseOccurrenceId(occurrenceId);
+        if (!parsed) throw new Error("Invalid occurrence ID");
+        
+        const bill = bills.find(b => b.id === parsed.billId);
+        if (!bill) throw new Error("Bill not found");
+        
+        occurrence = {
+          id: occurrenceId,
+          billId: parsed.billId,
+          billName: bill.name,
+          dueDate: new Date(parsed.dueDate + "T12:00:00"),
+          expectedAmount: Number(bill.amount),
+          status: "due" as const,
+          bill: bill as any,
+        };
+      }
       
       const { error } = await supabase.from("bill_occurrences").upsert({
         user_id: user.id,
@@ -138,7 +171,6 @@ export function useBillOccurrences(year: number, month: number) {
       
       if (error) throw error;
 
-      // If linking a transaction, update the transaction too
       if (transactionId) {
         await supabase
           .from("transactions")
@@ -162,8 +194,19 @@ export function useBillOccurrences(year: number, month: number) {
     mutationFn: async (occurrenceId: string) => {
       if (!user) throw new Error("Not authenticated");
       
-      const occurrence = mergedOccurrences.find(o => o.id === occurrenceId);
-      if (!occurrence) throw new Error("Occurrence not found");
+      let occurrence = mergedOccurrences.find(o => o.id === occurrenceId);
+      
+      if (!occurrence) {
+        const parsed = parseOccurrenceId(occurrenceId);
+        if (!parsed) throw new Error("Invalid occurrence ID");
+        const bill = bills.find(b => b.id === parsed.billId);
+        if (!bill) throw new Error("Bill not found");
+        occurrence = {
+          id: occurrenceId, billId: parsed.billId, billName: bill.name,
+          dueDate: new Date(parsed.dueDate + "T12:00:00"),
+          expectedAmount: Number(bill.amount), status: "due" as const, bill: bill as any,
+        };
+      }
       
       const { error } = await supabase.from("bill_occurrences").upsert({
         user_id: user.id,
@@ -187,17 +230,27 @@ export function useBillOccurrences(year: number, month: number) {
     },
   });
 
-  // Reset occurrence (back to due)
+  // Reset occurrence
   const resetOccurrence = useMutation({
     mutationFn: async (occurrenceId: string) => {
       if (!user) throw new Error("Not authenticated");
       
-      const occurrence = mergedOccurrences.find(o => o.id === occurrenceId);
-      if (!occurrence) throw new Error("Occurrence not found");
+      let occurrence = mergedOccurrences.find(o => o.id === occurrenceId);
+      
+      if (!occurrence) {
+        const parsed = parseOccurrenceId(occurrenceId);
+        if (!parsed) throw new Error("Invalid occurrence ID");
+        const bill = bills.find(b => b.id === parsed.billId);
+        if (!bill) throw new Error("Bill not found");
+        occurrence = {
+          id: occurrenceId, billId: parsed.billId, billName: bill.name,
+          dueDate: new Date(parsed.dueDate + "T12:00:00"),
+          expectedAmount: Number(bill.amount), status: "due" as const, bill: bill as any,
+        };
+      }
 
-      // If there was a linked transaction, unlink it
       const stored = storedOccurrencesQuery.data?.find(
-        s => s.bill_id === occurrence.billId && s.due_date === format(occurrence.dueDate, "yyyy-MM-dd")
+        s => s.bill_id === occurrence!.billId && s.due_date === format(occurrence!.dueDate, "yyyy-MM-dd")
       );
       
       if (stored?.paid_transaction_id) {
@@ -207,7 +260,6 @@ export function useBillOccurrences(year: number, month: number) {
           .eq("id", stored.paid_transaction_id);
       }
 
-      // Delete the occurrence record to reset to computed state
       const { error } = await supabase
         .from("bill_occurrences")
         .delete()
@@ -228,7 +280,7 @@ export function useBillOccurrences(year: number, month: number) {
     },
   });
 
-  // Apply auto-match (for high-confidence matches)
+  // Apply auto-match
   const applyAutoMatches = useMutation({
     mutationFn: async () => {
       for (const match of matchResults.autoApply) {
