@@ -53,22 +53,22 @@ function MacroCell({ label, actual, target, unit, showBar, compact, isCal = fals
 
   if (compact) {
     return (
-      <div className="text-center min-w-0">
+      <div className="text-center min-w-0 overflow-hidden">
         <div className="text-[10px] text-muted-foreground truncate">{label}</div>
         <div className={cn(
-          "text-xs font-medium tabular-nums",
+          "text-[11px] font-medium tabular-nums leading-tight",
           status === "success" && "text-green-600 dark:text-green-400",
           status === "warning" && "text-amber-600 dark:text-amber-400",
           status === "error" && "text-red-600 dark:text-red-400"
         )}>
-          {Math.round(actual)}
+          <span>{Math.round(actual)}</span>
           {showBar && target > 0 && (
             <span className="text-muted-foreground font-normal">/{target}</span>
           )}
         </div>
         {diff && showBar && (
           <div className={cn(
-            "text-[9px] tabular-nums",
+            "text-[9px] tabular-nums leading-tight",
             status === "success" && "text-green-600 dark:text-green-400",
             status === "warning" && "text-amber-600 dark:text-amber-400",
             status === "error" && "text-red-600 dark:text-red-400"
@@ -127,7 +127,7 @@ function MacroCell({ label, actual, target, unit, showBar, compact, isCal = fals
 export function DayMacroSummary({ totals, targets, isTargetMode, compact = false }: DayMacroSummaryProps) {
   if (compact) {
     return (
-      <div className="grid grid-cols-4 gap-2 text-xs py-1">
+      <div className="grid grid-cols-4 gap-1 text-xs py-1">
         <MacroCell label="Cal" actual={totals.calories} target={targets.calories} unit="kcal" showBar={isTargetMode} compact isCal />
         <MacroCell label="P" actual={totals.protein} target={targets.protein} unit="g" showBar={isTargetMode} compact />
         <MacroCell label="C" actual={totals.carbs} target={targets.carbs} unit="g" showBar={isTargetMode} compact />
