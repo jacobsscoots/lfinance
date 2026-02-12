@@ -107,8 +107,8 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
         const isCurrent = year === currentYear && month === currentMonth;
         const occs = getBillOccurrencesForMonth([bill], year, month);
         let monthTotal = occs.reduce((s, o) => s + o.expectedAmount, 0);
-        // Apply inflation for future months only
-        if (!isPast && !isCurrent && monthTotal > 0) {
+        // Apply inflation for all months (matches hook logic)
+        if (monthTotal > 0) {
           monthTotal = applyInflation(bill.name, monthTotal, year, month);
         }
         amounts.push(monthTotal);
