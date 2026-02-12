@@ -991,9 +991,26 @@ export function useMealPlanItems(weekStart: Date) {
       });
 
       if (error) throw error;
-      if (!data?.success || !data?.portions) throw new Error(data?.error || "AI planning failed");
+      
+      // HARD VALIDATION GATE: If server says FAIL_CONSTRAINTS, do NOT save
+      if (!data?.success || data?.status === 'FAIL_CONSTRAINTS') {
+        const violations = data?.violations || [];
+        const fixes = data?.suggested_fixes || [];
+        return {
+          updated: 0,
+          failed: true,
+          violations,
+          suggested_fixes: fixes,
+          totals: data?.totals,
+          targets: data?.targets,
+        };
+      }
+      
+      if (!data?.portions || data.portions.length === 0) {
+        throw new Error("AI returned no portions");
+      }
 
-      // Apply portions to DB
+      // PASS: Apply validated portions to DB
       let updated = 0;
       for (const portion of data.portions) {
         const item = items.find(i => i.id === portion.id);
@@ -1010,11 +1027,21 @@ export function useMealPlanItems(weekStart: Date) {
         updated++;
       }
 
-      return { updated };
+      return { updated, failed: false };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
-      toast.success(`AI planned ${result.updated} portions`);
+      if (result.failed) {
+        toast.error("AI couldn't meet targets — no portions saved.", { duration: 6000 });
+        if (result.violations?.length) {
+          toast.info(`Violations: ${result.violations.join(', ')}`, { duration: 8000 });
+        }
+        if (result.suggested_fixes?.length) {
+          toast.info(`Try: ${result.suggested_fixes[0]}`, { duration: 8000 });
+        }
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+        toast.success(`AI planned ${result.updated} portions`);
+      }
     },
     onError: (error) => {
       toast.error("AI planning failed: " + error.message);
@@ -1078,12 +1105,12 @@ export function useMealPlanItems(weekStart: Date) {
             },
           });
 
-          if (error || !data?.success || !data?.portions) {
+          if (error || !data?.success || data?.status === 'FAIL_CONSTRAINTS' || !data?.portions) {
             failedCount++;
             continue;
           }
 
-          // Apply portions to DB
+          // PASS: Apply validated portions to DB
           for (const portion of data.portions) {
             const item = items.find(i => i.id === portion.id);
             if (!item) continue;
