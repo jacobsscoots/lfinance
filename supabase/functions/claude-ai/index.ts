@@ -385,15 +385,18 @@ async function handleMealPlanner(
   const cTarget = Math.round(remainingTargets.carbs);
   const fTarget = Math.round(remainingTargets.fat);
 
-  const systemPrompt = `You are a PRECISE meal portion calculator. You MUST hit macro targets exactly.
+  const systemPrompt = `You are a PRECISE meal portion calculator solving a constrained optimisation problem.
 
 ## STRICT Targets (remaining after locked items):
-- Calories: ${calTarget} kcal (MUST be between ${calTarget} and ${calTarget + 50})
-- Protein: ${pTarget}g (MUST be between ${pTarget} and ${pTarget + 2}g — NEVER below ${pTarget}g)
-- Carbs: ${cTarget}g (MUST be between ${cTarget} and ${cTarget + 2}g — NEVER below ${cTarget}g)
-- Fat: ${fTarget}g (MUST be between ${fTarget} and ${fTarget + 2}g — NEVER below ${fTarget}g)
+- Calories: MUST be between ${calTarget - 50} and ${calTarget} kcal (AT or BELOW ${calTarget}, never over)
+- Protein: MUST be between ${pTarget - 2}g and ${pTarget}g (AT or BELOW ${pTarget}g, never over)
+- Carbs: MUST be between ${cTarget - 2}g and ${cTarget}g (AT or BELOW ${cTarget}g, never over)
+- Fat: MUST be between ${fTarget - 2}g and ${fTarget}g (AT or BELOW ${fTarget}g, never over)
 
-ALL macros must be AT or ABOVE target. Being under target is a FAILURE.
+CRITICAL RULES:
+- NEVER exceed any target. Every total must be ≤ its target.
+- Each total must be within the tolerance band (50kcal for calories, 2g for macros) BELOW the target.
+- If you cannot satisfy all constraints, return the closest attempt.
 
 ## Locked items (do not change):
 ${lockedList}
@@ -402,14 +405,14 @@ ${lockedList}
 ${foodList}
 
 ## Method — follow this EXACTLY:
-1. Start by assigning minimum portions to all items.
-2. Calculate the macro deficit from target.
-3. Identify which items are richest in the needed macro (carbs, protein, fat).
-4. Increase those items' portions in 5g steps, recalculating totals each time.
-5. VERIFY your final totals: sum (portion/100 × per100g) for each macro.
-6. If ANY macro is below target, increase the appropriate item.
+1. For each food, calculate nutrition per gram (per100g / 100).
+2. Start with moderate portions. Calculate exact totals.
+3. Compare totals to targets. Each must be: target - tolerance ≤ total ≤ target.
+4. If a macro is OVER target, reduce the food that contributes most to that macro.
+5. If a macro is UNDER the tolerance band, increase the food richest in that macro (without pushing others over).
+6. Iterate adjustments until all 4 constraints pass.
 7. Seasonings: HARD cap 5-15g. Never exceed 15g.
-8. Round all portions to nearest 5g.
+8. Round all portions to nearest 5g, then RE-VERIFY totals still pass.
 9. Return ONLY the set_portions tool call.`;
 
   const tools = [
@@ -439,7 +442,7 @@ ${foodList}
     },
   ];
 
-  // Helper: compute totals from portions
+  // Helper: compute totals from portions (use precise floats)
   function computeTotals(portionList: Array<{ id: string; quantity_grams: number }>) {
     let cal = 0, p = 0, c = 0, f = 0;
     for (const portion of portionList) {
@@ -451,35 +454,135 @@ ${foodList}
       c += item.carbs_per_100g * factor;
       f += item.fat_per_100g * factor;
     }
-    return { calories: Math.round(cal), protein: Math.round(p), carbs: Math.round(c), fat: Math.round(f) };
+    return { calories: Math.round(cal), protein: Math.round(p * 10) / 10, carbs: Math.round(c * 10) / 10, fat: Math.round(f * 10) / 10 };
   }
 
-  // Helper: check if totals meet targets
+  // Helper: check constraints — totals must be ≤ target and within tolerance BELOW
   function meetsTargets(totals: { calories: number; protein: number; carbs: number; fat: number }) {
-    const calOk = totals.calories >= calTarget && totals.calories <= calTarget + 50;
-    const pOk = totals.protein >= pTarget && totals.protein <= pTarget + 2;
-    const cOk = totals.carbs >= cTarget && totals.carbs <= cTarget + 2;
-    const fOk = totals.fat >= fTarget && totals.fat <= fTarget + 2;
+    const calOk = totals.calories <= calTarget && totals.calories >= calTarget - 50;
+    const pOk = totals.protein <= pTarget && totals.protein >= pTarget - 2;
+    const cOk = totals.carbs <= cTarget && totals.carbs >= cTarget - 2;
+    const fOk = totals.fat <= fTarget && totals.fat >= fTarget - 2;
     return { calOk, pOk, cOk, fOk, allOk: calOk && pOk && cOk && fOk };
   }
 
-  // Retry loop: up to 3 attempts
+  // Server-side refinement: adjust portions to fix constraint violations
+  function refinePortions(portionList: Array<{ id: string; quantity_grams: number }>): Array<{ id: string; quantity_grams: number }> {
+    const refined = portionList.map(p => ({ ...p }));
+    const freeIds = new Set(freeItems.map((i: any) => i.id));
+
+    for (let iter = 0; iter < 200; iter++) {
+      const totals = computeTotals(refined);
+      const check = meetsTargets(totals);
+      if (check.allOk) break;
+
+      // Find the worst violation
+      type Macro = 'calories' | 'protein' | 'carbs' | 'fat';
+      const violations: Array<{ macro: Macro; delta: number; over: boolean }> = [];
+      
+      if (totals.calories > calTarget) violations.push({ macro: 'calories', delta: totals.calories - calTarget, over: true });
+      else if (totals.calories < calTarget - 50) violations.push({ macro: 'calories', delta: calTarget - 50 - totals.calories, over: false });
+      
+      if (totals.protein > pTarget) violations.push({ macro: 'protein', delta: totals.protein - pTarget, over: true });
+      else if (totals.protein < pTarget - 2) violations.push({ macro: 'protein', delta: pTarget - 2 - totals.protein, over: false });
+      
+      if (totals.carbs > cTarget) violations.push({ macro: 'carbs', delta: totals.carbs - cTarget, over: true });
+      else if (totals.carbs < cTarget - 2) violations.push({ macro: 'carbs', delta: cTarget - 2 - totals.carbs, over: false });
+      
+      if (totals.fat > fTarget) violations.push({ macro: 'fat', delta: totals.fat - fTarget, over: true });
+      else if (totals.fat < fTarget - 2) violations.push({ macro: 'fat', delta: fTarget - 2 - totals.fat, over: false });
+
+      if (violations.length === 0) break;
+
+      // Sort by worst violation first
+      violations.sort((a, b) => b.delta - a.delta);
+      const worst = violations[0];
+
+      // Map macro name to per100g field
+      const per100gField: Record<Macro, string> = {
+        calories: 'calories_per_100g',
+        protein: 'protein_per_100g',
+        carbs: 'carbs_per_100g',
+        fat: 'fat_per_100g',
+      };
+
+      // Find best item to adjust (highest density in the violating macro, free only)
+      let bestIdx = -1;
+      let bestDensity = 0;
+      for (let i = 0; i < refined.length; i++) {
+        if (!freeIds.has(refined[i].id)) continue;
+        const item = items.find((it: any) => it.id === refined[i].id);
+        if (!item) continue;
+        if (isSeasoningItem(item)) continue; // don't adjust seasonings
+        const density = item[per100gField[worst.macro]] || 0;
+        if (density <= 0) continue;
+
+        if (worst.over) {
+          // Need to decrease: item must have room to decrease
+          const minG = item.min_portion_grams || 10;
+          if (refined[i].quantity_grams <= minG) continue;
+        } else {
+          // Need to increase: item must have room to increase
+          const maxG = item.max_portion_grams || 500;
+          if (refined[i].quantity_grams >= maxG) continue;
+        }
+
+        if (density > bestDensity) {
+          bestDensity = density;
+          bestIdx = i;
+        }
+      }
+
+      if (bestIdx === -1) break; // No adjustable items
+
+      // Adjust by 5g
+      if (worst.over) {
+        refined[bestIdx].quantity_grams -= 5;
+      } else {
+        refined[bestIdx].quantity_grams += 5;
+      }
+
+      // Clamp
+      const adjItem = items.find((it: any) => it.id === refined[bestIdx].id);
+      if (adjItem) {
+        const minG = adjItem.min_portion_grams || 10;
+        const maxG = adjItem.max_portion_grams || 500;
+        refined[bestIdx].quantity_grams = Math.max(minG, Math.min(maxG, refined[bestIdx].quantity_grams));
+      }
+    }
+
+    return refined;
+  }
+
+  // Retry loop: up to 3 AI attempts
   let bestPortions: Array<{ id: string; quantity_grams: number }> = [];
   let bestTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const MAX_ATTEMPTS = 3;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    let userMessage = "Calculate portions for these foods to hit the macro targets precisely. Use the set_portions tool.";
+    let userMessage = "Calculate portions for these foods to hit the macro targets precisely. Every total MUST be ≤ target and within tolerance below. Use the set_portions tool.";
     
     if (attempt > 0) {
       const check = meetsTargets(bestTotals);
       const issues: string[] = [];
-      if (!check.pOk) issues.push(`Protein is ${bestTotals.protein}g but must be ${pTarget}-${pTarget + 2}g`);
-      if (!check.cOk) issues.push(`Carbs is ${bestTotals.carbs}g but must be ${cTarget}-${cTarget + 2}g`);
-      if (!check.fOk) issues.push(`Fat is ${bestTotals.fat}g but must be ${fTarget}-${fTarget + 2}g`);
-      if (!check.calOk) issues.push(`Calories is ${bestTotals.calories} but must be ${calTarget}-${calTarget + 50}`);
+      if (!check.calOk) {
+        if (bestTotals.calories > calTarget) issues.push(`Calories ${bestTotals.calories} EXCEEDS target ${calTarget} — REDUCE portions`);
+        else issues.push(`Calories ${bestTotals.calories} is too far below target (min ${calTarget - 50})`);
+      }
+      if (!check.pOk) {
+        if (bestTotals.protein > pTarget) issues.push(`Protein ${bestTotals.protein}g EXCEEDS target ${pTarget}g — REDUCE`);
+        else issues.push(`Protein ${bestTotals.protein}g too far below (min ${pTarget - 2}g)`);
+      }
+      if (!check.cOk) {
+        if (bestTotals.carbs > cTarget) issues.push(`Carbs ${bestTotals.carbs}g EXCEEDS target ${cTarget}g — REDUCE`);
+        else issues.push(`Carbs ${bestTotals.carbs}g too far below (min ${cTarget - 2}g)`);
+      }
+      if (!check.fOk) {
+        if (bestTotals.fat > fTarget) issues.push(`Fat ${bestTotals.fat}g EXCEEDS target ${fTarget}g — REDUCE`);
+        else issues.push(`Fat ${bestTotals.fat}g too far below (min ${fTarget - 2}g)`);
+      }
       
-      userMessage = `Your previous attempt was WRONG. The totals were: ${bestTotals.calories}kcal, ${bestTotals.protein}g P, ${bestTotals.carbs}g C, ${bestTotals.fat}g F.\n\nPROBLEMS:\n${issues.join('\n')}\n\nFix these by adjusting portions. All macros must be AT or ABOVE target, never below. Recalculate and use set_portions.`;
+      userMessage = `WRONG. Totals: ${bestTotals.calories}kcal, ${bestTotals.protein}g P, ${bestTotals.carbs}g C, ${bestTotals.fat}g F.\nPROBLEMS:\n${issues.join('\n')}\n\nAll totals must be ≤ target and within tolerance below. Fix and use set_portions.`;
     }
 
     const aiData = await callAI({
@@ -519,29 +622,45 @@ ${foodList}
       return { id: p.id, quantity_grams: qty };
     });
 
-    // Combine with locked items for total check
+    // Combine with locked items
     const allPortions = [
       ...lockedItems.map((item: any) => ({ id: item.id, quantity_grams: item.quantity_grams })),
       ...validatedPortions,
     ];
 
-    const totals = computeTotals(allPortions);
+    // Server-side refinement loop to fix any remaining violations
+    const refinedPortions = refinePortions(allPortions);
+    const totals = computeTotals(refinedPortions);
     const check = meetsTargets(totals);
 
-    bestPortions = allPortions;
+    bestPortions = refinedPortions;
     bestTotals = totals;
 
     if (check.allOk) {
-      console.log(`[claude-ai] converged on attempt ${attempt + 1}: ${JSON.stringify(totals)}`);
+      console.log(`[claude-ai] PASS attempt ${attempt + 1}: ${JSON.stringify(totals)}`);
       break;
     }
     
-    console.log(`[claude-ai] attempt ${attempt + 1} missed targets: ${JSON.stringify(totals)} vs cal=${calTarget} p=${pTarget} c=${cTarget} f=${fTarget}`);
+    console.log(`[claude-ai] attempt ${attempt + 1} after refinement: ${JSON.stringify(totals)} targets: cal≤${calTarget} p≤${pTarget} c≤${cTarget} f≤${fTarget}`);
+  }
+
+  // Final status
+  const finalCheck = meetsTargets(bestTotals);
+  if (!finalCheck.allOk) {
+    console.warn(`[claude-ai] FAIL_CONSTRAINTS: ${JSON.stringify(bestTotals)} vs targets cal=${calTarget} p=${pTarget} c=${cTarget} f=${fTarget}`);
   }
 
   return {
     success: true,
+    status: finalCheck.allOk ? 'PASS' : 'FAIL_CONSTRAINTS',
     portions: bestPortions,
+    totals: bestTotals,
+    tolerances_check: {
+      kcal_ok: finalCheck.calOk,
+      protein_ok: finalCheck.pOk,
+      carbs_ok: finalCheck.cOk,
+      fat_ok: finalCheck.fOk,
+    },
   };
 }
 
