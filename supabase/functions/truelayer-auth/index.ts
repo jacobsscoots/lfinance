@@ -244,19 +244,17 @@ serve(async (req) => {
         );
       }
 
-      // Store tokens server-side in the database - NEVER send to client
+      // Store tokens encrypted server-side - NEVER send to client
       const expiresAt = new Date();
       expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
-      const { error: updateError } = await serviceSupabase
-        .from('bank_connections')
-        .update({
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          token_expires_at: expiresAt.toISOString(),
-          status: 'connected',
-        })
-        .eq('id', connectionId);
+      const { error: updateError } = await serviceSupabase.rpc('store_bank_connection_tokens', {
+        p_connection_id: connectionId,
+        p_access_token: tokenData.access_token,
+        p_refresh_token: tokenData.refresh_token,
+        p_token_expires_at: expiresAt.toISOString(),
+        p_status: 'connected',
+      });
 
       if (updateError) {
         console.error('[exchange-code] Failed to store tokens:', updateError);
@@ -288,12 +286,10 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      // Get the connection and verify ownership
-      const { data: connection, error: connError } = await serviceSupabase
-        .from('bank_connections')
-        .select('id, user_id, refresh_token')
-        .eq('id', connectionId)
-        .single();
+      // Get the connection with decrypted tokens and verify ownership
+      const { data: connectionRows, error: connError } = await serviceSupabase
+        .rpc('get_bank_connection_tokens', { p_connection_id: connectionId });
+      const connection = connectionRows?.[0];
 
       if (connError || !connection) {
         return errorResponse('Connection not found', 'refresh-token', 404);
@@ -333,18 +329,16 @@ serve(async (req) => {
         );
       }
 
-      // Update tokens in database
+      // Update tokens encrypted in database
       const expiresAt = new Date();
       expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
-      await serviceSupabase
-        .from('bank_connections')
-        .update({
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          token_expires_at: expiresAt.toISOString(),
-        })
-        .eq('id', connectionId);
+      await serviceSupabase.rpc('store_bank_connection_tokens', {
+        p_connection_id: connectionId,
+        p_access_token: tokenData.access_token,
+        p_refresh_token: tokenData.refresh_token,
+        p_token_expires_at: expiresAt.toISOString(),
+      });
 
       console.log('[refresh-token] Token refresh successful');
       return jsonResponse({ success: true });

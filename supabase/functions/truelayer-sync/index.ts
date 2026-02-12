@@ -111,17 +111,16 @@ serve(async (req) => {
       return errorResponse('Invalid connectionId: must be a valid UUID', 'validation', 400);
     }
 
-    // Get connection details server-side - tokens never exposed to client
+    // Get connection details server-side using encrypted token retrieval
     const serviceSupabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: connection, error: connError } = await serviceSupabase
-      .from('bank_connections')
-      .select('id, user_id, access_token, refresh_token, token_expires_at, provider')
-      .eq('id', connectionId)
-      .single();
+    const { data: connectionRows, error: connError } = await serviceSupabase
+      .rpc('get_bank_connection_tokens', { p_connection_id: connectionId });
+
+    const connection = connectionRows?.[0];
 
     if (connError || !connection) {
       return errorResponse('Connection not found', 'sync', 404);
@@ -182,14 +181,13 @@ serve(async (req) => {
       const expiresAt = new Date();
       expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
-      await serviceSupabase
-        .from('bank_connections')
-        .update({
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          token_expires_at: expiresAt.toISOString(),
-        })
-        .eq('id', connectionId);
+      const tokenExpiresAt = expiresAt.toISOString();
+      await serviceSupabase.rpc('store_bank_connection_tokens', {
+        p_connection_id: connectionId,
+        p_access_token: tokenData.access_token,
+        p_refresh_token: tokenData.refresh_token,
+        p_token_expires_at: tokenExpiresAt,
+      });
 
       accessToken = tokenData.access_token;
       console.log('[sync] Token refreshed successfully');
