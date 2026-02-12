@@ -4,9 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Receipt, CreditCard, Tv, Upload } from "lucide-react";
+import { Plus, Receipt, CreditCard, Tv, Upload, ShoppingCart } from "lucide-react";
 import { ExcelImportDialog } from "@/components/settings/ExcelImportDialog";
 import { useBills, Bill } from "@/hooks/useBills";
+import { useGroceryForecast } from "@/hooks/useGroceryForecast";
 import { BillListItem } from "@/components/bills/BillListItem";
 import { BillFormDialog } from "@/components/bills/BillFormDialog";
 import { DeleteBillDialog } from "@/components/bills/DeleteBillDialog";
@@ -14,6 +15,7 @@ import { DailyBudgetCard } from "@/components/bills/DailyBudgetCard";
 
 export default function Bills() {
   const { bills, isLoading } = useBills();
+  const { weeklySpend: groceryWeekly, monthlySpend: groceryMonthly } = useGroceryForecast();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
@@ -87,6 +89,27 @@ export default function Bills() {
 
         {/* Daily Budget Tracker */}
         <DailyBudgetCard />
+
+        {/* Grocery Forecast */}
+        {groceryMonthly > 0 && (
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ShoppingCart className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">Grocery Forecast</p>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-xl font-bold">£{groceryMonthly.toFixed(2)}<span className="text-sm font-normal text-muted-foreground">/mo</span></span>
+                    <span className="text-sm text-muted-foreground">£{groceryWeekly.toFixed(2)}/wk</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground max-w-[140px] text-right">Based on meal plan needs minus stock on hand</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Summary Card */}
         <Card>

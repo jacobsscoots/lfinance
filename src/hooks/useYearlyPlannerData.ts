@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBills } from "@/hooks/useBills";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
+import { useGroceryForecast } from "@/hooks/useGroceryForecast";
 import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
 import { toast } from "sonner";
 
@@ -25,6 +26,7 @@ export interface MonthData {
   isEstimated: boolean;
   income: number;
   bills: number;
+  groceryForecast: number;
   discretionary: number;
   overrideIncome: number;
   overrideExpense: number;
@@ -39,6 +41,7 @@ export function useYearlyPlannerData(year: number) {
   const { user } = useAuth();
   const { bills } = useBills();
   const { effectiveSettings } = usePaydaySettings();
+  const { monthlySpend: groceryMonthlyForecast } = useGroceryForecast();
   const queryClient = useQueryClient();
 
   // Fetch overrides for the year
@@ -147,6 +150,7 @@ export function useYearlyPlannerData(year: number) {
     let income = 0;
     let discretionary = 0;
     let billsTotal = 0;
+    let groceryForecast = 0;
 
     if (isPast || isCurrent) {
       // Use actual data - only tracked income sources
@@ -175,10 +179,11 @@ export function useYearlyPlannerData(year: number) {
         income += estimatedSalary;
       }
     } else {
-      // Future: use projected salary + tracked income average + projected bills
+      // Future: use projected salary + tracked income average + projected bills + grocery forecast
       income = estimatedSalary + averageTrackedIncome;
       const occurrences = getBillOccurrencesForMonth(activeBills, year, month);
       billsTotal = occurrences.reduce((s, o) => s + o.expectedAmount, 0);
+      groceryForecast = groceryMonthlyForecast;
     }
 
     const overrideIncome = monthOverrides
@@ -189,7 +194,7 @@ export function useYearlyPlannerData(year: number) {
       .reduce((s, o) => s + Number(o.amount), 0);
 
     const totalIncome = income + overrideIncome;
-    const totalOutgoings = billsTotal + overrideExpense;
+    const totalOutgoings = billsTotal + groceryForecast + overrideExpense;
     const net = totalIncome - totalOutgoings;
     runningSurplus += net;
 
@@ -200,6 +205,7 @@ export function useYearlyPlannerData(year: number) {
       isEstimated,
       income,
       bills: billsTotal,
+      groceryForecast,
       discretionary,
       overrideIncome,
       overrideExpense,
