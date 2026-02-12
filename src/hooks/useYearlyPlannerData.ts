@@ -210,49 +210,40 @@ export function useYearlyPlannerData(year: number) {
     const isCurrent = year === currentYear && month === currentMonth;
     const isEstimated = !isPast && !isCurrent;
     const monthOverrides = overrides.filter(o => o.month === month + 1);
+    const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
 
+    // ─── INCOME ───
+    // Always include salary: use actual transaction if found, otherwise estimated
     let income = 0;
-    let discretionary = 0;
-    let billsTotal = 0;
-    let groceryForecast = 0;
+    const salaryTxns = yearTransactions.filter(t =>
+      t.transaction_date.startsWith(monthStr) &&
+      t.type === 'income' &&
+      !isTrackedIncome(t.description) &&
+      Math.abs(Number(t.amount)) > 500
+    );
+    if (salaryTxns.length > 0) {
+      income += salaryTxns.reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+    } else if (baseSalary > 0) {
+      income += getEstimatedSalary(year, month);
+    }
 
+    // Tracked income: use actual if available for past/current, average for future
     if (isPast || isCurrent) {
-      // Use actual data - only tracked income sources
-      const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
       yearTransactions.forEach(t => {
-        if (t.transaction_date.startsWith(monthStr)) {
-          const amt = Math.abs(Number(t.amount));
-          if (t.type === 'income' && isTrackedIncome(t.description)) {
-            income += amt;
-          } else if (t.type === 'expense') {
-            if (t.bill_id) {
-              billsTotal += amt;
-            } else {
-              discretionary += amt;
-            }
-          }
+        if (t.transaction_date.startsWith(monthStr) && t.type === 'income' && isTrackedIncome(t.description)) {
+          income += Math.abs(Number(t.amount));
         }
       });
-
-      // Check if salary transaction exists for this month
-      const hasSalaryTransaction = yearTransactions.some(t =>
-        t.transaction_date.startsWith(monthStr) &&
-        t.type === 'income' &&
-        !isTrackedIncome(t.description) &&
-        Math.abs(Number(t.amount)) > 500 // salary-level income
-      );
-
-      // If current month and no salary yet, add estimated salary
-      if (isCurrent && !hasSalaryTransaction && baseSalary > 0) {
-        income += getEstimatedSalary(year, month);
-      }
     } else {
-      // Future: use projected salary (with Apr 2026 increase) + tracked income average + projected bills + grocery forecast
-      income = getEstimatedSalary(year, month) + averageTrackedIncome;
-      const occurrences = getBillOccurrencesForMonth(activeBills, year, month);
-      billsTotal = occurrences.reduce((s, o) => s + getInflationAdjustedAmount(o.billName, o.expectedAmount, year, month), 0);
-      groceryForecast = groceryMonthlyForecast;
+      income += averageTrackedIncome;
     }
+
+    // ─── OUTGOINGS ───
+    // Always use projected bills from occurrence engine (matches table's bill rows)
+    const occurrences = getBillOccurrencesForMonth(activeBills, year, month);
+    let billsTotal = occurrences.reduce((s, o) => s + getInflationAdjustedAmount(o.billName, o.expectedAmount, year, month), 0);
+    let groceryForecast = groceryMonthlyForecast;
+    let discretionary = 0;
 
     const overrideIncome = monthOverrides
       .filter(o => o.type === 'income')
@@ -346,32 +337,15 @@ export function useYearlyPlannerData(year: number) {
       const isCurrent = year === currentYear && month === currentMonth;
       const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-      if (isPast) {
-        // Use actual salary-level income transactions for past months
+      if (isPast || isCurrent) {
+        // Use actual salary-level income transactions, fall back to estimated
         const salaryTxns = yearTransactions.filter(t =>
           t.transaction_date.startsWith(monthStr) &&
           t.type === 'income' &&
           !isTrackedIncome(t.description) &&
           Math.abs(Number(t.amount)) > 500
         );
-        salaryTxns.forEach(t => {
-          incomeBreakdown[salaryLabel][month] += Math.abs(Number(t.amount));
-        });
-      } else if (isCurrent) {
-        // Check if salary arrived this month already
-        const hasSalary = yearTransactions.some(t =>
-          t.transaction_date.startsWith(monthStr) &&
-          t.type === 'income' &&
-          !isTrackedIncome(t.description) &&
-          Math.abs(Number(t.amount)) > 500
-        );
-        if (hasSalary) {
-          const salaryTxns = yearTransactions.filter(t =>
-            t.transaction_date.startsWith(monthStr) &&
-            t.type === 'income' &&
-            !isTrackedIncome(t.description) &&
-            Math.abs(Number(t.amount)) > 500
-          );
+        if (salaryTxns.length > 0) {
           salaryTxns.forEach(t => {
             incomeBreakdown[salaryLabel][month] += Math.abs(Number(t.amount));
           });
