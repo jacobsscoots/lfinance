@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { format, addMonths, subMonths } from "date-fns";
+import { useState, useMemo } from "react";
+import { format, subDays, addDays } from "date-fns";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,10 @@ import { useCalendarData } from "@/hooks/useCalendarData";
 import { useBillOccurrences } from "@/hooks/useBillOccurrences";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { DayDetailPanel } from "@/components/calendar/DayDetailPanel";
-import { getNextPayday, getCurrentPayCycle } from "@/lib/payday";
+import { getCurrentPayCycle, getNextPayday } from "@/lib/payday";
+import { getPayCycleForDate, getNextPayCycle, getPrevPayCycle, formatPayCycleLabel } from "@/lib/payCycle";
+import { usePaydaySettings } from "@/hooks/usePaydaySettings";
+import { toPaydaySettings } from "@/lib/payCycle";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Drawer,
@@ -19,25 +22,44 @@ import {
 } from "@/components/ui/drawer";
 
 export default function Calendar() {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const { effectiveSettings } = usePaydaySettings();
+  const paydaySettings = useMemo(() => effectiveSettings ? toPaydaySettings(effectiveSettings) : undefined, [effectiveSettings]);
+
+  // Navigate by pay cycle instead of calendar month
+  const [currentCycle, setCurrentCycle] = useState(() => {
+    return paydaySettings ? getPayCycleForDate(new Date(), paydaySettings) : getPayCycleForDate(new Date());
+  });
+
+  // Update cycle when settings load
+  const cycle = useMemo(() => {
+    if (paydaySettings) {
+      return getPayCycleForDate(currentCycle.start, paydaySettings);
+    }
+    return currentCycle;
+  }, [currentCycle.start, paydaySettings]);
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const { data, isLoading } = useCalendarData(currentDate);
+  const { data, isLoading } = useCalendarData(cycle.start, cycle.end);
   const isMobile = useIsMobile();
 
-  // Get bill occurrences hook for actions
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const { markPaid, skipOccurrence, resetOccurrence, autoMatchCount, applyAutoMatches } = useBillOccurrences(year, month);
+  // Bill occurrences hook — pass full cycle range for cross-month support
+  const year = cycle.start.getFullYear();
+  const month = cycle.start.getMonth();
+  const { markPaid, skipOccurrence, resetOccurrence, autoMatchCount, applyAutoMatches } = useBillOccurrences(year, month, cycle.start, cycle.end);
 
-  const goToPreviousMonth = () => setCurrentDate(subMonths(currentDate, 1));
-  const goToNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const goToPreviousCycle = () => {
+    setCurrentCycle(prev => getPrevPayCycle(prev, paydaySettings));
+  };
+  const goToNextCycle = () => {
+    setCurrentCycle(prev => getNextPayCycle(prev, paydaySettings));
+  };
   const goToToday = () => {
-    setCurrentDate(new Date());
+    const todayCycle = paydaySettings ? getPayCycleForDate(new Date(), paydaySettings) : getPayCycleForDate(new Date());
+    setCurrentCycle(todayCycle);
     setSelectedDate(new Date());
   };
 
-  const nextPayday = getNextPayday();
-  const { start: cycleStart, end: cycleEnd } = getCurrentPayCycle();
+  const nextPayday = paydaySettings ? getNextPayday(new Date(), paydaySettings) : getNextPayday();
 
   const selectedDayData = selectedDate
     ? data?.days.find((d) => format(d.date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd"))
@@ -67,8 +89,10 @@ export default function Calendar() {
     resetOccurrence.mutate(occurrenceId);
   };
 
-  const paidCount = data?.days.flatMap(d => d.bills).filter(b => b.isPaid || b.status === "paid").length || 0;
-  const totalBillCount = data?.days.flatMap(d => d.bills).length || 0;
+  const paidCount = data?.days.filter(d => d.isInPayCycle).flatMap(d => d.bills).filter(b => b.isPaid || b.status === "paid").length || 0;
+  const totalBillCount = data?.days.filter(d => d.isInPayCycle).flatMap(d => d.bills).length || 0;
+
+  const cycleLabel = formatPayCycleLabel(cycle);
 
   return (
     <AppLayout>
@@ -78,7 +102,7 @@ export default function Calendar() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Calendar</h1>
             <p className="text-muted-foreground">
-              View your bills projected across the month
+              View your bills across the pay cycle
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -100,11 +124,11 @@ export default function Calendar() {
           </div>
         </div>
 
-        {/* Summary Cards - Stack on mobile */}
+        {/* Summary Cards */}
         <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4">
           <Card>
             <CardContent className="py-3 sm:py-4">
-              <p className="text-xs sm:text-sm text-muted-foreground">Bills This Month</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Bills This Cycle</p>
               <p className="text-xl sm:text-2xl font-bold text-destructive">
                 £{(data?.monthTotal || 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
               </p>
@@ -128,9 +152,9 @@ export default function Calendar() {
           </Card>
           <Card>
             <CardContent className="py-3 sm:py-4">
-              <p className="text-xs sm:text-sm text-muted-foreground">Current Pay Cycle</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Pay Cycle</p>
               <p className="text-base sm:text-lg font-semibold">
-                {format(cycleStart, "d MMM")} – {format(cycleEnd, "d MMM")}
+                {format(cycle.start, "d MMM")} – {format(cycle.end, "d MMM")}
               </p>
             </CardContent>
           </Card>
@@ -138,17 +162,16 @@ export default function Calendar() {
 
         {/* Calendar and Detail Panel */}
         {isMobile ? (
-          /* Mobile: Full-width calendar with drawer for details */
           <div className="space-y-4">
-            {/* Month Navigator */}
+            {/* Cycle Navigator */}
             <div className="flex items-center justify-between">
-              <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+              <Button variant="outline" size="icon" onClick={goToPreviousCycle}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <h2 className="text-lg font-semibold">
-                {format(currentDate, "MMMM yyyy")}
+                {cycleLabel}
               </h2>
-              <Button variant="outline" size="icon" onClick={goToNextMonth}>
+              <Button variant="outline" size="icon" onClick={goToNextCycle}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -179,7 +202,7 @@ export default function Calendar() {
               </Card>
             )}
 
-            {/* Mobile Drawer for Day Details */}
+            {/* Mobile Drawer */}
             <Drawer open={!!selectedDate && !!selectedDayData} onOpenChange={(open) => !open && handleCloseDrawer()}>
               <DrawerContent>
                 <DrawerHeader>
@@ -202,19 +225,18 @@ export default function Calendar() {
             </Drawer>
           </div>
         ) : (
-          /* Desktop: Side-by-side layout */
           <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
             {/* Calendar */}
             <div className="space-y-4">
-              {/* Month Navigator */}
+              {/* Cycle Navigator */}
               <div className="flex items-center justify-between">
-                <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                <Button variant="outline" size="icon" onClick={goToPreviousCycle}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <h2 className="text-xl font-semibold">
-                  {format(currentDate, "MMMM yyyy")}
+                  {cycleLabel}
                 </h2>
-                <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                <Button variant="outline" size="icon" onClick={goToNextCycle}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
