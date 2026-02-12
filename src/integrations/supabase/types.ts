@@ -294,41 +294,68 @@ export type Database = {
       }
       birthday_events: {
         Row: {
+          address_line1: string | null
+          address_line2: string | null
           budget: number | null
+          card_sent: boolean | null
+          city: string | null
+          country: string | null
           created_at: string
           event_day: number | null
           event_month: number
           id: string
           is_active: boolean | null
+          money_scheduled: boolean | null
           notes: string | null
           occasion: string
           person_name: string
+          postcode: string | null
+          state: string | null
+          title: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
           budget?: number | null
+          card_sent?: boolean | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           event_day?: number | null
           event_month: number
           id?: string
           is_active?: boolean | null
+          money_scheduled?: boolean | null
           notes?: string | null
           occasion?: string
           person_name: string
+          postcode?: string | null
+          state?: string | null
+          title?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          address_line1?: string | null
+          address_line2?: string | null
           budget?: number | null
+          card_sent?: boolean | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           event_day?: number | null
           event_month?: number
           id?: string
           is_active?: boolean | null
+          money_scheduled?: boolean | null
           notes?: string | null
           occasion?: string
           person_name?: string
+          postcode?: string | null
+          state?: string | null
+          title?: string | null
           updated_at?: string
           user_id?: string
         }
