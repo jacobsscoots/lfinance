@@ -192,8 +192,12 @@ export function useYearlyPlannerData(year: number) {
           const amt = Math.abs(Number(t.amount));
           if (t.type === 'income' && isTrackedIncome(t.description)) {
             income += amt;
-          } else if (t.type === 'expense' && t.bill_id) {
-            billsTotal += amt;
+          } else if (t.type === 'expense') {
+            if (t.bill_id) {
+              billsTotal += amt;
+            } else {
+              discretionary += amt;
+            }
           }
         }
       });
@@ -226,7 +230,7 @@ export function useYearlyPlannerData(year: number) {
       .reduce((s, o) => s + Number(o.amount), 0);
 
     const totalIncome = income + overrideIncome;
-    const totalOutgoings = billsTotal + groceryForecast + overrideExpense;
+    const totalOutgoings = billsTotal + discretionary + groceryForecast + overrideExpense;
     const net = totalIncome - totalOutgoings;
     runningSurplus += net;
 
