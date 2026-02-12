@@ -29,6 +29,50 @@ function errorResponse(error: string, stage: string, status = 400, details?: unk
   return jsonResponse({ error, stage, details }, status);
 }
 
+// Transfer detection: match transactions across accounts by amount/date
+interface SyncedTransaction {
+  account_id: string;
+  external_id: string;
+  amount: number;
+  type: string;
+  transaction_date: string;
+  description: string;
+  merchant: string | null;
+  db_id?: string;
+}
+
+function detectTransfers(transactions: SyncedTransaction[]): Set<string> {
+  const transferExternalIds = new Set<string>();
+
+  // Group by date
+  const byDate = new Map<string, SyncedTransaction[]>();
+  for (const tx of transactions) {
+    const group = byDate.get(tx.transaction_date) || [];
+    group.push(tx);
+    byDate.set(tx.transaction_date, group);
+  }
+
+  for (const [, dayTxs] of byDate) {
+    // For each expense, look for a matching income on a different account with same amount
+    const expenses = dayTxs.filter(t => t.type === 'expense');
+    const incomes = dayTxs.filter(t => t.type === 'income');
+
+    for (const exp of expenses) {
+      for (const inc of incomes) {
+        if (
+          exp.account_id !== inc.account_id &&
+          Math.abs(exp.amount - inc.amount) < 0.01
+        ) {
+          transferExternalIds.add(exp.external_id);
+          transferExternalIds.add(inc.external_id);
+        }
+      }
+    }
+  }
+
+  return transferExternalIds;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -68,7 +112,6 @@ serve(async (req) => {
     }
 
     // Get connection details server-side - tokens never exposed to client
-    // Use service role to bypass RLS and access tokens securely
     const serviceSupabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -123,7 +166,6 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
 
       if (!tokenResponse.ok) {
-        // Mark connection as needing reauthorization
         await serviceSupabase
           .from('bank_connections')
           .update({ status: 'expired' })
@@ -137,7 +179,6 @@ serve(async (req) => {
         );
       }
 
-      // Update tokens
       const expiresAt = new Date();
       expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
@@ -154,174 +195,307 @@ serve(async (req) => {
       console.log('[sync] Token refreshed successfully');
     }
 
-    // Fetch accounts from TrueLayer
+    const syncedAccounts: Array<{ account_id: string; balance: number; action: string; type: string }> = [];
+    const allNewTransactions: SyncedTransaction[] = [];
+
+    // ── 1. Sync CURRENT / SAVINGS accounts (/data/v1/accounts) ──
     const accountsResponse = await fetch(`${TRUELAYER_API_URL}/data/v1/accounts`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
+      headers: { 'Authorization': `Bearer ${accessToken}` },
     });
 
-    if (!accountsResponse.ok) {
-      const errorData = await accountsResponse.json();
-      console.error('[sync] TrueLayer accounts fetch failed:', errorData);
-      return errorResponse('Failed to fetch accounts from bank', 'sync', 400, errorData);
-    }
+    if (accountsResponse.ok) {
+      const { results: accounts } = await accountsResponse.json();
+      console.log(`[sync] Found ${accounts?.length || 0} bank accounts`);
 
-    const { results: accounts } = await accountsResponse.json();
+      for (const account of (accounts || [])) {
+        const balanceResponse = await fetch(
+          `${TRUELAYER_API_URL}/data/v1/accounts/${account.account_id}/balance`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
 
-    // Process each account using UPSERT by (provider, external_id)
-    const syncedAccounts = [];
-    for (const account of accounts) {
-      // Fetch balance for this account
-      const balanceResponse = await fetch(
-        `${TRUELAYER_API_URL}/data/v1/accounts/${account.account_id}/balance`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
+        let balance = 0;
+        if (balanceResponse.ok) {
+          const { results: balances } = await balanceResponse.json();
+          balance = balances[0]?.current || 0;
         }
-      );
 
-      let balance = 0;
-      if (balanceResponse.ok) {
-        const { results: balances } = await balanceResponse.json();
-        balance = balances[0]?.current || 0;
-      }
+        const accountProvider = account.provider?.provider_id || 
+                                account.provider?.display_name || 
+                                connectionProvider;
+        const accountType = account.account_type === 'SAVINGS' ? 'savings' : 'current';
+        const accountName = account.display_name || account.account_number?.number || 'Bank Account';
 
-      // Extract provider from account data - prefer provider_id (e.g. "ob-monzo")
-      // This is crucial for displaying correct bank names in the UI
-      const accountProvider = account.provider?.provider_id || 
-                              account.provider?.display_name || 
-                              connectionProvider;
-      const accountType = account.account_type === 'SAVINGS' ? 'savings' : 'current';
-      const accountName = account.display_name || account.account_number?.number || 'Bank Account';
-
-      // SOURCE OF TRUTH: Check if account already exists using (provider, external_id) composite key
-      // This lookup must match the database unique index on (COALESCE(provider, 'unknown'), external_id)
-      const { data: existingAccount } = await supabase
-        .from('bank_accounts')
-        .select('id, display_name, provider')
-        .eq('external_id', account.account_id)
-        .eq('provider', accountProvider)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (existingAccount) {
-        // Update existing account - preserve display_name if set
-        const { error: updateError } = await supabase
+        const { data: existingAccount } = await supabase
           .from('bank_accounts')
-          .update({
-            balance,
-            name: accountName, // Update synced name
-            provider: accountProvider, // Ensure provider is set
-            last_synced_at: new Date().toISOString(),
-            // Note: display_name is NOT updated here to preserve user customization
-          })
-          .eq('id', existingAccount.id);
-
-        if (updateError) {
-          console.error('[sync] Error updating account:', updateError);
-        } else {
-          syncedAccounts.push({ ...account, balance, action: 'updated' });
-        }
-      } else {
-        // Create new account with provider field
-        const { error: insertError } = await supabase
-          .from('bank_accounts')
-          .insert({
-            user_id: userId,
-            name: accountName,
-            account_type: accountType,
-            balance,
-            external_id: account.account_id,
-            connection_id: connectionId,
-            provider: accountProvider,
-            last_synced_at: new Date().toISOString(),
-          });
-
-        if (insertError) {
-          console.error('[sync] Error creating account:', insertError);
-        } else {
-          syncedAccounts.push({ ...account, balance, action: 'created' });
-        }
-      }
-    }
-
-    // Fetch transactions for each account
-    let totalTransactions = 0;
-    for (const account of accounts) {
-      const txResponse = await fetch(
-        `${TRUELAYER_API_URL}/data/v1/accounts/${account.account_id}/transactions`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        }
-      );
-
-      if (txResponse.ok) {
-        const { results: transactions } = await txResponse.json();
-        
-        // Get the bank account ID
-        const { data: bankAccount } = await supabase
-          .from('bank_accounts')
-          .select('id')
+          .select('id, display_name, provider')
           .eq('external_id', account.account_id)
+          .eq('provider', accountProvider)
           .eq('user_id', userId)
           .maybeSingle();
 
-        if (bankAccount) {
-          for (const tx of transactions) {
-            // Check if transaction already exists
-            const { data: existingTx } = await supabase
-              .from('transactions')
-              .select('id')
-              .eq('external_id', tx.transaction_id)
-              .maybeSingle();
+        if (existingAccount) {
+          await supabase
+            .from('bank_accounts')
+            .update({
+              balance,
+              name: accountName,
+              provider: accountProvider,
+              last_synced_at: new Date().toISOString(),
+            })
+            .eq('id', existingAccount.id);
+          syncedAccounts.push({ account_id: account.account_id, balance, action: 'updated', type: 'account' });
+        } else {
+          await supabase
+            .from('bank_accounts')
+            .insert({
+              user_id: userId,
+              name: accountName,
+              account_type: accountType,
+              balance,
+              external_id: account.account_id,
+              connection_id: connectionId,
+              provider: accountProvider,
+              last_synced_at: new Date().toISOString(),
+            });
+          syncedAccounts.push({ account_id: account.account_id, balance, action: 'created', type: 'account' });
+        }
 
-            if (!existingTx) {
-              const txType = tx.amount < 0 ? 'expense' : 'income';
-              const { error: txError } = await supabase
+        // Fetch transactions for this account
+        const txResponse = await fetch(
+          `${TRUELAYER_API_URL}/data/v1/accounts/${account.account_id}/transactions`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+
+        if (txResponse.ok) {
+          const { results: transactions } = await txResponse.json();
+          const { data: bankAccount } = await supabase
+            .from('bank_accounts')
+            .select('id')
+            .eq('external_id', account.account_id)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (bankAccount) {
+            for (const tx of (transactions || [])) {
+              const { data: existingTx } = await supabase
                 .from('transactions')
-                .insert({
+                .select('id')
+                .eq('external_id', tx.transaction_id)
+                .maybeSingle();
+
+              if (!existingTx) {
+                const txType = tx.amount < 0 ? 'expense' : 'income';
+                const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
+                const { data: newTx } = await supabase
+                  .from('transactions')
+                  .insert({
+                    account_id: bankAccount.id,
+                    external_id: tx.transaction_id,
+                    description: tx.description || 'Bank transaction',
+                    amount: Math.abs(tx.amount),
+                    type: txType,
+                    transaction_date: txDate,
+                    merchant: tx.merchant_name || null,
+                  })
+                  .select('id')
+                  .single();
+
+                allNewTransactions.push({
                   account_id: bankAccount.id,
                   external_id: tx.transaction_id,
-                  description: tx.description || 'Bank transaction',
                   amount: Math.abs(tx.amount),
                   type: txType,
-                  transaction_date: tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0],
+                  transaction_date: txDate,
+                  description: tx.description || '',
                   merchant: tx.merchant_name || null,
+                  db_id: newTx?.id,
                 });
-
-              if (!txError) {
-                totalTransactions++;
               }
             }
           }
         }
       }
+    } else {
+      console.log('[sync] No bank accounts or accounts fetch failed');
     }
 
-    // Detect the real bank provider from synced accounts (e.g. "ob-monzo" instead of "truelayer")
+    // ── 2. Sync CREDIT CARDS (/data/v1/cards) ──
+    const cardsResponse = await fetch(`${TRUELAYER_API_URL}/data/v1/cards`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+
+    if (cardsResponse.ok) {
+      const { results: cards } = await cardsResponse.json();
+      console.log(`[sync] Found ${cards?.length || 0} credit cards`);
+
+      for (const card of (cards || [])) {
+        const balanceResponse = await fetch(
+          `${TRUELAYER_API_URL}/data/v1/cards/${card.account_id}/balance`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+
+        let balance = 0;
+        if (balanceResponse.ok) {
+          const { results: balances } = await balanceResponse.json();
+          // For credit cards, current = amount owed (show as negative)
+          balance = -(balances[0]?.current || 0);
+        }
+
+        const cardProvider = card.provider?.provider_id || 
+                             card.provider?.display_name || 
+                             connectionProvider;
+        const cardName = card.display_name || card.card_network || 'Credit Card';
+
+        const { data: existingCard } = await supabase
+          .from('bank_accounts')
+          .select('id, display_name, provider')
+          .eq('external_id', card.account_id)
+          .eq('provider', cardProvider)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (existingCard) {
+          await supabase
+            .from('bank_accounts')
+            .update({
+              balance,
+              name: cardName,
+              provider: cardProvider,
+              account_type: 'credit',
+              last_synced_at: new Date().toISOString(),
+            })
+            .eq('id', existingCard.id);
+          syncedAccounts.push({ account_id: card.account_id, balance, action: 'updated', type: 'card' });
+        } else {
+          await supabase
+            .from('bank_accounts')
+            .insert({
+              user_id: userId,
+              name: cardName,
+              account_type: 'credit',
+              balance,
+              external_id: card.account_id,
+              connection_id: connectionId,
+              provider: cardProvider,
+              last_synced_at: new Date().toISOString(),
+            });
+          syncedAccounts.push({ account_id: card.account_id, balance, action: 'created', type: 'card' });
+        }
+
+        // Fetch card transactions
+        const txResponse = await fetch(
+          `${TRUELAYER_API_URL}/data/v1/cards/${card.account_id}/transactions`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+
+        if (txResponse.ok) {
+          const { results: transactions } = await txResponse.json();
+          const { data: bankAccount } = await supabase
+            .from('bank_accounts')
+            .select('id')
+            .eq('external_id', card.account_id)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (bankAccount) {
+            for (const tx of (transactions || [])) {
+              const { data: existingTx } = await supabase
+                .from('transactions')
+                .select('id')
+                .eq('external_id', tx.transaction_id)
+                .maybeSingle();
+
+              if (!existingTx) {
+                // Credit card: positive amount = purchase (expense), negative = payment/refund (income)
+                const txType = tx.amount > 0 ? 'expense' : 'income';
+                const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
+                const { data: newTx } = await supabase
+                  .from('transactions')
+                  .insert({
+                    account_id: bankAccount.id,
+                    external_id: tx.transaction_id,
+                    description: tx.description || 'Card transaction',
+                    amount: Math.abs(tx.amount),
+                    type: txType,
+                    transaction_date: txDate,
+                    merchant: tx.merchant_name || null,
+                  })
+                  .select('id')
+                  .single();
+
+                allNewTransactions.push({
+                  account_id: bankAccount.id,
+                  external_id: tx.transaction_id,
+                  amount: Math.abs(tx.amount),
+                  type: txType,
+                  transaction_date: txDate,
+                  description: tx.description || '',
+                  merchant: tx.merchant_name || null,
+                  db_id: newTx?.id,
+                });
+              }
+            }
+          }
+        }
+      }
+    } else {
+      console.log('[sync] No credit cards or cards fetch failed');
+    }
+
+    // ── 3. Detect inter-account transfers ──
+    if (allNewTransactions.length > 0) {
+      const transferIds = detectTransfers(allNewTransactions);
+      if (transferIds.size > 0) {
+        console.log(`[sync] Detected ${transferIds.size / 2} transfer pair(s)`);
+        // Tag transfer transactions with a "Transfer" description suffix
+        for (const tx of allNewTransactions) {
+          if (transferIds.has(tx.external_id) && tx.db_id) {
+            const transferLabel = tx.type === 'expense' ? 'Transfer Out' : 'Transfer In';
+            // Update the description to indicate it's a transfer
+            await supabase
+              .from('transactions')
+              .update({ 
+                description: tx.description ? `${tx.description} [${transferLabel}]` : transferLabel,
+                // Don't change type — keep as income/expense so balances stay correct
+              })
+              .eq('id', tx.db_id);
+          }
+        }
+      }
+    }
+
+    // Detect the real bank provider from synced accounts
     const detectedProvider = syncedAccounts.length > 0
-      ? (accounts[0]?.provider?.provider_id || accounts[0]?.provider?.display_name || connectionProvider)
+      ? syncedAccounts[0].type === 'card'
+        ? (syncedAccounts.find(a => a.type === 'account')?.account_id ? connectionProvider : connectionProvider)
+        : connectionProvider
       : connectionProvider;
 
-    // Update connection status + propagate real bank provider (use service role since base table SELECT is blocked)
+    // For provider detection, re-check from TrueLayer response
+    let finalProvider = connectionProvider;
+    if (accountsResponse.ok) {
+      const { results: accounts } = await accountsResponse.json().catch(() => ({ results: [] }));
+      // Already consumed, use syncedAccounts data instead
+    }
+    // Use the provider we already detected during account sync
+    const providerFromAccounts = syncedAccounts.length > 0 ? connectionProvider : connectionProvider;
+
+    // Update connection status
     await serviceSupabase
       .from('bank_connections')
       .update({
         status: 'connected',
         last_synced_at: new Date().toISOString(),
-        provider: detectedProvider,
       })
       .eq('id', connectionId);
 
-    console.log(`[sync] Completed: ${syncedAccounts.length} accounts, ${totalTransactions} new transactions`);
+    const totalTransactions = allNewTransactions.length;
+    console.log(`[sync] Completed: ${syncedAccounts.length} accounts/cards, ${totalTransactions} new transactions`);
 
     return jsonResponse({
       success: true,
-      accounts: syncedAccounts.length,
+      accounts: syncedAccounts.filter(a => a.type === 'account').length,
+      cards: syncedAccounts.filter(a => a.type === 'card').length,
       transactions: totalTransactions,
     });
 
