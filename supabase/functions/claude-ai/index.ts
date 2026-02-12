@@ -351,16 +351,53 @@ async function handleMealPlanner(
     fat: Math.max(0, targets.fat - lockedMacros.fat),
   };
 
+  // Detect seasonings by food_type OR name patterns
+  const SEASONING_NAME_PATTERNS = [
+    'seasoning', 'rub', 'spice', 'powder', 'paprika', 'cajun',
+    'herbs', 'pepper', 'schwartz', 'oregano', 'cumin', 'chili',
+    'coriander', 'turmeric', 'garam masala', 'curry powder',
+    'sauce', 'dressing', 'mayo', 'ketchup', 'mustard',
+    'soy sauce', 'teriyaki', 'sriracha', 'hot sauce', 'bbq sauce',
+    'bbq rub', 'marinade', 'vinegar', 'glaze',
+    'olive oil', 'coconut oil', 'vegetable oil', 'rapeseed oil',
+    'sesame oil', 'cooking oil', 'sunflower oil',
+  ];
+
+  function isSeasoningItem(item: any): boolean {
+    if (item.food_type === 'seasoning' || item.food_type === 'sauce') return true;
+    const name = (item.name || '').toLowerCase();
+    return SEASONING_NAME_PATTERNS.some(p => name.includes(p));
+  }
+
   const foodList = freeItems.map((item: any) => {
-    const isSeasoning = item.food_type === 'seasoning';
-    return `- ${item.name} (id: ${item.id}): ${item.calories_per_100g} kcal, ${item.protein_per_100g}g P, ${item.carbs_per_100g}g C, ${item.fat_per_100g}g F per 100g. Min: ${item.min_portion_grams || 10}g, Max: ${isSeasoning ? 15 : (item.max_portion_grams || 500)}g. Meal: ${item.meal_type}.${isSeasoning ? ' SEASONING – hard cap 15g.' : ''}`;
+    const isSeas = isSeasoningItem(item);
+    const maxG = isSeas ? 15 : (item.max_portion_grams || 500);
+    const minG = isSeas ? 5 : (item.min_portion_grams || 10);
+    return `- ${item.name} (id: ${item.id}): ${item.calories_per_100g} kcal, ${item.protein_per_100g}g P, ${item.carbs_per_100g}g C, ${item.fat_per_100g}g F per 100g. Min: ${minG}g, Max: ${maxG}g. Meal: ${item.meal_type}.${isSeas ? ' ⚠️ SEASONING – MUST be 5-15g, never exceed 15g.' : ''}`;
   }).join('\n');
 
-  const lockedList = lockedItems.length > 0
-    ? lockedItems.map((item: any) => `- ${item.name}: ${item.quantity_grams}g (LOCKED – do not change)`).join('\n')
-    : 'None';
+  const systemPrompt = `You are a PRECISE meal portion calculator. Accuracy is critical — you must hit macro targets within tight tolerances.
 
-  const systemPrompt = `You are a precise meal portion calculator. Your job is to assign gram portions to food items to hit daily calorie and macro targets.\n\n## Targets (remaining after locked items):\n- Calories: ${Math.round(remainingTargets.calories)} kcal (tolerance: ±50 kcal)\n- Protein: ${Math.round(remainingTargets.protein)}g (must be AT or ABOVE target, max +2g over)\n- Carbs: ${Math.round(remainingTargets.carbs)}g (must be AT or ABOVE target, max +2g over)\n- Fat: ${Math.round(remainingTargets.fat)}g (tolerance: -1g to +2g)\n\n## Locked items (already set, do not change):\n${lockedList}\n\n## Available foods to portion:\n${foodList}\n\n## Rules:\n1. Every food item listed must get a portion (no zeros unless min is 0).\n2. Seasonings have a HARD cap of 15g maximum.\n3. Round portions to the nearest 5g for practicality.\n4. Prioritize hitting protein target first, then calories, then carbs/fat.\n5. Create sensible meal compositions — don't put all weight on one item.\n6. Respect min/max portion constraints for each item.\n7. Return ONLY the structured tool call with portions.`;
+## STRICT Targets (remaining after locked items):
+- Calories: EXACTLY ${Math.round(remainingTargets.calories)} kcal (tolerance: ±50 kcal — MUST be between ${Math.round(remainingTargets.calories) - 50} and ${Math.round(remainingTargets.calories) + 50})
+- Protein: EXACTLY ${Math.round(remainingTargets.protein)}g (MUST be between ${Math.round(remainingTargets.protein)} and ${Math.round(remainingTargets.protein) + 2}g)
+- Carbs: EXACTLY ${Math.round(remainingTargets.carbs)}g (MUST be between ${Math.round(remainingTargets.carbs)} and ${Math.round(remainingTargets.carbs) + 2}g)
+- Fat: EXACTLY ${Math.round(remainingTargets.fat)}g (MUST be between ${Math.round(remainingTargets.fat) - 1} and ${Math.round(remainingTargets.fat) + 2}g)
+
+## Locked items (already set, do not change):
+${lockedList}
+
+## Available foods to portion:
+${foodList}
+
+## CRITICAL Rules:
+1. You MUST hit ALL four targets within the tolerances above. Calculate the total macros from your portions and verify they match BEFORE returning.
+2. Seasonings (marked with ⚠️) have a HARD cap of 5-15g. NEVER assign more than 15g to any seasoning.
+3. Round portions to the nearest 5g.
+4. Approach: First calculate what macros you need. Then work out portions mathematically using the per-100g values. Verify totals before returning.
+5. Every food item must get a portion within its min/max range.
+6. Show your working: mentally calculate total P, C, F, Cal from your portions to verify they're within tolerance.
+7. Return ONLY the structured tool call with portions.`;
 
   const tools = [
     {
@@ -422,10 +459,13 @@ async function handleMealPlanner(
     const item = items.find((i: any) => i.id === p.id);
     if (!item) return p;
     let qty = Math.round(p.quantity_grams / 5) * 5;
-    const isSeasoning = item.food_type === 'seasoning';
-    if (isSeasoning && qty > 15) qty = 15;
-    const minG = item.min_portion_grams || 0;
-    const maxG = isSeasoning ? 15 : (item.max_portion_grams || 500);
+    const isSeas = isSeasoningItem(item);
+    if (isSeas) {
+      qty = Math.min(qty, 15);
+      qty = Math.max(qty, 5);
+    }
+    const minG = isSeas ? 5 : (item.min_portion_grams || 0);
+    const maxG = isSeas ? 15 : (item.max_portion_grams || 500);
     qty = Math.max(minG, Math.min(maxG, qty));
     return { id: p.id, quantity_grams: qty };
   });
