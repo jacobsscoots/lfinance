@@ -142,6 +142,25 @@ export interface SolverFailure {
   iterationsRun: number;
 }
 
+// Debug log entry for solver transparency
+export interface SolverStrategyLog {
+  strategy: string;
+  iterationsUsed: number;
+  converged: boolean;
+  finalDistance: number; // weighted distance from target
+  totals: MacroTotals;
+}
+
+export interface SolverDebugLog {
+  targets: SolverTargets;
+  itemCount: number;
+  adjustableCount: number;
+  feasibilityPassed: boolean;
+  strategies: SolverStrategyLog[];
+  winningStrategy: string | null;
+  totalIterations: number;
+}
+
 // Successful solver result
 export interface SolverSuccess {
   success: true;
@@ -150,6 +169,7 @@ export interface SolverSuccess {
   score: number;
   iterationsRun: number;
   warnings?: string[];
+  debugLog?: SolverDebugLog;
 }
 
 // Failed solver result — always includes bestEffortPortions so UI never shows 0g
@@ -157,6 +177,7 @@ export interface SolverFailed {
   success: false;
   failure: SolverFailure;
   bestEffortPortions?: Map<string, number>;
+  debugLog?: SolverDebugLog;
 }
 
 // Union result type

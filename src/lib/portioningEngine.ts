@@ -25,6 +25,8 @@ import {
   ToleranceConfig,
   DEFAULT_SOLVER_OPTIONS,
   SolverDebugInfo,
+  SolverDebugLog,
+  SolverStrategyLog,
   RoundingRule,
   MealType,
 } from './portioningTypes';
@@ -1142,6 +1144,11 @@ export function solve(
   const opts: SolverOptions = { ...DEFAULT_SOLVER_OPTIONS, ...options };
   const { maxIterations, tolerances, seasoningsCountMacros } = opts;
 
+  // Debug log tracking — always built, only attached when debugMode is true
+  const adjustableCount = items.filter(i => i.editableMode !== 'LOCKED' && i.category !== 'seasoning').length;
+  const strategyLogs: SolverStrategyLog[] = [];
+  let winningStrategy: string | null = null;
+
   // ============================================================
   // FIX A1: Feasibility pre-check — but still return best-effort
   // ============================================================
@@ -1265,6 +1272,32 @@ export function solve(
     return null;
   };
 
+  // Helper to build the debug log object
+  const buildDebugLog = (): SolverDebugLog => ({
+    targets,
+    itemCount: items.length,
+    adjustableCount,
+    feasibilityPassed: !feasibilityFailure,
+    strategies: strategyLogs,
+    winningStrategy,
+    totalIterations,
+  });
+
+  // Helper to log a strategy result
+  const logStrategy = (name: string, result: SolverResult & { iterationsRun: number }) => {
+    const totals = result.success
+      ? result.totals
+      : (result as any).failure?.closestTotals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    const delta = calculateDelta(totals, targets);
+    strategyLogs.push({
+      strategy: name,
+      iterationsUsed: result.iterationsRun,
+      converged: result.success,
+      finalDistance: calculateNetError(delta, tolerances),
+      totals,
+    });
+  };
+
   // Try gradient solver with each initialization (weighted iteration budgets)
   for (const init of initPortfolios) {
     const budget = Math.ceil(maxIterations * init.iterShare);
@@ -1272,8 +1305,13 @@ export function solve(
       items, targets, tolerances, seasoningsCountMacros,
       budget, init.portions, opts.debugMode
     );
+    logStrategy(`gradient:${init.name}`, result);
     const validResult = evaluateResult(result);
-    if (validResult) return validResult;
+    if (validResult) {
+      winningStrategy = `gradient:${init.name}`;
+      if (opts.debugMode) return { ...validResult, debugLog: buildDebugLog() };
+      return validResult;
+    }
   }
 
   // ============================================================
@@ -1284,14 +1322,19 @@ export function solve(
       items, targets, tolerances, seasoningsCountMacros,
       greedyBudget, 'midpoint', opts.debugMode
     );
+    logStrategy('greedy:midpoint', result);
     const validResult = evaluateResult(result);
-    if (validResult) return validResult;
+    if (validResult) {
+      winningStrategy = 'greedy:midpoint';
+      if (opts.debugMode) return { ...validResult, debugLog: buildDebugLog() };
+      return validResult;
+    }
   }
 
   // All strategies failed — return best attempt with diagnostics
   if (bestResult && !bestResult.success) {
     const failure = (bestResult as { success: false; failure: SolverFailure }).failure;
-    return {
+    const failResult: SolverResult = {
       success: false,
       failure: {
         ...failure,
@@ -1299,13 +1342,15 @@ export function solve(
         iterationsRun: totalIterations,
       },
       bestEffortPortions: bestFailedPortions ?? undefined,
-    } as SolverResult;
+    };
+    if (opts.debugMode) return { ...failResult, debugLog: buildDebugLog() } as SolverResult;
+    return failResult;
   }
 
   // Fallback (shouldn't reach here)
   const portions = initializePortions(items);
   const totals = sumMacros(items, portions, seasoningsCountMacros);
-  return {
+  const fallbackResult: SolverResult = {
     success: false,
     failure: {
       reason: 'max_iterations_exceeded',
@@ -1315,7 +1360,9 @@ export function solve(
       iterationsRun: totalIterations,
     },
     bestEffortPortions: portions,
-  } as SolverResult;
+  };
+  if (opts.debugMode) return { ...fallbackResult, debugLog: buildDebugLog() } as SolverResult;
+  return fallbackResult;
 }
 
 /**
