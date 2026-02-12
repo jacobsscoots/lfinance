@@ -79,11 +79,13 @@ export type Database = {
       bank_connections: {
         Row: {
           access_token: string | null
+          access_token_encrypted: string | null
           created_at: string
           id: string
           last_synced_at: string | null
           provider: string
           refresh_token: string | null
+          refresh_token_encrypted: string | null
           status: string
           token_expires_at: string | null
           updated_at: string
@@ -91,11 +93,13 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          access_token_encrypted?: string | null
           created_at?: string
           id?: string
           last_synced_at?: string | null
           provider?: string
           refresh_token?: string | null
+          refresh_token_encrypted?: string | null
           status?: string
           token_expires_at?: string | null
           updated_at?: string
@@ -103,11 +107,13 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          access_token_encrypted?: string | null
           created_at?: string
           id?: string
           last_synced_at?: string | null
           provider?: string
           refresh_token?: string | null
+          refresh_token_encrypted?: string | null
           status?: string
           token_expires_at?: string | null
           updated_at?: string
@@ -3615,6 +3621,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      decrypt_token: { Args: { encrypted_data: string }; Returns: string }
+      encrypt_token: { Args: { plain_text: string }; Returns: string }
+      get_bank_connection_tokens: {
+        Args: { p_connection_id: string }
+        Returns: {
+          access_token: string
+          id: string
+          provider: string
+          refresh_token: string
+          status: string
+          token_expires_at: string
+          user_id: string
+        }[]
+      }
       get_bank_connections_safe: {
         Args: never
         Returns: {
@@ -3653,6 +3673,16 @@ export type Database = {
         }[]
       }
       get_requesting_user_id: { Args: never; Returns: string }
+      store_bank_connection_tokens: {
+        Args: {
+          p_access_token: string
+          p_connection_id: string
+          p_refresh_token: string
+          p_status?: string
+          p_token_expires_at?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       bill_frequency:
