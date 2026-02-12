@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { SwitchingPopupDialog } from "@/components/cheaper-bills/SwitchingPopupDialog";
+import { CompareProvidersDialog } from "@/components/cheaper-bills/CompareProvidersDialog";
 import { ComparisonResult } from "@/hooks/useComparisonResults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,8 +32,9 @@ export default function CheaperBills() {
   const [readingDialogOpen, setReadingDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
   const [scanningServiceId, setScanningServiceId] = useState<string | null>(null);
-  const [switchingOffer, setSwitchingOffer] = useState<ComparisonResult | null>(null);
-  const [switchingCost, setSwitchingCost] = useState(0);
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [compareServiceType, setCompareServiceType] = useState<string | undefined>();
+  const [compareCost, setCompareCost] = useState(0);
 
   const { services, isLoading, createService, updateService, deleteService, isCreating } = useTrackedServices();
   const { readings, createReading, isCreating: isCreatingReading, totalKwh, totalCost } = useEnergyReadings();
@@ -148,11 +149,11 @@ export default function CheaperBills() {
     }
   };
 
-  const handleViewBestDeal = (offer: ComparisonResult) => {
-    // Find the service to get current monthly cost
+  const handleViewBestDeal = (_offer: ComparisonResult) => {
     const service = services.find(s => s.last_recommendation === 'switch');
-    setSwitchingCost(service?.monthly_cost || 0);
-    setSwitchingOffer(offer);
+    setCompareCost(service?.monthly_cost || 0);
+    setCompareServiceType(service?.service_type);
+    setCompareDialogOpen(true);
   };
 
   const energyServices = services.filter((s) => s.service_type === "energy");
@@ -443,11 +444,12 @@ export default function CheaperBills() {
           preferred_contract_months: editingService.preferred_contract_months || undefined,
         } : undefined}
       />
-      <SwitchingPopupDialog
-        open={!!switchingOffer}
-        onOpenChange={(open) => !open && setSwitchingOffer(null)}
-        result={switchingOffer}
-        currentMonthlyCost={switchingCost}
+      <CompareProvidersDialog
+        open={compareDialogOpen}
+        onOpenChange={setCompareDialogOpen}
+        results={comparisonResults}
+        currentMonthlyCost={compareCost}
+        serviceType={compareServiceType}
       />
       <TariffFormDialog
         open={tariffDialogOpen}
