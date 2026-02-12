@@ -1,11 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { z } from "https://esm.sh/zod@3.23.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const inputSchema = z.object({
+  payslipId: z.string().regex(UUID_REGEX, "Invalid payslip ID format"),
+  imageBase64: z.string().min(1).max(15_000_000, "Image too large (max ~10MB)"),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]).optional().default("image/jpeg"),
+});
 
 interface OtherDeduction {
   name: string;
@@ -32,14 +41,15 @@ serve(async (req) => {
   }
 
   try {
-    const { payslipId, imageBase64, mimeType } = await req.json();
-
-    if (!payslipId || !imageBase64) {
+    const rawBody = await req.json();
+    const parseResult = inputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return new Response(
-        JSON.stringify({ error: "Missing payslipId or imageBase64" }),
+        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    const { payslipId, imageBase64, mimeType } = parseResult.data;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {

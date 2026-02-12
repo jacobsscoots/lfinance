@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://esm.sh/zod@3.23.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,8 +77,22 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
-    const { method, content, productType = "grocery" } = body;
+    const rawBody = await req.json();
+    
+    const nutritionInputSchema = z.object({
+      method: z.enum(["image", "text", "url"]),
+      content: z.string().min(1),
+      productType: z.enum(["grocery", "toiletry"]).optional().default("grocery"),
+    });
+    
+    const parseResult = nutritionInputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid input", details: parseResult.error.flatten().fieldErrors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { method, content, productType } = parseResult.data;
     
     // Validate method
     if (!method || !VALID_METHODS.includes(method)) {

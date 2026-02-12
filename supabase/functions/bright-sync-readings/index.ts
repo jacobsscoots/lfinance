@@ -1,5 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const inputSchema = z.object({
+  action: z.enum(["connect", "sync", "disconnect"]),
+  username: z.string().email().max(255).optional(),
+  password: z.string().min(1).max(500).optional(),
+  from: z.string().max(30).optional(),
+  to: z.string().max(30).optional(),
+});
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,7 +123,15 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    const { action, username, password, from, to } = await req.json();
+    const rawBody = await req.json();
+    const parseResult = inputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { action, username, password, from, to } = parseResult.data;
 
     // Get or create connection
     let { data: connection } = await supabase

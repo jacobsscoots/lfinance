@@ -1,5 +1,22 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "node:crypto";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const webhookBodySchema = z.object({
+  data: z.object({
+    tracking_number: z.string().max(100).optional(),
+    delivery_status: z.string().max(50).optional(),
+    courier_code: z.string().max(50).optional(),
+    latest_event_time: z.string().max(100).optional(),
+    id: z.string().max(100).optional(),
+    origin_info: z.any().optional(),
+    destination_info: z.any().optional(),
+  }).optional(),
+  tracking_number: z.string().max(100).optional(),
+  status: z.string().max(50).optional(),
+  carrier: z.string().max(50).optional(),
+  event_time: z.string().max(100).optional(),
+}).passthrough();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,7 +72,14 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const body = await req.json();
+    const rawBody = await req.json();
+    const parseResult = webhookBodySchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const body = parseResult.data;
 
     // TrackingMore V4 webhook: { data: { tracking_number, courier_code, delivery_status, ... } }
     const tmData = body.data;

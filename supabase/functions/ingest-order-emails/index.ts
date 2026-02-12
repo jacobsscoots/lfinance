@@ -1,4 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const emailItemSchema = z.object({
+  message_id: z.string().max(500),
+  from_email: z.string().max(500),
+  subject: z.string().max(1000).optional(),
+  body_snippet: z.string().max(10000).optional(),
+  received_at: z.string().max(50).optional(),
+});
+
+const ingestInputSchema = z.object({
+  emails: z.array(emailItemSchema).max(100),
+});
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,14 +119,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { emails } = await req.json();
-
-    if (!Array.isArray(emails)) {
-      return new Response(JSON.stringify({ error: "emails array required" }), {
+    const rawBody = await req.json();
+    const parseResult = ingestInputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const { emails } = parseResult.data;
 
     let ordersCreated = 0;
     let shipmentsCreated = 0;

@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const postBodySchema = z.object({
+  action: z.enum(["get_auth_url", "exchange_token", "refresh_token"]),
+  code: z.string().max(2048).optional(),
+  redirect_uri: z.string().url().max(2048).optional(),
+  origin: z.string().url().max(2048).optional(),
+});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -150,7 +158,15 @@ serve(async (req) => {
     }
 
     // Handle POST requests (API calls from frontend)
-    const body = await req.json();
+    const rawBody = await req.json();
+    const parseResult = postBodySchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const body = parseResult.data;
     const { action, code, redirect_uri } = body;
 
     if (action === 'get_auth_url') {
