@@ -156,6 +156,31 @@ export function RunwayBalanceCard({ metrics, isLoading }: RunwayBalanceCardProps
             <span>= {formatCurrency(metrics.safeToSpendPerDay)}/day</span>
           </div>
         </div>
+
+        {/* Budget Buffer - Ahead/Behind Plan */}
+        <div className="rounded-lg border p-3 space-y-1.5 text-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground uppercase tracking-wide">Budget Plan (£{metrics.dailyBudget}/day)</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Plan remaining ({metrics.daysRemaining} days)</span>
+            <span className="font-medium">{formatCurrency(metrics.planRemaining)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Start-of-day buffer</span>
+            <span className={cn("font-medium", metrics.bufferStart >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+              {metrics.bufferStart >= 0 ? "+" : ""}{formatCurrency(metrics.bufferStart)}
+            </span>
+          </div>
+          <div className="border-t pt-1.5 flex justify-between font-semibold">
+            <span>{metrics.bufferTomorrow >= 0 ? "Ahead of plan" : "Behind plan"}</span>
+            <span className={cn(
+              metrics.bufferTomorrow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+            )}>
+              {metrics.bufferTomorrow >= 0 ? "+" : ""}{formatCurrency(metrics.bufferTomorrow)}
+            </span>
+          </div>
+        </div>
         
         {/* Balance Timeline */}
         <BalanceTimeline 

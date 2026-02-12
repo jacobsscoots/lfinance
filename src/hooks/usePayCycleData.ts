@@ -215,6 +215,14 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const safeToSpendPerDay = daysRemaining > 0 ? nonCreditBalance / daysRemaining : 0;
   const discretionaryRemaining = nonCreditBalance;
   
+  // Budget buffer tracking
+  const dailyBudget = effectiveSettings.daily_budget;
+  const planRemaining = dailyBudget * daysRemaining; // includes today
+  const bufferStart = anchorBalance - planRemaining;
+  const bufferTomorrow = daysRemaining > 1
+    ? nonCreditBalance - (dailyBudget * (daysRemaining - 1))
+    : nonCreditBalance; // last day: whatever's left is buffer
+  
   // Budget for pace calculation (income if available, otherwise start balance)
   const effectiveBudget = totalIncome > 0 ? totalIncome : startBalance;
   const expectedSpentByNow = daysTotal > 0 ? (effectiveBudget / daysTotal) * daysPassed : 0;
@@ -250,6 +258,10 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     anchorBalance,
     spentToday,
     remainingBalance: nonCreditBalance,
+    dailyBudget,
+    planRemaining,
+    bufferStart,
+    bufferTomorrow,
     totalSpent,
     totalIncome,
     expectedSpentByNow,

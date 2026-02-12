@@ -46,6 +46,12 @@ export interface PayCycleMetrics {
   spentToday: number;         // posted spend today
   remainingBalance: number;   // current non-credit balance
   
+  // Budget buffer tracking
+  dailyBudget: number;        // configured daily budget (e.g. £15)
+  planRemaining: number;      // daily_budget * days_remaining (incl today)
+  bufferStart: number;        // anchor_balance - plan_remaining (start of day)
+  bufferTomorrow: number;     // current_balance - (daily_budget * (days_remaining - 1))
+  
   // Spending
   totalSpent: number;
   totalIncome: number;
