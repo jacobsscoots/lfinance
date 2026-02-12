@@ -353,7 +353,8 @@ async function handleMealPlanner(
     id: string;
     name: string;
     isSeasoning: boolean;
-    minG: number;
+    softMinG: number; // product-level min (if included, use at least this)
+    minG: number;     // solver hard floor (0 for optional items)
     maxG: number;
     calPer1g: number;
     pPer1g: number;
@@ -363,11 +364,19 @@ async function handleMealPlanner(
 
   const freeFoods: FreeFood[] = freeItems.map((item: any) => {
     const isSeas = isSeasoningItem(item);
+    // CRITICAL: Non-locked, non-seasoning items are OPTIONAL (minG = 0).
+    // The solver can choose to exclude them entirely (set to 0g).
+    // min_portion_grams from the product is only a "soft" minimum —
+    // it means "if you include this food, use at least Xg" but the solver
+    // can decide not to include it at all.
+    // Seasonings are the exception: they are always 5–15g when present.
+    const softMin = item.min_portion_grams || 0;
     return {
       id: item.id,
       name: item.name,
       isSeasoning: isSeas,
-      minG: isSeas ? 5 : Math.max(item.min_portion_grams || 0, 0),
+      softMinG: isSeas ? 5 : Math.max(softMin, 0), // product-level min (for logging/suggestions)
+      minG: isSeas ? 5 : 0, // solver hard floor: 0 = optional
       maxG: isSeas ? 15 : Math.max(item.max_portion_grams || 500, 1),
       calPer1g: (item.calories_per_100g || 0) / 100,
       pPer1g: (item.protein_per_100g || 0) / 100,
@@ -413,10 +422,24 @@ async function handleMealPlanner(
 
   console.log(`[solver] FEASIBILITY: targets cal=${fullCalTarget} p=${fullPTarget} c=${fullCTarget} f=${fullFTarget}`);
   console.log(`[solver] locked: cal=${Math.round(lockedMacros.calories)} p=${Math.round(lockedMacros.protein)} c=${Math.round(lockedMacros.carbs)} f=${Math.round(lockedMacros.fat)}`);
-  console.log(`[solver] theoretical_min: cal=${Math.round(theoreticalMin.calories)} p=${Math.round(theoreticalMin.protein)} c=${Math.round(theoreticalMin.carbs)} f=${Math.round(theoreticalMin.fat)}`);
+  console.log(`[solver] theoretical_min (optional mode, minG=0): cal=${Math.round(theoreticalMin.calories)} p=${Math.round(theoreticalMin.protein)} c=${Math.round(theoreticalMin.carbs)} f=${Math.round(theoreticalMin.fat)}`);
   console.log(`[solver] theoretical_max: cal=${Math.round(theoreticalMax.calories)} p=${Math.round(theoreticalMax.protein)} c=${Math.round(theoreticalMax.carbs)} f=${Math.round(theoreticalMax.fat)}`);
+  
+  // Also compute forced-min mode for comparison logging
+  const forcedMin = { calories: lockedMacros.calories, protein: lockedMacros.protein, carbs: lockedMacros.carbs, fat: lockedMacros.fat };
   for (const food of freeFoods) {
-    console.log(`[solver] food: ${food.name} | min=${food.minG}g max=${food.maxG}g | cal/g=${food.calPer1g.toFixed(2)} p/g=${food.pPer1g.toFixed(2)} c/g=${food.cPer1g.toFixed(2)} f/g=${food.fPer1g.toFixed(2)} | seasoning=${food.isSeasoning}`);
+    forcedMin.calories += food.calPer1g * food.softMinG;
+    forcedMin.protein += food.pPer1g * food.softMinG;
+    forcedMin.carbs += food.cPer1g * food.softMinG;
+    forcedMin.fat += food.fPer1g * food.softMinG;
+  }
+  console.log(`[solver] forced_min (if all softMins applied): cal=${Math.round(forcedMin.calories)} p=${Math.round(forcedMin.protein)} c=${Math.round(forcedMin.carbs)} f=${Math.round(forcedMin.fat)}`);
+  if (forcedMin.fat > fullFTarget) {
+    console.log(`[solver] NOTE: Forced mins would exceed fat target (${Math.round(forcedMin.fat)}g > ${fullFTarget}g). Optional mode fixes this.`);
+  }
+  
+  for (const food of freeFoods) {
+    console.log(`[solver] food: ${food.name} | minG=0 softMin=${food.softMinG}g max=${food.maxG}g | cal/g=${food.calPer1g.toFixed(2)} p/g=${food.pPer1g.toFixed(2)} c/g=${food.cPer1g.toFixed(2)} f/g=${food.fPer1g.toFixed(2)} | seasoning=${food.isSeasoning}`);
   }
 
   // Check hard infeasibility: if theoretical max can't reach target - tolerance
@@ -896,94 +919,92 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     if (finalTotals.fat > fullFTarget) violations.push(`fat_over_by_${(finalTotals.fat - fullFTarget).toFixed(1)}g`);
     else if (finalTotals.fat < fullFTarget - 2) violations.push(`fat_under_by_${(fullFTarget - finalTotals.fat).toFixed(1)}g`);
 
-    // ── Inter-constraint conflict analysis ──
-    // Identify WHY the solver couldn't hit all targets simultaneously.
-    // This is the key insight: each macro may be individually achievable,
-    // but the combination may not be (e.g., hitting carbs forces fat/kcal over).
+    // ── Context-aware suggestions based on ACTUAL solver state ──
     const suggested_fixes: string[] = [];
 
-    const isCalOver = finalTotals.calories > fullCalTarget;
-    const isFatOver = finalTotals.fat > fullFTarget;
     const isCarbsUnder = finalTotals.carbs < fullCTarget - 2;
     const isProtUnder = finalTotals.protein < fullPTarget - 2;
     const isCalUnder = finalTotals.calories < fullCalTarget - 50;
+    const isCalOver = finalTotals.calories > fullCalTarget;
+    const isFatOver = finalTotals.fat > fullFTarget;
 
-    // Compute per-food fat contribution at their minimum portions
-    const fatBudgetFromLocked = lockedMacros.fat;
-    const fatBudgetTotal = fullFTarget;
-    const fatRoomFromFree = fatBudgetTotal - fatBudgetFromLocked;
-    const fatAtMin = freeFoods.reduce((s, f) => s + f.fPer1g * f.minG, 0);
-    const fatHeadroom = fatRoomFromFree - fatAtMin;
+    // Analyze what the solver actually did — which foods are at max, at 0, etc.
+    const foodStates = freeFoods.map(f => {
+      const g = finalResult.grams.get(f.id) || 0;
+      return { ...f, currentG: g, atMax: g >= f.maxG, atZero: g === 0, atSoftMin: g > 0 && g <= f.softMinG };
+    });
 
-    // Find the biggest fat contributors (at min)
-    const fatContributors = freeFoods
-      .filter(f => !f.isSeasoning && f.fPer1g * f.minG > 0.5)
-      .map(f => ({ name: f.name, fatAtMin: f.fPer1g * f.minG, minG: f.minG, fPer100g: f.fPer1g * 100 }))
-      .sort((a, b) => b.fatAtMin - a.fatAtMin);
+    // Find foods the solver excluded (0g) and what they'd contribute
+    const excludedFoods = foodStates.filter(f => f.atZero && !f.isSeasoning);
+    // Find foods at their max
+    const maxedFoods = foodStates.filter(f => f.atMax && !f.isSeasoning);
 
-    if (isFatOver || (isCarbsUnder && fatHeadroom < 5)) {
-      // Fat-carbs conflict: explain that adding carbs also adds fat
-      suggested_fixes.push(
-        `Fat budget conflict: locked items use ${fatBudgetFromLocked.toFixed(1)}g fat, ` +
-        `free items at minimum portions add ${fatAtMin.toFixed(1)}g fat, ` +
-        `leaving only ${fatHeadroom.toFixed(1)}g headroom (target: ${fatBudgetTotal}g). ` +
-        `Increasing carb portions pushes fat over.`
-      );
-      for (const fc of fatContributors.slice(0, 2)) {
+    if (isCarbsUnder || isCalUnder) {
+      // Which carb foods are at max?
+      const carbMaxed = maxedFoods.filter(f => f.cPer1g > 0.2);
+      for (const cf of carbMaxed.slice(0, 2)) {
         suggested_fixes.push(
-          `${fc.name} at min ${fc.minG}g uses ${fc.fatAtMin.toFixed(1)}g fat (${fc.fPer100g.toFixed(1)}g/100g). ` +
-          `Reduce min_portion_grams or replace with a lower-fat alternative.`
+          `${cf.name} is at max ${cf.maxG}g (provides ${(cf.cPer1g * cf.currentG).toFixed(0)}g carbs). ` +
+          `Increase max_portion_grams to allow more carbs.`
         );
+      }
+
+      // Are there excluded carb-rich foods?
+      const excludedCarb = excludedFoods.filter(f => f.cPer1g > 0.2);
+      if (excludedCarb.length > 0) {
+        // Solver chose to exclude them — probably because including them pushes another macro over
+        for (const ec of excludedCarb.slice(0, 1)) {
+          const fatPer100g = ec.fPer1g * 100;
+          if (fatPer100g > 3) {
+            suggested_fixes.push(
+              `${ec.name} was excluded by solver (${(ec.cPer1g * 100).toFixed(0)}g carbs/100g but also ${fatPer100g.toFixed(1)}g fat/100g). ` +
+              `Replace with a lower-fat carb source to hit carbs without exceeding fat.`
+            );
+          }
+        }
+      }
+
+      // If no carb foods are maxed or excluded, the issue is likely not enough carb sources
+      if (carbMaxed.length === 0 && excludedCarb.length === 0) {
+        const carbFoods = foodStates.filter(f => f.cPer1g > 0.2 && !f.isSeasoning);
+        if (carbFoods.length === 0) {
+          suggested_fixes.push('No carb-dense food available. Add rice, pasta, bread, oats, or cereal.');
+        } else {
+          for (const cf of carbFoods.slice(0, 1)) {
+            suggested_fixes.push(
+              `${cf.name} at ${cf.currentG}g of ${cf.maxG}g max. ` +
+              `Solver couldn't increase further without breaking another constraint (likely fat or calories).`
+            );
+          }
+        }
       }
     }
 
-    if (isCalOver && isCarbsUnder) {
-      // Calorie-carbs conflict: carb foods are too calorie-dense or other foods eat the calorie budget
-      const calDenseNonCarb = freeFoods
-        .filter(f => !f.isSeasoning && f.calPer1g > 0.8 && f.cPer1g < 0.1)
-        .map(f => ({ name: f.name, calAtMin: f.calPer1g * f.minG, minG: f.minG }))
-        .sort((a, b) => b.calAtMin - a.calAtMin);
-      if (calDenseNonCarb.length > 0) {
-        const top = calDenseNonCarb[0];
+    if (isFatOver) {
+      // Which foods contribute most fat at their current portions?
+      const fatContribs = foodStates
+        .filter(f => !f.isSeasoning && f.currentG > 0)
+        .map(f => ({ ...f, fatContrib: f.fPer1g * f.currentG }))
+        .sort((a, b) => b.fatContrib - a.fatContrib);
+      for (const fc of fatContribs.slice(0, 2)) {
         suggested_fixes.push(
-          `${top.name} at min ${top.minG}g uses ${top.calAtMin.toFixed(0)} kcal but only ` +
-          `${(freeFoods.find(f => f.name === top.name)!.cPer1g * top.minG).toFixed(1)}g carbs. ` +
-          `Reduce its min_portion_grams to free calories for carb-rich foods.`
+          `${fc.name} at ${fc.currentG}g contributes ${fc.fatContrib.toFixed(1)}g fat (${(fc.fPer1g * 100).toFixed(1)}g/100g). ` +
+          `Replace with a lower-fat alternative or reduce portion.`
         );
       }
-    }
-
-    if (isCalOver && !isCarbsUnder && !isProtUnder) {
-      // All macros OK but calories over — find calorie-dense items that could be reduced
-      const calOverBy = finalTotals.calories - fullCalTarget;
-      suggested_fixes.push(
-        `Calories over target by ${calOverBy} kcal. Reduce portions of calorie-dense items ` +
-        `or replace with lower-calorie alternatives.`
-      );
     }
 
     if (isProtUnder && !isCalOver) {
-      const protFoods = freeFoods.filter(f => f.pPer1g > 0.15 && !f.isSeasoning);
+      const protFoods = foodStates.filter(f => f.pPer1g > 0.15 && !f.isSeasoning && !f.atMax);
       if (protFoods.length > 0) {
         const top = protFoods.sort((a, b) => b.pPer1g - a.pPer1g)[0];
-        const currentG = finalResult.grams.get(top.id) || 0;
-        if (currentG < top.maxG) {
-          suggested_fixes.push(`Increase ${top.name} from ${currentG}g (max ${top.maxG}g) to add protein.`);
-        }
+        suggested_fixes.push(`Increase ${top.name} from ${top.currentG}g (max ${top.maxG}g) to add protein.`);
       } else {
-        suggested_fixes.push('Add a lean protein source (chicken, turkey, white fish).');
-      }
-    }
-
-    if (isCalUnder && isCarbsUnder) {
-      // Both under — need more calorie + carb dense food
-      const carbFoods = freeFoods.filter(f => f.cPer1g > 0.2 && !f.isSeasoning);
-      for (const cf of carbFoods.sort((a, b) => b.cPer1g - a.cPer1g).slice(0, 2)) {
-        const currentG = finalResult.grams.get(cf.id) || 0;
-        if (currentG >= cf.maxG) {
-          suggested_fixes.push(`${cf.name} is at max ${cf.maxG}g. Increase max_portion_grams to add more carbs + calories.`);
+        const protMaxed = maxedFoods.filter(f => f.pPer1g > 0.15);
+        if (protMaxed.length > 0) {
+          suggested_fixes.push(`${protMaxed[0].name} at max ${protMaxed[0].maxG}g. Increase max_portion_grams for more protein.`);
         } else {
-          suggested_fixes.push(`Increase ${cf.name} from ${currentG}g toward ${cf.maxG}g.`);
+          suggested_fixes.push('Add a lean protein source (chicken, turkey, white fish).');
         }
       }
     }
@@ -994,22 +1015,26 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
       return {
         name: f.name,
         currentGrams: g,
+        softMinG: f.softMinG,
         minG: f.minG,
         maxG: f.maxG,
         atMin: g <= f.minG,
         atMax: g >= f.maxG,
+        excluded: g === 0,
         isSeasoning: f.isSeasoning,
         perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
       };
     });
 
     if (suggested_fixes.length === 0) {
-      suggested_fixes.push('Targets may be impossible with current food list and portion constraints. Adjust targets or food list.');
+      suggested_fixes.push('Targets may be impossible with current food list. Consider adjusting targets, adding new foods, or increasing max_portion_grams.');
     }
 
-    console.log(`[solver] FAIL analysis: fatFromLocked=${fatBudgetFromLocked.toFixed(1)} fatAtMin=${fatAtMin.toFixed(1)} fatHeadroom=${fatHeadroom.toFixed(1)} fatTarget=${fatBudgetTotal}`);
-    console.log(`[solver] violations: ${violations.join(', ')}`);
+    console.log(`[solver] FAIL analysis: violations=${violations.join(', ')}`);
     console.log(`[solver] suggestions: ${suggested_fixes.join(' | ')}`);
+    for (const fb of foodBreakdown) {
+      console.log(`[solver] breakdown: ${fb.name} = ${fb.currentGrams}g (softMin=${fb.softMinG} max=${fb.maxG} excluded=${fb.excluded} atMax=${fb.atMax})`);
+    }
 
     return {
       success: false,
@@ -1023,9 +1048,6 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
       feasibility: {
         theoretical_min: theoreticalMin,
         theoretical_max: theoreticalMax,
-        fat_headroom: fatHeadroom,
-        fat_at_min: fatAtMin,
-        locked_fat: fatBudgetFromLocked,
       },
     };
   }
