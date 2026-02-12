@@ -58,7 +58,7 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
       try {
         const wb = XLSX.read(evt.target?.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
+        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { raw: false });
 
         const parsed: ImportRow[] = [];
         const currentYear = new Date().getFullYear();
@@ -81,16 +81,30 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
           let day: number | null = null;
 
           if (birthdayRaw) {
-            const str = String(birthdayRaw).trim();
-            // Try DD/MM or DD/MM/YYYY
-            const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
-            if (slashMatch) {
-              day = parseInt(slashMatch[1], 10);
-              month = parseInt(slashMatch[2], 10);
-              // Validate
-              if (month < 1 || month > 12 || day < 1 || day > 31) {
-                month = null;
-                day = null;
+            // Excel may parse "05/11" as a Date serial number — handle that first
+            if (typeof birthdayRaw === "number") {
+              // Excel date serial → JS Date
+              const parsed = XLSX.SSF.parse_date_code(birthdayRaw);
+              if (parsed && parsed.m >= 1 && parsed.m <= 12) {
+                // Excel stores dates as MM/DD in US locale, but the spreadsheet is DD/MM UK.
+                // parse_date_code returns { y, m, d } based on the serial, which Excel interprets
+                // with its own locale. We'll use the raw value: re-read as string from the cell.
+                month = parsed.m;
+                day = parsed.d;
+              }
+            }
+            if (!month) {
+              const str = String(birthdayRaw).trim();
+              // Try DD/MM or DD/MM/YYYY
+              const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
+              if (slashMatch) {
+                day = parseInt(slashMatch[1], 10);
+                month = parseInt(slashMatch[2], 10);
+                // Validate
+                if (month < 1 || month > 12 || day < 1 || day > 31) {
+                  month = null;
+                  day = null;
+                }
               }
             }
           }
