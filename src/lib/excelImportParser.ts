@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 // --- Sheet Detection ---
 
@@ -6,11 +6,11 @@ const SETTINGS_VARIANTS = [
   "settings", "setting", "config", "configuration",
 ];
 
-export function findSettingsSheet(workbook: XLSX.WorkBook): {
+export function findSettingsSheet(workbook: ExcelJS.Workbook): {
   sheetName: string | null;
   availableSheets: string[];
 } {
-  const availableSheets = workbook.SheetNames;
+  const availableSheets = workbook.worksheets.map((ws) => ws.name);
   const match = availableSheets.find((name) =>
     SETTINGS_VARIANTS.includes(name.trim().toLowerCase())
   );
@@ -19,17 +19,18 @@ export function findSettingsSheet(workbook: XLSX.WorkBook): {
 
 // --- Grid Conversion ---
 
-export function sheetToGrid(sheet: XLSX.WorkSheet): string[][] {
-  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
+export function sheetToGrid(sheet: ExcelJS.Worksheet): string[][] {
   const grid: string[][] = [];
-  for (let r = range.s.r; r <= range.e.r; r++) {
-    const row: string[] = [];
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
-      row.push(cell ? String(cell.v ?? "").trim() : "");
+  sheet.eachRow({ includeEmpty: true }, (row, _rowNumber) => {
+    const cells: string[] = [];
+    const colCount = sheet.columnCount;
+    for (let c = 1; c <= colCount; c++) {
+      const cell = row.getCell(c);
+      const val = cell.value;
+      cells.push(val != null ? String(val).trim() : "");
     }
-    grid.push(row);
-  }
+    grid.push(cells);
+  });
   return grid;
 }
 
@@ -228,6 +229,11 @@ export function normaliseAmount(value: any): number | null {
 export function normaliseDate(value: any): string | null {
   if (value == null || value === "") return null;
 
+  // Date object (ExcelJS returns Date objects for date cells)
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : formatISODate(value);
+  }
+
   // Excel serial date (number)
   if (typeof value === "number") {
     const date = excelSerialToDate(value);
@@ -337,4 +343,44 @@ export function normaliseBoolean(value: any): boolean | null {
   if (["yes", "y", "true", "1", "active"].includes(s)) return true;
   if (["no", "n", "false", "0", "inactive", "cancelled"].includes(s)) return false;
   return null;
+}
+
+// --- Workbook Reading Helper ---
+
+export async function readWorkbook(data: ArrayBuffer): Promise<ExcelJS.Workbook> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(data);
+  return workbook;
+}
+
+// --- Sheet to JSON Helper (replaces XLSX.utils.sheet_to_json) ---
+
+export function sheetToJson<T = Record<string, any>>(sheet: ExcelJS.Worksheet): T[] {
+  const rows: T[] = [];
+  const headers: string[] = [];
+
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) {
+      // First row is headers
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        headers[colNumber - 1] = cell.value != null ? String(cell.value).trim() : `Column${colNumber}`;
+      });
+      return;
+    }
+
+    const record: Record<string, any> = {};
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const header = headers[colNumber - 1];
+      if (header) {
+        record[header] = cell.value;
+      }
+    });
+
+    // Only add non-empty rows
+    if (Object.values(record).some((v) => v != null && String(v).trim() !== "")) {
+      rows.push(record as T);
+    }
+  });
+
+  return rows;
 }

@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import * as XLSX from "xlsx";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +39,7 @@ import {
   sheetToGrid,
   extractTables,
   assignSections,
+  readWorkbook,
   type ExtractedTable,
   type AssignedSections,
   type LayoutType,
@@ -153,45 +153,45 @@ export function ExcelImportDialog({
 
   // --- Step 1: Upload ---
   const handleFileUpload = useCallback(
-    (file: File) => {
+    async (file: File) => {
       setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
-          const { sheetName: found, availableSheets: sheets } = findSettingsSheet(workbook);
+      try {
+        const buffer = await file.arrayBuffer();
+        const workbook = await readWorkbook(buffer);
+        const { sheetName: found, availableSheets: sheets } = findSettingsSheet(workbook);
 
-          setAvailableSheets(sheets);
+        setAvailableSheets(sheets);
 
-          if (!found) {
-            toast.error(
-              `Couldn't find a Settings sheet. Available sheets: ${sheets.join(", ")}`,
-              { duration: 6000 }
-            );
-            return;
-          }
-
-          setSheetName(found);
-          const sheet = workbook.Sheets[found];
-          const grid = sheetToGrid(sheet);
-          const layout = detectLayout(grid);
-          setLayoutDetected(layout);
-
-          const tables = extractTables(grid);
-          const assigned = assignSections(tables);
-          setSections(assigned);
-          setStep("detect");
-        } catch (err) {
-          console.error("Parse error:", err);
+        if (!found) {
           toast.error(
-            file.name.endsWith(".xls")
-              ? "Failed to parse .xls file. Please save as .xlsx and try again."
-              : "Failed to parse file. Please check it's a valid Excel file."
+            `Couldn't find a Settings sheet. Available sheets: ${sheets.join(", ")}`,
+            { duration: 6000 }
           );
+          return;
         }
-      };
-      reader.readAsArrayBuffer(file);
+
+        setSheetName(found);
+        const sheet = workbook.getWorksheet(found);
+        if (!sheet) {
+          toast.error("Failed to read sheet");
+          return;
+        }
+        const grid = sheetToGrid(sheet);
+        const layout = detectLayout(grid);
+        setLayoutDetected(layout);
+
+        const tables = extractTables(grid);
+        const assigned = assignSections(tables);
+        setSections(assigned);
+        setStep("detect");
+      } catch (err) {
+        console.error("Parse error:", err);
+        toast.error(
+          file.name.endsWith(".xls")
+            ? "Failed to parse .xls file. Please save as .xlsx and try again."
+            : "Failed to parse file. Please check it's a valid Excel file."
+        );
+      }
     },
     []
   );
@@ -504,374 +504,353 @@ export function ExcelImportDialog({
       debts_added: res.debts.added,
       debts_updated: res.debts.updated,
       debts_skipped: res.debts.skipped,
-      details: {
-        totalRows: totalRows,
-        sectionsFound: {
-          bills: billsData?.rows.length ?? 0,
-          subs: subsData?.rows.length ?? 0,
-          debts: debtRows.length,
-        },
-      },
     });
 
-    // Invalidate queries
     queryClient.invalidateQueries({ queryKey: ["bills"] });
     queryClient.invalidateQueries({ queryKey: ["debts"] });
 
     setStep("done");
-    toast.success("Import completed!");
   }, [user, billsData, subsData, debtsData, fileName, sheetName, layoutDetected, createLog, queryClient]);
 
-  // --- Summary counts ---
-  const getSummary = () => {
-    const count = (sd: SectionData | null) => {
-      if (!sd) return { toAdd: 0, toUpdate: 0, toSkip: 0, errors: 0 };
-      const valid = sd.rows.filter((r) => r.valid);
-      const invalid = sd.rows.filter((r) => !r.valid);
-      const toAdd = valid.filter((r) => !r.duplicate || r.duplicateAction === "import_new").length;
-      const toUpdate = valid.filter((r) => r.duplicate && r.duplicateAction === "update").length;
-      const toSkip = valid.filter((r) => r.duplicate && r.duplicateAction === "skip").length;
-      return { toAdd, toUpdate, toSkip, errors: invalid.length };
-    };
-    return {
-      bills: count(billsData),
-      subs: count(subsData),
-      debts: count(debtsData),
-    };
+  // --- Render helpers ---
+  const renderSectionSummary = (name: string, table: ExtractedTable | null) => {
+    if (!table) return null;
+    return (
+      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+        <div>
+          <p className="font-medium text-sm">{name}</p>
+          <p className="text-xs text-muted-foreground">
+            {table.rows.length} row(s) · {table.headers.length} columns
+          </p>
+        </div>
+        <Badge variant="outline">
+          <CheckCircle2 className="h-3 w-3 mr-1" />
+          Found
+        </Badge>
+      </div>
+    );
   };
 
-  const hasBlockingErrors = () => {
-    const check = (sd: SectionData | null) => {
-      if (!sd) return false;
-      return sd.rows.some((r) => !r.valid);
-    };
-    return check(billsData) || check(subsData) || check(debtsData);
+  const renderMappingSection = (
+    title: string,
+    sectionKey: "bills" | "subs" | "debts",
+    data: SectionData | null
+  ) => {
+    if (!data) return null;
+    return (
+      <div className="space-y-2">
+        <h4 className="font-medium text-sm">{title}</h4>
+        <div className="space-y-1">
+          {data.table.headers.map((header) => (
+            <div key={header} className="flex items-center gap-2 text-sm">
+              <span className="w-32 truncate text-muted-foreground">{header}</span>
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+              <Select
+                value={data.mapping[header] || "_skip"}
+                onValueChange={(val) => updateMapping(sectionKey, header, val)}
+              >
+                <SelectTrigger className="h-8 w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_skip">— Skip —</SelectItem>
+                  {data.fields.map((f) => (
+                    <SelectItem key={f.key} value={f.key}>
+                      {f.label} {f.required ? "*" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPreviewSection = (
+    title: string,
+    sectionKey: "bills" | "subs" | "debts",
+    data: SectionData | null
+  ) => {
+    if (!data || data.rows.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        <h4 className="font-medium text-sm">
+          {title} ({data.rows.filter((r) => r.valid).length} valid /{" "}
+          {data.rows.length} total)
+        </h4>
+        <div className="max-h-48 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-8">✓</TableHead>
+                {data.fields
+                  .filter((f) => Object.values(data.mapping).includes(f.key))
+                  .map((f) => (
+                    <TableHead key={f.key} className="text-xs">
+                      {f.label}
+                    </TableHead>
+                  ))}
+                <TableHead className="text-xs">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.rows.map((row, idx) => (
+                <TableRow key={idx} className={row.valid ? "" : "opacity-50"}>
+                  <TableCell>
+                    {row.valid ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    )}
+                  </TableCell>
+                  {data.fields
+                    .filter((f) => Object.values(data.mapping).includes(f.key))
+                    .map((f) => (
+                      <TableCell key={f.key} className="text-xs">
+                        {row.normalised?.[f.key] != null
+                          ? String(row.normalised[f.key])
+                          : "—"}
+                      </TableCell>
+                    ))}
+                  <TableCell>
+                    {row.duplicate ? (
+                      <Select
+                        value={row.duplicateAction}
+                        onValueChange={(val) =>
+                          setDuplicateAction(sectionKey, idx, val as DuplicateAction)
+                        }
+                      >
+                        <SelectTrigger className="h-6 w-24 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="skip">Skip</SelectItem>
+                          <SelectItem value="update">Update</SelectItem>
+                          <SelectItem value="import_new">New</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : row.valid ? (
+                      <Badge variant="outline" className="text-xs">
+                        New
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-destructive">
+                        {row.errors[0]}
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto pr-8">
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        if (!val) handleClose();
+        else onOpenChange(val);
+      }}
+    >
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader className="pr-8">
-          <DialogTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5" />
-            Import from Excel
-          </DialogTitle>
+          <DialogTitle>Import from Excel</DialogTitle>
         </DialogHeader>
 
-        {/* Step 1: Upload */}
         {step === "upload" && (
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload an Excel file with a <strong>Settings</strong> sheet containing
+              your bills, subscriptions, and/or debts.
+            </p>
+
             <div
               className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
-              onClick={() => document.getElementById("excel-file-input")?.click()}
+              onClick={() =>
+                document.getElementById("excel-import-input")?.click()
+              }
             >
-              <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <p className="font-medium">Drop your Excel file here</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                or click to browse — accepts .xlsx files
-              </p>
               <input
-                id="excel-file-input"
+                id="excel-import-input"
                 type="file"
                 accept=".xlsx,.xls"
                 className="hidden"
                 onChange={handleFileInput}
               />
-            </div>
-            <div className="flex items-center justify-between">
-              <SampleTemplateDownload />
-              <p className="text-xs text-muted-foreground">
-                The file must contain a "Settings" sheet
+              <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm font-medium">
+                Drop your Excel file here or click to browse
               </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Supports .xlsx and .xls files
+              </p>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <SampleTemplateDownload />
+              <Button variant="outline" onClick={handleClose}>
+                Cancel
+              </Button>
             </div>
           </div>
         )}
 
-        {/* Step 2: Detection */}
         {step === "detect" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-primary" />
-              <span>
-                Found sheet: <strong>{sheetName}</strong> — Layout:{" "}
-                <Badge variant="secondary">{layoutDetected}</Badge>
-              </span>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                <span className="text-sm font-medium">{fileName}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Sheet: {sheetName} · Layout:{" "}
+                {layoutDetected === "CATEGORY_TABLE"
+                  ? "Category column"
+                  : layoutDetected === "SECTION_TABLES"
+                  ? "Section headings"
+                  : "Unknown"}
+              </p>
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-medium">Detected sections:</h3>
-              {sections.bills && (
-                <div className="flex items-center gap-2 p-2 rounded border">
-                  <Badge>Bills</Badge>
-                  <span className="text-sm">{sections.bills.rows.length} rows</span>
-                </div>
-              )}
-              {sections.subscriptions && (
-                <div className="flex items-center gap-2 p-2 rounded border">
-                  <Badge>Subscriptions</Badge>
-                  <span className="text-sm">{sections.subscriptions.rows.length} rows</span>
-                </div>
-              )}
-              {sections.debts && (
-                <div className="flex items-center gap-2 p-2 rounded border">
-                  <Badge>Debts</Badge>
-                  <span className="text-sm">{sections.debts.rows.length} rows</span>
-                </div>
-              )}
+              <h4 className="text-sm font-medium">Detected sections:</h4>
+              {renderSectionSummary("Bills", sections.bills)}
+              {renderSectionSummary("Subscriptions", sections.subscriptions)}
+              {renderSectionSummary("Debts", sections.debts)}
               {!sections.bills && !sections.subscriptions && !sections.debts && (
-                <div className="flex items-center gap-2 p-3 rounded border border-destructive/50 bg-destructive/5">
+                <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
                   <span className="text-sm">
-                    No valid sections found. Use headings like "Bills", "Subscriptions", or "Debts",
-                    or add a "Category" column.
+                    No sections found. Check the file uses section headings (Bills,
+                    Subscriptions, Debts) or a Category column.
                   </span>
                 </div>
               )}
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={resetState}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
+              <Button variant="outline" onClick={() => setStep("upload")}>
+                <ArrowLeft className="h-4 w-4 mr-1" />
                 Back
               </Button>
               <Button
                 onClick={handleProceedToMapping}
-                disabled={!sections.bills && !sections.subscriptions && !sections.debts}
+                disabled={
+                  !sections.bills && !sections.subscriptions && !sections.debts
+                }
               >
-                Continue
-                <ArrowRight className="h-4 w-4 ml-2" />
+                Continue to Mapping
+                <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 3: Mapping */}
         {step === "mapping" && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Confirm how columns map to app fields. Adjust any incorrect mappings.
+              Map your spreadsheet columns to the correct fields. Required fields
+              are marked with *.
             </p>
 
-            {[
-              { label: "Bills", data: billsData, section: "bills" as const },
-              { label: "Subscriptions", data: subsData, section: "subs" as const },
-              { label: "Debts", data: debtsData, section: "debts" as const },
-            ]
-              .filter((s) => s.data)
-              .map(({ label, data, section }) => (
-                <div key={section} className="space-y-2">
-                  <h3 className="text-sm font-medium">{label} Column Mapping</h3>
-                  <div className="border rounded-lg divide-y">
-                    {data!.table.headers
-                      .filter((h) => h.trim())
-                      .map((header) => (
-                        <div
-                          key={header}
-                          className="flex items-center justify-between p-2 gap-3"
-                        >
-                          <span className="text-sm font-mono truncate flex-1">
-                            {header}
-                          </span>
-                          <Select
-                            value={data!.mapping[header] || "IGNORE"}
-                            onValueChange={(val) => updateMapping(section, header, val)}
-                          >
-                            <SelectTrigger className="w-48">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="IGNORE">— Ignore —</SelectItem>
-                              {data!.fields.map((f) => (
-                                <SelectItem key={f.key} value={f.key}>
-                                  {f.label}
-                                  {f.required ? " *" : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              ))}
+            {renderMappingSection("Bills", "bills", billsData)}
+            {renderMappingSection("Subscriptions", "subs", subsData)}
+            {renderMappingSection("Debts", "debts", debtsData)}
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep("detect")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
+                <ArrowLeft className="h-4 w-4 mr-1" />
                 Back
               </Button>
               <Button onClick={handleProceedToPreview}>
-                Preview Data
-                <ArrowRight className="h-4 w-4 ml-2" />
+                Preview Import
+                <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Preview */}
         {step === "preview" && (
           <div className="space-y-4">
-            {(() => {
-              const summary = getSummary();
-              return (
-                <div className="grid grid-cols-3 gap-3">
-                  {(["bills", "subs", "debts"] as const).map((key) => {
-                    const s = summary[key];
-                    const label = key === "subs" ? "Subscriptions" : key === "bills" ? "Bills" : "Debts";
-                    if (s.toAdd === 0 && s.toUpdate === 0 && s.toSkip === 0 && s.errors === 0)
-                      return null;
-                    return (
-                      <div key={key} className="p-3 border rounded-lg space-y-1">
-                        <p className="text-sm font-medium">{label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {s.toAdd} new · {s.toUpdate} update · {s.toSkip} skip
-                          {s.errors > 0 && (
-                            <span className="text-destructive"> · {s.errors} errors</span>
-                          )}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            {[
-              { label: "Bills", data: billsData, section: "bills" as const },
-              { label: "Subscriptions", data: subsData, section: "subs" as const },
-              { label: "Debts", data: debtsData, section: "debts" as const },
-            ]
-              .filter((s) => s.data && s.data.rows.length > 0)
-              .map(({ label, data, section }) => (
-                <div key={section} className="space-y-2">
-                  <h3 className="text-sm font-medium">{label}</h3>
-                  <div className="border rounded-lg overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-8"></TableHead>
-                          {data!.fields
-                            .filter((f) =>
-                              Object.values(data!.mapping).includes(f.key)
-                            )
-                            .map((f) => (
-                              <TableHead key={f.key} className="text-xs">
-                                {f.label}
-                              </TableHead>
-                            ))}
-                          <TableHead className="text-xs">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data!.rows.slice(0, 20).map((row, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>
-                              {row.valid ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                              ) : (
-                                <XCircle className="h-3.5 w-3.5 text-destructive" />
-                              )}
-                            </TableCell>
-                            {data!.fields
-                              .filter((f) =>
-                                Object.values(data!.mapping).includes(f.key)
-                              )
-                              .map((f) => (
-                                <TableCell key={f.key} className="text-xs">
-                                  {row.valid
-                                    ? String(row.normalised[f.key] ?? "")
-                                    : String(row.raw[f.key] ?? "")}
-                                </TableCell>
-                              ))}
-                            <TableCell className="text-xs">
-                              {!row.valid && (
-                                <span className="text-destructive">
-                                  {row.errors.join(", ")}
-                                </span>
-                              )}
-                              {row.duplicate && row.valid && (
-                                <Select
-                                  value={row.duplicateAction}
-                                  onValueChange={(val) =>
-                                    setDuplicateAction(section, idx, val as DuplicateAction)
-                                  }
-                                >
-                                  <SelectTrigger className="h-7 text-xs w-28">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="skip">Skip</SelectItem>
-                                    <SelectItem value="update">Update</SelectItem>
-                                    <SelectItem value="import_new">New</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )}
-                              {!row.duplicate && row.valid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  New
-                                </Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              ))}
+            {renderPreviewSection("Bills", "bills", billsData)}
+            {renderPreviewSection("Subscriptions", "subs", subsData)}
+            {renderPreviewSection("Debts", "debts", debtsData)}
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep("mapping")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
+                <ArrowLeft className="h-4 w-4 mr-1" />
                 Back
               </Button>
-              <Button onClick={handleImport} disabled={hasBlockingErrors()}>
-                Import All
-                <ArrowRight className="h-4 w-4 ml-2" />
+              <Button onClick={handleImport}>
+                Import Data
+                <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 5: Importing */}
         {step === "importing" && (
-          <div className="space-y-4 py-8 text-center">
-            <FileSpreadsheet className="h-10 w-10 mx-auto text-primary animate-pulse" />
-            <p className="font-medium">Importing…</p>
-            <Progress value={importProgress} className="max-w-xs mx-auto" />
-            <p className="text-sm text-muted-foreground">{importProgress}%</p>
+          <div className="space-y-4 py-8">
+            <p className="text-sm text-center">Importing your data…</p>
+            <Progress value={importProgress} className="w-full" />
+            <p className="text-xs text-center text-muted-foreground">
+              {importProgress}%
+            </p>
           </div>
         )}
 
-        {/* Step 6: Done */}
         {step === "done" && results && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-primary">
-              <CheckCircle2 className="h-5 w-5" />
-              <span className="font-medium">Import Complete</span>
+            <div className="text-center py-4">
+              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-2" />
+              <h3 className="font-medium">Import Complete</h3>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Bills", r: results.bills },
-                { label: "Subscriptions", r: results.subs },
-                { label: "Debts", r: results.debts },
-              ].map(({ label, r }) => (
-                <div key={label} className="p-3 border rounded-lg">
-                  <p className="text-sm font-medium">{label}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {r.added} added · {r.updated} updated · {r.skipped} skipped
-                  </p>
+            <div className="space-y-2">
+              {(results.bills.added > 0 ||
+                results.bills.updated > 0 ||
+                results.bills.skipped > 0) && (
+                <div className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                  <span>Bills</span>
+                  <span>
+                    {results.bills.added} added · {results.bills.updated} updated ·{" "}
+                    {results.bills.skipped} skipped
+                  </span>
                 </div>
-              ))}
+              )}
+              {(results.subs.added > 0 ||
+                results.subs.updated > 0 ||
+                results.subs.skipped > 0) && (
+                <div className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                  <span>Subscriptions</span>
+                  <span>
+                    {results.subs.added} added · {results.subs.updated} updated ·{" "}
+                    {results.subs.skipped} skipped
+                  </span>
+                </div>
+              )}
+              {(results.debts.added > 0 ||
+                results.debts.updated > 0 ||
+                results.debts.skipped > 0) && (
+                <div className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                  <span>Debts</span>
+                  <span>
+                    {results.debts.added} added · {results.debts.updated} updated ·{" "}
+                    {results.debts.skipped} skipped
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleClose}>
-                Close
-              </Button>
+            <div className="flex justify-end">
               <Button
                 onClick={() => {
                   handleClose();
