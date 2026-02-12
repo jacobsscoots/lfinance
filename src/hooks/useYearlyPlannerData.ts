@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBills } from "@/hooks/useBills";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { useGroceryForecast } from "@/hooks/useGroceryForecast";
+import { useBirthdayEvents } from "@/hooks/useBirthdayEvents";
 import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
 import { toast } from "sonner";
 
@@ -27,6 +28,7 @@ export interface MonthData {
   income: number;
   bills: number;
   groceryForecast: number;
+  birthdayOutgoings: number;
   discretionary: number;
   overrideIncome: number;
   overrideExpense: number;
@@ -42,6 +44,7 @@ export function useYearlyPlannerData(year: number) {
   const { bills } = useBills();
   const { effectiveSettings } = usePaydaySettings();
   const { monthlySpend: groceryMonthlyForecast } = useGroceryForecast();
+  const { events: birthdayEvents } = useBirthdayEvents();
   const queryClient = useQueryClient();
 
   // Fetch overrides for the year
@@ -245,6 +248,11 @@ export function useYearlyPlannerData(year: number) {
     let groceryForecast = groceryMonthlyForecast;
     let discretionary = 0;
 
+    // Birthday outgoings: sum budgets for events in this month (month is 0-indexed, event_month is 1-indexed)
+    const birthdayOutgoings = birthdayEvents
+      .filter(e => e.is_active !== false && e.event_month === month + 1 && Number(e.budget) > 0)
+      .reduce((s, e) => s + Number(e.budget), 0);
+
     const overrideIncome = monthOverrides
       .filter(o => o.type === 'income')
       .reduce((s, o) => s + Number(o.amount), 0);
@@ -253,7 +261,7 @@ export function useYearlyPlannerData(year: number) {
       .reduce((s, o) => s + Number(o.amount), 0);
 
     const totalIncome = income + overrideIncome;
-    const totalOutgoings = billsTotal + discretionary + groceryForecast + overrideExpense;
+    const totalOutgoings = billsTotal + discretionary + groceryForecast + overrideExpense + birthdayOutgoings;
     const net = totalIncome - totalOutgoings;
     runningSurplus += net;
 
@@ -265,6 +273,7 @@ export function useYearlyPlannerData(year: number) {
       income,
       bills: billsTotal,
       groceryForecast,
+      birthdayOutgoings,
       discretionary,
       overrideIncome,
       overrideExpense,

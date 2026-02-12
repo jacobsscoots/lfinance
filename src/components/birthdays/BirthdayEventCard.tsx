@@ -3,9 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import {
   Cake, Gift, TreePine, Heart, Plus, Trash2, Pencil, ChevronDown, ChevronRight,
+  MapPin, Mail, Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BirthdayEvent, BirthdayExpense } from "@/hooks/useBirthdayEvents";
@@ -28,10 +28,13 @@ interface Props {
   onAddExpense: (eventId: string) => void;
   onTogglePurchased: (expense: BirthdayExpense) => void;
   onDeleteExpense: (id: string) => void;
+  onToggleCardSent?: (event: BirthdayEvent) => void;
+  onToggleMoneyScheduled?: (event: BirthdayEvent) => void;
 }
 
 export function BirthdayEventCard({
   event, expenses, year, onEdit, onDelete, onAddExpense, onTogglePurchased, onDeleteExpense,
+  onToggleCardSent, onToggleMoneyScheduled,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const Icon = OCCASION_ICONS[event.occasion] || Gift;
@@ -45,6 +48,9 @@ export function BirthdayEventCard({
   const dateLabel = event.event_day
     ? `${event.event_day} ${MONTH_NAMES[event.event_month - 1]}`
     : MONTH_NAMES[event.event_month - 1];
+
+  const hasAddress = event.address_line1 || event.city || event.postcode;
+  const addressParts = [event.address_line1, event.address_line2, event.city, event.state, event.postcode, event.country].filter(Boolean);
 
   return (
     <Card className={cn(overBudget && "border-destructive/50")}>
@@ -61,9 +67,30 @@ export function BirthdayEventCard({
             )} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{event.person_name}</p>
+            <p className="font-medium truncate">
+              {event.title ? `${event.title} ` : ""}{event.person_name}
+            </p>
             <p className="text-xs text-muted-foreground">{dateLabel}</p>
           </div>
+
+          {/* Status tick boxes */}
+          <div className="flex items-center gap-3 shrink-0">
+            <label className="flex items-center gap-1 text-xs cursor-pointer" title="Money Scheduled">
+              <Checkbox
+                checked={!!event.money_scheduled}
+                onCheckedChange={() => onToggleMoneyScheduled?.(event)}
+              />
+              <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
+            </label>
+            <label className="flex items-center gap-1 text-xs cursor-pointer" title="Card Sent">
+              <Checkbox
+                checked={!!event.card_sent}
+                onCheckedChange={() => onToggleCardSent?.(event)}
+              />
+              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+            </label>
+          </div>
+
           <div className="text-right shrink-0">
             <p className={cn("font-semibold text-sm", overBudget ? "text-destructive" : "text-foreground")}>
               £{totalSpent.toFixed(2)}
@@ -86,7 +113,16 @@ export function BirthdayEventCard({
         </div>
 
         {expanded && (
-          <div className="mt-3 ml-10 space-y-2">
+          <div className="mt-3 ml-10 space-y-3">
+            {/* Address */}
+            {hasAddress && (
+              <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>{addressParts.join(", ")}</span>
+              </div>
+            )}
+
+            {/* Expenses */}
             {yearExpenses.length === 0 ? (
               <p className="text-sm text-muted-foreground">No items yet for {year}</p>
             ) : (

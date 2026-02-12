@@ -172,6 +172,8 @@ export default function Birthdays() {
                   onAddExpense={(id) => { setSelectedEventId(id); setExpenseFormOpen(true); }}
                   onTogglePurchased={(exp) => updateExpense.mutate({ id: exp.id, is_purchased: !exp.is_purchased })}
                   onDeleteExpense={(id) => deleteExpense.mutate(id)}
+                  onToggleCardSent={(e) => updateEvent.mutate({ id: e.id, card_sent: !e.card_sent })}
+                  onToggleMoneyScheduled={(e) => updateEvent.mutate({ id: e.id, money_scheduled: !e.money_scheduled })}
                 />
               ))
             )}

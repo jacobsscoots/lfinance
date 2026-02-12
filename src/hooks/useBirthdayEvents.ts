@@ -13,6 +13,15 @@ export interface BirthdayEvent {
   budget: number;
   notes: string | null;
   is_active: boolean;
+  title: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+  country: string | null;
+  money_scheduled: boolean | null;
+  card_sent: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -170,6 +179,15 @@ export function useBirthdayEvents() {
       event_month: number;
       event_day: number | null;
       budget: number;
+      title?: string | null;
+      address_line1?: string | null;
+      address_line2?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postcode?: string | null;
+      country?: string | null;
+      money_scheduled?: boolean | null;
+      card_sent?: boolean | null;
       expenses?: Array<{ description: string; amount: number; year: number }>;
     }>) => {
       if (!user) throw new Error("Not authenticated");

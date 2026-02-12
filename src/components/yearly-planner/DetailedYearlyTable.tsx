@@ -315,6 +315,28 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                 );
               }
 
+              // Birthday outgoings row
+              const hasBirthdays = months.some(m => m.birthdayOutgoings > 0);
+              if (hasBirthdays) {
+                rows.push(
+                  <tr key="birthday-outgoings" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                    <td className={cn(labelClass, "font-normal")}>
+                      <span className="flex items-center gap-1.5">
+                        🎂 Birthdays &amp; Occasions
+                      </span>
+                    </td>
+                    {months.map((m, i) => (
+                      <td key={i} className={cn(cellClass, m.birthdayOutgoings > 0 ? "text-foreground" : "text-muted-foreground/40")}>
+                        {m.birthdayOutgoings > 0 ? fmt(m.birthdayOutgoings) : "—"}
+                      </td>
+                    ))}
+                    <td className={cn(cellClass, "font-semibold bg-muted/50")}>
+                      {fmt(months.reduce((s, m) => s + m.birthdayOutgoings, 0))}
+                    </td>
+                  </tr>
+                );
+              }
+
               return rows;
             })()}
 
