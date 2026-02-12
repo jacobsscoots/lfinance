@@ -158,18 +158,20 @@ export function useYearlyPlannerData(year: number) {
   const averageTrackedIncome = getMonthlyTrackedIncome();
   const activeBills = bills.filter(b => b.is_active);
 
-  // April 2026 inflation adjustments (researched from official/reputable sources)
-  // Bills in a fixed-term contract are excluded (Broadband/Fibrely, Electric)
+  // ─── APRIL 2026 – MARCH 2027 BILL ADJUSTMENTS ───
+  // Researched from official/reputable sources. Update this config as new
+  // announcements are made for the 2026/27 tax year.
+  // Last reviewed: Feb 2026
   const APRIL_2026_INFLATION: Record<string, { type: 'percent' | 'flat' | 'fixed'; value: number; source: string }> = {
     // --- Confirmed increases ---
-    'Council Tax':           { type: 'percent', value: 5,     source: 'Gov 5% referendum cap 2026/27' },
+    'Council Tax':           { type: 'percent', value: 5,     source: 'Swindon BC +5% for 2026/27 (Band B, single person 25% discount, 10 instalments Apr-Jan)' },
     'TV License':            { type: 'fixed',   value: 180,   source: 'BBC/Gov confirmed £180/yr from Apr 2026' },
     'TV Licence':            { type: 'fixed',   value: 180,   source: 'BBC/Gov confirmed £180/yr from Apr 2026' },
     'EE Phone Payment':      { type: 'flat',    value: 2.50,  source: 'EE confirmed +£2.50/mo from Apr 2026 (Bristol Live/Uswitch)' },
     'Santander Premium Bank': { type: 'percent', value: 25,   source: 'Santander 25% fee hike on premium accounts (The Sun, Jan 2026)' },
     // --- No change confirmed (frozen / contract-protected / no announcement) ---
     // 'Broadband' — Fibrely, in fixed-term contract
-    // 'Electric' — in fixed-term contract
+    // 'Electric' — in fixed-term contract, no gov subsidy applies (Warm Home Discount is means-tested)
     // 'Spotify' — UK already at £12.99 since Nov 2024, no Apr 2026 UK increase
     // 'iCloud+' — no UK increase announced for 2026
     // '1p Mobile' — no mid-contract price rises policy
@@ -179,15 +181,25 @@ export function useYearlyPlannerData(year: number) {
     // 'Rent' — not specified as changing
   };
 
+  // Council Tax is paid over 10 monthly instalments (April–January).
+  // February (index 1) and March (index 2) are payment holidays.
+  const COUNCIL_TAX_PAYMENT_MONTHS = [0, 3, 4, 5, 6, 7, 8, 9, 10, 11]; // Jan, Apr-Nov, Dec
+
+  const isCouncilTaxMonth = (mo: number): boolean =>
+    COUNCIL_TAX_PAYMENT_MONTHS.includes(mo);
+
   const getInflationAdjustedAmount = (billName: string, baseAmount: number, yr: number, mo: number): number => {
-    // Only apply from April 2026 onwards
-    if (yr < 2026 || (yr === 2026 && mo < 3)) return baseAmount; // mo is 0-indexed, April = 3
+    // Council Tax: skip Feb (1) and Mar (2) — no instalments
+    if (/council\s*tax/i.test(billName) && !isCouncilTaxMonth(mo)) return 0;
+
+    // Only apply inflation from April 2026 onwards
+    if (yr < 2026 || (yr === 2026 && mo < 3)) return baseAmount;
     if (baseAmount === 0) return 0;
     const rule = APRIL_2026_INFLATION[billName];
     if (!rule) return baseAmount;
     if (rule.type === 'percent') return Math.round(baseAmount * (1 + rule.value / 100) * 100) / 100;
     if (rule.type === 'flat') return baseAmount + rule.value;
-    if (rule.type === 'fixed') return rule.value; // occurrence engine handles frequency
+    if (rule.type === 'fixed') return rule.value;
     return baseAmount;
   };
 
