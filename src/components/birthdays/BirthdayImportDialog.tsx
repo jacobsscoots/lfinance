@@ -11,6 +11,15 @@ interface ImportRow {
   event_month: number;
   event_day: number | null;
   budget: number;
+  title?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+  money_scheduled?: boolean | null;
+  card_sent?: boolean | null;
   expenses?: Array<{ description: string; amount: number; year: number }>;
 }
 
@@ -143,12 +152,36 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
             expenses.push({ description: "Gift", amount: cost, year: currentYear });
           }
 
+          // Address fields
+          const title = row["Title"] || row["title"] || null;
+          const address_line1 = row["Address 1"] || row["Address1"] || row["address_line1"] || row["Address"] || null;
+          const address_line2 = row["Address 2"] || row["Address2"] || row["address_line2"] || null;
+          const city = row["City"] || row["city"] || row["Town"] || null;
+          const state = row["State"] || row["state"] || row["County"] || null;
+          const postcode = row["Zip"] || row["zip"] || row["Postcode"] || row["postcode"] || row["Post Code"] || null;
+          const country = row["Country"] || row["country"] || null;
+
+          // Status checkboxes
+          const moneyRaw = row["Money Scheduled?"] || row["Money Scheduled"] || row["money_scheduled"];
+          const money_scheduled = moneyRaw ? String(moneyRaw).toUpperCase() === "TRUE" : false;
+          const cardRaw = row["Card Sent?"] || row["Card Sent"] || row["card_sent"];
+          const card_sent = cardRaw ? String(cardRaw).toUpperCase() === "TRUE" : false;
+
           parsed.push({
             person_name: String(name).trim(),
             occasion,
             event_month: month,
             event_day: day,
             budget,
+            title: title ? String(title).trim() : null,
+            address_line1: address_line1 ? String(address_line1).trim() : null,
+            address_line2: address_line2 ? String(address_line2).trim() : null,
+            city: city ? String(city).trim() : null,
+            state: state ? String(state).trim() : null,
+            postcode: postcode ? String(postcode).trim() : null,
+            country: country ? String(country).trim() : null,
+            money_scheduled,
+            card_sent,
             expenses: expenses.length > 0 ? expenses : undefined,
           });
         }

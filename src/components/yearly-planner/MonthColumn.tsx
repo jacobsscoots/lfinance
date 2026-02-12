@@ -51,6 +51,12 @@ export function MonthColumn({ data, onAddOverride, onDeleteOverride }: MonthColu
           <span className="text-muted-foreground">Spending</span>
           <span className="font-medium">{formatCurrency(data.discretionary)}</span>
         </div>
+        {data.birthdayOutgoings > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">🎂 Birthdays</span>
+            <span className="font-medium">{formatCurrency(data.birthdayOutgoings)}</span>
+          </div>
+        )}
 
         {/* Overrides */}
         {data.overrides.length > 0 && (
