@@ -897,27 +897,35 @@ function runGradientSolve(
   let iterationsRun = 0;
   let lastError = Infinity;
   let stagnation = 0;
+  let validSinceImproved = 0; // Track how many iterations since last improvement within tolerance
 
   for (let iter = 0; iter < maxIterations; iter++, iterationsRun++) {
     const totals = sumMacros(items, portions, seasoningsCountMacros);
     const delta = calculateDelta(totals, targets);
     const currentError = calculateNetError(delta, tolerances);
 
-    // Check for valid solution
+    // Check for valid solution — DON'T break immediately. Keep iterating
+    // to find better solutions within tolerance. Only stop after 15
+    // consecutive in-tolerance iterations with no improvement.
     if (isWithinTolerance(totals, targets, tolerances)) {
       const score = scorePlan(portions, totals, targets, items);
       if (!bestCandidate || score < bestCandidate.score) {
         bestCandidate = { portions: new Map(portions), totals: roundMacros(totals), score };
+        validSinceImproved = 0;
+      } else {
+        validSinceImproved++;
       }
-      break;
+      if (validSinceImproved >= 15) break; // Fully converged within tolerance
+    } else {
+      validSinceImproved = 0;
     }
 
     if (currentError < 0.1) break;
 
-    // Stagnation check
+    // Stagnation check — increase patience for tighter convergence
     if (Math.abs(currentError - lastError) < 0.01) {
       stagnation++;
-      if (stagnation > 40) break;
+      if (stagnation > 60) break;
     } else {
       stagnation = 0;
     }
@@ -976,36 +984,48 @@ function runGradientSolve(
       }
     }
 
-    // PHASE 2: Fine-tuning — escape rounding traps with ±step increments
+    // PHASE 2: Multi-pass fine-tuning — escape rounding traps with ±step
+    // increments. Loop until no item changes (not just one pass).
     if (!anyChanged) {
-      for (let j = 0; j < adjustableItems.length; j++) {
-        const item = adjustableItems[j];
-        const currentGrams = portions.get(item.id) ?? 0;
-        const step = Math.max(item.portionStepGrams, 1);
+      let fineTunePass = 0;
+      const MAX_FINE_TUNE_PASSES = 5;
+      while (fineTunePass < MAX_FINE_TUNE_PASSES) {
+        fineTunePass++;
+        let passChanged = false;
 
-        const candidateSet = new Set<number>();
-        for (const d of [1, -1, 2, -2, step, -step, step * 2, -step * 2]) {
-          const g = clampToConstraints(currentGrams + d, item);
-          if (g !== currentGrams) candidateSet.add(g);
-        }
+        for (let j = 0; j < adjustableItems.length; j++) {
+          const item = adjustableItems[j];
+          const currentGrams = portions.get(item.id) ?? 0;
+          const step = Math.max(item.portionStepGrams, 1);
 
-        let bestError = tryAdjustment(items, portions, item.id, currentGrams, targets, tolerances, seasoningsCountMacros);
-        let bestGrams = currentGrams;
+          const candidateSet = new Set<number>();
+          for (const d of [1, -1, 2, -2, 3, -3, step, -step, step * 2, -step * 2, step * 3, -step * 3]) {
+            const g = clampToConstraints(currentGrams + d, item);
+            if (g !== currentGrams) candidateSet.add(g);
+          }
 
-        for (const g of candidateSet) {
-          const error = tryAdjustment(items, portions, item.id, g, targets, tolerances, seasoningsCountMacros);
-          if (error < bestError - 0.001) {
-            bestError = error;
-            bestGrams = g;
+          let bestError = tryAdjustment(items, portions, item.id, currentGrams, targets, tolerances, seasoningsCountMacros);
+          let bestGrams = currentGrams;
+
+          for (const g of candidateSet) {
+            const error = tryAdjustment(items, portions, item.id, g, targets, tolerances, seasoningsCountMacros);
+            if (error < bestError - 0.001) {
+              bestError = error;
+              bestGrams = g;
+            }
+          }
+
+          if (bestGrams !== currentGrams) {
+            portions.set(item.id, bestGrams);
+            passChanged = true;
+            anyChanged = true;
           }
         }
 
-        if (bestGrams !== currentGrams) {
-          portions.set(item.id, bestGrams);
-          anyChanged = true;
-        }
+        if (!passChanged) break; // No item changed this pass — converged
+        scaleSeasonings(items, portions);
       }
-      if (!anyChanged) break; // Truly converged
+      if (!anyChanged) break; // Truly converged after all fine-tuning
     }
 
     scaleSeasonings(items, portions);
@@ -1165,21 +1185,20 @@ export function solve(
 
   // ============================================================
   // PHASE 1: Gradient solver with multiple starting points
-  // (macro_balance → midpoint → protein_heavy → carb_heavy → current)
+  // Give macro_balance (best init) 50% of iterations, then split
+  // the rest across fewer fallback strategies.
   // ============================================================
-  const initStrategies: InitStrategy[] = ['midpoint', 'protein_heavy', 'carb_heavy', 'current'];
+  const initStrategies: InitStrategy[] = ['midpoint', 'current'];
 
-  // Build initialization portfolios: macro_balance first (best), then others
-  const initPortfolios: Array<{ name: string; portions: Map<string, number> }> = [
-    { name: 'macro_balance', portions: macroBalanceInit(items, targets, seasoningsCountMacros) },
-    ...initStrategies.map(s => ({
-      name: s,
-      portions: initializePortionsWithStrategy(items, s),
-    })),
+  // Build initialization portfolios: macro_balance first (best), then fallbacks
+  const initPortfolios: Array<{ name: string; portions: Map<string, number>; iterShare: number }> = [
+    { name: 'macro_balance', portions: macroBalanceInit(items, targets, seasoningsCountMacros), iterShare: 0.50 },
+    { name: 'midpoint', portions: initializePortionsWithStrategy(items, 'midpoint'), iterShare: 0.25 },
+    { name: 'current', portions: initializePortionsWithStrategy(items, 'current'), iterShare: 0.25 },
   ];
 
-  const totalAttempts = initPortfolios.length + initStrategies.length; // gradient + greedy fallback
-  const iterationsPerAttempt = Math.ceil(maxIterations / totalAttempts);
+  // Greedy fallback gets whatever is left
+  const greedyBudget = Math.ceil(maxIterations * 0.15);
 
   let bestResult: SolverResult | null = null;
   let bestFailedPortions: Map<string, number> | null = null;
@@ -1246,23 +1265,24 @@ export function solve(
     return null;
   };
 
-  // Try gradient solver with each initialization
+  // Try gradient solver with each initialization (weighted iteration budgets)
   for (const init of initPortfolios) {
+    const budget = Math.ceil(maxIterations * init.iterShare);
     const result = runGradientSolve(
       items, targets, tolerances, seasoningsCountMacros,
-      iterationsPerAttempt, init.portions, opts.debugMode
+      budget, init.portions, opts.debugMode
     );
     const validResult = evaluateResult(result);
     if (validResult) return validResult;
   }
 
   // ============================================================
-  // PHASE 2: Legacy greedy solver as fallback
+  // PHASE 2: Legacy greedy solver as single fallback
   // ============================================================
-  for (const strategy of initStrategies) {
+  {
     const result = runSingleSolve(
       items, targets, tolerances, seasoningsCountMacros,
-      iterationsPerAttempt, strategy, opts.debugMode
+      greedyBudget, 'midpoint', opts.debugMode
     );
     const validResult = evaluateResult(result);
     if (validResult) return validResult;

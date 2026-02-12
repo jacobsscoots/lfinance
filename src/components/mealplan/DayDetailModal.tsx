@@ -34,6 +34,7 @@ interface DayDetailModalProps {
   settings: NutritionSettings | null | undefined;
   onEdit?: () => void;
   weeklyOverride?: WeeklyTargetsOverride | null;
+  previousWeekOverride?: WeeklyTargetsOverride | null;
 }
 
 function getDiffText(actual: number, target: number, unit: string): string {
@@ -49,14 +50,15 @@ function getDiffClass(actual: number, target: number): string {
   return "text-red-600";
 }
 
-export function DayDetailModal({ 
-  open, 
-  onOpenChange, 
-  plan, 
-  dayMacros, 
+export function DayDetailModal({
+  open,
+  onOpenChange,
+  plan,
+  dayMacros,
   settings,
   onEdit,
-  weeklyOverride 
+  weeklyOverride,
+  previousWeekOverride
 }: DayDetailModalProps) {
   // State for debug panel
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
@@ -67,7 +69,7 @@ export function DayDetailModal({
   const isTargetMode = settings?.mode === "target_based";
   
   // Use unified getDailyTargets for single source of truth
-  const targets = getDailyTargets(date, settings, weeklyOverride);
+  const targets = getDailyTargets(date, settings, weeklyOverride, previousWeekOverride);
   
   const warnings = getBalanceWarnings(dayMacros, settings);
   const items = plan.items || [];

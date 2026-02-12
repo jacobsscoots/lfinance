@@ -688,12 +688,14 @@ export function useMealPlanItems(weekStart: Date) {
       planId,
       settings,
       portioningSettings = DEFAULT_PORTIONING_SETTINGS,
-      weeklyOverride
+      weeklyOverride,
+      previousWeekOverride
     }: {
       planId: string;
       settings: NutritionSettings;
       portioningSettings?: PortioningSettings;
       weeklyOverride?: WeeklyTargetsOverride | null;
+      previousWeekOverride?: WeeklyTargetsOverride | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
 
@@ -704,7 +706,7 @@ export function useMealPlanItems(weekStart: Date) {
       if (items.length === 0) throw new Error("No items to generate");
 
       const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
-      const targets = getDailyTargets(dayDate, settings, weeklyOverride);
+      const targets = getDailyTargets(dayDate, settings, weeklyOverride, previousWeekOverride);
 
       const solverItems = convertToSolverItems(items);
       const solverTargets: SolverTargets = {
@@ -808,11 +810,13 @@ export function useMealPlanItems(weekStart: Date) {
     mutationFn: async ({
       settings,
       portioningSettings = DEFAULT_PORTIONING_SETTINGS,
-      weeklyOverride
+      weeklyOverride,
+      previousWeekOverride
     }: {
       settings: NutritionSettings;
       portioningSettings?: PortioningSettings;
       weeklyOverride?: WeeklyTargetsOverride | null;
+      previousWeekOverride?: WeeklyTargetsOverride | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
 
@@ -828,7 +832,7 @@ export function useMealPlanItems(weekStart: Date) {
         attemptedDays++;
 
         const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
-        const targets = getDailyTargets(dayDate, settings, weeklyOverride);
+        const targets = getDailyTargets(dayDate, settings, weeklyOverride, previousWeekOverride);
 
         const solverItems = convertToSolverItems(items);
         const solverTargets: SolverTargets = {

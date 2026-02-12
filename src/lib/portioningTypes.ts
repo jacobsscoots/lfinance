@@ -203,7 +203,7 @@ export interface SolverOptions {
 
 // Default solver options
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
-  maxIterations: 500,
+  maxIterations: 1500,
   tolerances: DEFAULT_TOLERANCES,
   debugMode: false,
   seasoningsCountMacros: false,

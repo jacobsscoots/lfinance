@@ -34,21 +34,27 @@ export interface WeeklyTargetsOverride {
 
 /**
  * Get the authoritative daily targets for a specific date.
- * 
+ *
  * CRITICAL: Fat is ALWAYS derived from remaining calories:
  *   fatGrams = (targetCalories - protein×4 - carbs×4) / 9
- * 
+ *
  * This ensures calorie/macro consistency and eliminates drift.
- * 
+ *
+ * Week-to-week continuity: when no weekly override exists for the current
+ * week, if a `previousWeekOverride` is provided, weekday calories carry
+ * forward from the previous week's Mon-Fri values.
+ *
  * @param date - The date to get targets for (as Date object)
  * @param globalSettings - User's global nutrition settings
- * @param weeklyOverride - Optional weekly targets override
+ * @param weeklyOverride - Optional weekly targets override for current week
+ * @param previousWeekOverride - Optional override from the previous week (for carry-forward)
  * @returns MacroTotals with calories, protein, carbs, and DERIVED fat
  */
 export function getDailyTargets(
   date: Date,
   globalSettings: NutritionSettings | null | undefined,
-  weeklyOverride?: WeeklyTargetsOverride | null
+  weeklyOverride?: WeeklyTargetsOverride | null,
+  previousWeekOverride?: WeeklyTargetsOverride | null
 ): MacroTotals {
   // Default fallback values
   const defaults: MacroTotals = { calories: 2000, protein: 150, carbs: 200, fat: 65 };
@@ -106,6 +112,39 @@ export function getDailyTargets(
     }
   }
 
+  // ── Carry-forward from previous week ──
+  // When no weekly override exists for the current week, use the previous
+  // week's Mon-Fri calorie average for weekday targets so that week-to-week
+  // continuity is maintained without the user having to manually re-enter.
+  if (previousWeekOverride) {
+    const s = previousWeekOverride.schedule;
+    const dayOfWeek = getDay(date); // 0 = Sunday, 6 = Saturday
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+    if (isWeekend) {
+      // Weekend: use previous week's weekend values
+      targetCalories = dayOfWeek === 6 ? s.saturday : s.sunday;
+    } else {
+      // Weekday: use previous week's Mon-Fri average
+      const weekdayAvg = Math.round(
+        (s.monday + s.tuesday + s.wednesday + s.thursday + s.friday) / 5
+      );
+      targetCalories = weekdayAvg;
+    }
+
+    // Carry forward macros from previous week if set, otherwise use global
+    targetProtein = previousWeekOverride.protein ?? globalSettings.protein_target_grams ?? 150;
+    targetCarbs = previousWeekOverride.carbs ?? globalSettings.carbs_target_grams ?? 200;
+
+    const derivedFat = deriveFatFromCalories(targetCalories, targetProtein, targetCarbs);
+    return {
+      calories: targetCalories,
+      protein: targetProtein,
+      carbs: targetCarbs,
+      fat: derivedFat,
+    };
+  }
+
   // Fall back to global settings with weekday/weekend logic
   const dayOfWeek = getDay(date); // 0 = Sunday, 6 = Saturday
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -138,10 +177,11 @@ export function getDailyTargets(
 export function getDailyTargetsFromDateString(
   dateString: string,
   globalSettings: NutritionSettings | null | undefined,
-  weeklyOverride?: WeeklyTargetsOverride | null
+  weeklyOverride?: WeeklyTargetsOverride | null,
+  previousWeekOverride?: WeeklyTargetsOverride | null
 ): MacroTotals {
   const date = parse(dateString, "yyyy-MM-dd", new Date());
-  return getDailyTargets(date, globalSettings, weeklyOverride);
+  return getDailyTargets(date, globalSettings, weeklyOverride, previousWeekOverride);
 }
 
 /**

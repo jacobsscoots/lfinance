@@ -27,6 +27,7 @@ interface MealDayCardProps {
   isBlackout?: boolean;
   blackoutReason?: string | null;
   weeklyOverride?: WeeklyTargetsOverride | null;
+  previousWeekOverride?: WeeklyTargetsOverride | null;
   weekDates?: string[];
   mealPlans?: MealPlan[];
 }
@@ -44,7 +45,7 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
   eating_out: <ExternalLink className="h-3 w-3 text-primary" />,
 };
 
-export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, weekDates, mealPlans = [] }: MealDayCardProps) {
+export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, previousWeekOverride, weekDates, mealPlans = [] }: MealDayCardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -69,7 +70,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const hasItems = items.length > 0;
   
   // Use unified getDailyTargets for single source of truth
-  const targets: MacroTotals = getDailyTargets(date, settings, weeklyOverride);
+  const targets: MacroTotals = getDailyTargets(date, settings, weeklyOverride, previousWeekOverride);
   
   // Check if there are uncalculated items
   const hasUncalculatedItems = items.some(item => 
@@ -180,7 +181,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
       tolerancePercent: settings.target_tolerance_percent || DEFAULT_PORTIONING_SETTINGS.tolerancePercent,
     };
     
-    recalculateDay.mutate({ planId: plan.id, settings, portioningSettings, weeklyOverride });
+    recalculateDay.mutate({ planId: plan.id, settings, portioningSettings, weeklyOverride, previousWeekOverride });
   };
 
   return (
@@ -436,6 +437,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
         dayMacros={dayMacros}
         settings={settings}
         weeklyOverride={weeklyOverride}
+        previousWeekOverride={previousWeekOverride}
       />
 
       {weekDates && mealPlans.length > 0 && (
