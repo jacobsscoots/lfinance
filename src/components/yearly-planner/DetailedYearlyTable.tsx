@@ -337,6 +337,31 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                 );
               }
 
+              // Toiletries forecast row
+              const hasToiletries = months.some(m => m.toiletryForecast > 0);
+              if (hasToiletries) {
+                rows.push(
+                  <tr key="toiletry-forecast" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                    <td className={cn(labelClass, "font-normal")}>
+                      <span className="flex items-center gap-1.5">
+                        🧴 Toiletries
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">
+                          Est.
+                        </Badge>
+                      </span>
+                    </td>
+                    {months.map((m, i) => (
+                      <td key={i} className={cn(cellClass, m.toiletryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
+                        {m.toiletryForecast > 0 ? fmt(m.toiletryForecast) : "—"}
+                      </td>
+                    ))}
+                    <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
+                      {fmt(months.reduce((s, m) => s + m.toiletryForecast, 0))}
+                    </td>
+                  </tr>
+                );
+              }
+
               return rows;
             })()}
 

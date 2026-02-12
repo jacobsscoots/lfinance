@@ -20,6 +20,7 @@ import { OrdersTab } from "@/components/toiletries/OrdersTab";
 import { OrdersPanel } from "@/components/toiletries/OrdersPanel";
 import { ToiletrySummaryTab } from "@/components/toiletries/ToiletrySummaryTab";
 import { WeighToiletriesDialog } from "@/components/toiletries/WeighToiletriesDialog";
+import { OnHandPanel } from "@/components/toiletries/OnHandPanel";
 import type { ToiletryItem } from "@/lib/toiletryCalculations";
 import type { ShippingProfile } from "@/lib/reorderCalculations";
 
@@ -190,6 +191,13 @@ export default function Toiletries() {
           <TabsContent value="items" className="space-y-6">
             {/* Orders Panel (inline at top) */}
             <OrdersPanel />
+
+            {/* On Hand Panel */}
+            <OnHandPanel
+              items={toiletries}
+              usageRates={usageRates}
+              shippingProfiles={shippingProfiles}
+            />
 
             {/* Summary Cards */}
             <ToiletrySummaryCards items={toiletries} />

@@ -115,6 +115,10 @@ interface BillPillProps {
 
 function BillPill({ bill, compact = false }: BillPillProps) {
   const getStatusStyle = () => {
+    if (bill.isToiletryReorder) {
+      if (bill.status === "overdue") return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
+      return "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-300";
+    }
     if (bill.isPaid || bill.status === "paid") {
       return "bg-success/20 text-success line-through";
     }

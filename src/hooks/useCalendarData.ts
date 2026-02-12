@@ -10,6 +10,7 @@ import {
   startOfDay,
 } from "date-fns";
 import { generateBillOccurrences } from "@/lib/billOccurrences";
+import { useToiletryForecasts, type ToiletryForecastEntry } from "@/hooks/useToiletryForecasts";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Bill = Tables<"bills"> & {
@@ -32,6 +33,7 @@ export interface CalendarBill {
   isPaid?: boolean;
   status?: "due" | "paid" | "overdue" | "skipped";
   matchConfidence?: string;
+  isToiletryReorder?: boolean;
 }
 
 export interface CalendarDay {
@@ -44,6 +46,7 @@ export interface CalendarDay {
 
 export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
   const { user } = useAuth();
+  const { entries: toiletryForecasts } = useToiletryForecasts();
 
   // Build the visual grid: expand to full weeks (Mon-Sun)
   const startDayOfWeek = getDay(cycleStart);
@@ -57,7 +60,7 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
   calendarGridEnd.setDate(calendarGridEnd.getDate() + daysToAdd);
 
   return useQuery({
-    queryKey: ["calendar-data", user?.id, format(cycleStart, "yyyy-MM-dd"), format(cycleEnd, "yyyy-MM-dd")],
+    queryKey: ["calendar-data", user?.id, format(cycleStart, "yyyy-MM-dd"), format(cycleEnd, "yyyy-MM-dd"), toiletryForecasts.length],
     queryFn: async () => {
       if (!user) return { days: [], monthTotal: 0 };
 
@@ -158,12 +161,10 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
           });
 
           if (foundLinked) {
-            // Transaction linked from Transactions page — auto-paid
             status = "paid";
             isPaid = true;
             matchConfidence = "auto";
           } else if (storedOcc) {
-            // Fall back to stored occurrence record
             const storedStatus = storedOcc.status;
             if (storedStatus === "paid" || storedStatus === "skipped" || storedStatus === "overdue" || storedStatus === "due") {
               status = storedStatus;
@@ -186,6 +187,27 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
             status,
             matchConfidence,
           };
+        });
+
+        // Add toiletry reorder events for this date
+        toiletryForecasts.forEach(entry => {
+          if (entry.forecast.orderByDate) {
+            const orderByKey = format(entry.forecast.orderByDate, "yyyy-MM-dd");
+            if (orderByKey === dateKey) {
+              dayBills.push({
+                id: `toiletry-${entry.item.id}`,
+                name: `🧴 Order ${entry.item.name}`,
+                amount: entry.item.cost_per_item,
+                dueDate: entry.forecast.orderByDate,
+                frequency: "one-off",
+                categoryName: "Toiletries",
+                categoryColor: "#f97316",
+                isPaid: false,
+                status: isBefore(date, today) && !isSameDay(date, today) ? "overdue" : "due",
+                isToiletryReorder: true,
+              });
+            }
+          }
         });
 
         // Only count bills in the pay cycle for the total
