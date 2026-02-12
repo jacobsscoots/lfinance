@@ -474,89 +474,94 @@ ${foodList}
   }
 
   // Server-side refinement: adjust portions to fix constraint violations
+  // CRITICAL: uses FULL targets (fullCalTarget etc.) because computeTotals includes locked items
+  // Two-pass: first 5g steps for big adjustments, then 1g steps for fine-tuning
   function refinePortions(portionList: Array<{ id: string; quantity_grams: number }>): Array<{ id: string; quantity_grams: number }> {
     const refined = portionList.map(p => ({ ...p }));
     const freeIds = new Set(freeItems.map((i: any) => i.id));
 
-    for (let iter = 0; iter < 200; iter++) {
-      const totals = computeTotals(refined);
-      const check = meetsTargets(totals);
-      if (check.allOk) break;
+    function runPass(stepSize: number, maxIter: number) {
+      for (let iter = 0; iter < maxIter; iter++) {
+        const totals = computeTotals(refined);
+        const check = meetsTargets(totals);
+        if (check.allOk) return true;
 
-      // Find the worst violation
-      type Macro = 'calories' | 'protein' | 'carbs' | 'fat';
-      const violations: Array<{ macro: Macro; delta: number; over: boolean }> = [];
-      
-      if (totals.calories > calTarget) violations.push({ macro: 'calories', delta: totals.calories - calTarget, over: true });
-      else if (totals.calories < calTarget - 50) violations.push({ macro: 'calories', delta: calTarget - 50 - totals.calories, over: false });
-      
-      if (totals.protein > pTarget) violations.push({ macro: 'protein', delta: totals.protein - pTarget, over: true });
-      else if (totals.protein < pTarget - 2) violations.push({ macro: 'protein', delta: pTarget - 2 - totals.protein, over: false });
-      
-      if (totals.carbs > cTarget) violations.push({ macro: 'carbs', delta: totals.carbs - cTarget, over: true });
-      else if (totals.carbs < cTarget - 2) violations.push({ macro: 'carbs', delta: cTarget - 2 - totals.carbs, over: false });
-      
-      if (totals.fat > fTarget) violations.push({ macro: 'fat', delta: totals.fat - fTarget, over: true });
-      else if (totals.fat < fTarget - 2) violations.push({ macro: 'fat', delta: fTarget - 2 - totals.fat, over: false });
+        type Macro = 'calories' | 'protein' | 'carbs' | 'fat';
+        const violations: Array<{ macro: Macro; delta: number; over: boolean }> = [];
+        
+        if (totals.calories > fullCalTarget) violations.push({ macro: 'calories', delta: totals.calories - fullCalTarget, over: true });
+        else if (totals.calories < fullCalTarget - 50) violations.push({ macro: 'calories', delta: fullCalTarget - 50 - totals.calories, over: false });
+        
+        if (totals.protein > fullPTarget) violations.push({ macro: 'protein', delta: totals.protein - fullPTarget, over: true });
+        else if (totals.protein < fullPTarget - 2) violations.push({ macro: 'protein', delta: fullPTarget - 2 - totals.protein, over: false });
+        
+        if (totals.carbs > fullCTarget) violations.push({ macro: 'carbs', delta: totals.carbs - fullCTarget, over: true });
+        else if (totals.carbs < fullCTarget - 2) violations.push({ macro: 'carbs', delta: fullCTarget - 2 - totals.carbs, over: false });
+        
+        if (totals.fat > fullFTarget) violations.push({ macro: 'fat', delta: totals.fat - fullFTarget, over: true });
+        else if (totals.fat < fullFTarget - 2) violations.push({ macro: 'fat', delta: fullFTarget - 2 - totals.fat, over: false });
 
-      if (violations.length === 0) break;
+        if (violations.length === 0) return true;
 
-      // Sort by worst violation first
-      violations.sort((a, b) => b.delta - a.delta);
-      const worst = violations[0];
+        // Sort by worst violation first
+        violations.sort((a, b) => b.delta - a.delta);
+        const worst = violations[0];
 
-      // Map macro name to per100g field
-      const per100gField: Record<Macro, string> = {
-        calories: 'calories_per_100g',
-        protein: 'protein_per_100g',
-        carbs: 'carbs_per_100g',
-        fat: 'fat_per_100g',
-      };
+        const per100gField: Record<Macro, string> = {
+          calories: 'calories_per_100g',
+          protein: 'protein_per_100g',
+          carbs: 'carbs_per_100g',
+          fat: 'fat_per_100g',
+        };
 
-      // Find best item to adjust (highest density in the violating macro, free only)
-      let bestIdx = -1;
-      let bestDensity = 0;
-      for (let i = 0; i < refined.length; i++) {
-        if (!freeIds.has(refined[i].id)) continue;
-        const item = items.find((it: any) => it.id === refined[i].id);
-        if (!item) continue;
-        if (isSeasoningItem(item)) continue; // don't adjust seasonings
-        const density = item[per100gField[worst.macro]] || 0;
-        if (density <= 0) continue;
+        // Find best item to adjust
+        let bestIdx = -1;
+        let bestDensity = 0;
+        for (let i = 0; i < refined.length; i++) {
+          if (!freeIds.has(refined[i].id)) continue;
+          const item = items.find((it: any) => it.id === refined[i].id);
+          if (!item) continue;
+          if (isSeasoningItem(item)) continue;
+          const density = item[per100gField[worst.macro]] || 0;
+          if (density <= 0) continue;
+
+          if (worst.over) {
+            const minG = item.min_portion_grams || 10;
+            if (refined[i].quantity_grams <= minG) continue;
+          } else {
+            const maxG = item.max_portion_grams || 500;
+            if (refined[i].quantity_grams >= maxG) continue;
+          }
+
+          if (density > bestDensity) {
+            bestDensity = density;
+            bestIdx = i;
+          }
+        }
+
+        if (bestIdx === -1) return false; // No adjustable items
 
         if (worst.over) {
-          // Need to decrease: item must have room to decrease
-          const minG = item.min_portion_grams || 10;
-          if (refined[i].quantity_grams <= minG) continue;
+          refined[bestIdx].quantity_grams -= stepSize;
         } else {
-          // Need to increase: item must have room to increase
-          const maxG = item.max_portion_grams || 500;
-          if (refined[i].quantity_grams >= maxG) continue;
+          refined[bestIdx].quantity_grams += stepSize;
         }
 
-        if (density > bestDensity) {
-          bestDensity = density;
-          bestIdx = i;
+        // Clamp
+        const adjItem = items.find((it: any) => it.id === refined[bestIdx].id);
+        if (adjItem) {
+          const minG = adjItem.min_portion_grams || 10;
+          const maxG = adjItem.max_portion_grams || 500;
+          refined[bestIdx].quantity_grams = Math.max(minG, Math.min(maxG, refined[bestIdx].quantity_grams));
         }
       }
-
-      if (bestIdx === -1) break; // No adjustable items
-
-      // Adjust by 5g
-      if (worst.over) {
-        refined[bestIdx].quantity_grams -= 5;
-      } else {
-        refined[bestIdx].quantity_grams += 5;
-      }
-
-      // Clamp
-      const adjItem = items.find((it: any) => it.id === refined[bestIdx].id);
-      if (adjItem) {
-        const minG = adjItem.min_portion_grams || 10;
-        const maxG = adjItem.max_portion_grams || 500;
-        refined[bestIdx].quantity_grams = Math.max(minG, Math.min(maxG, refined[bestIdx].quantity_grams));
-      }
+      return false;
     }
+
+    // Pass 1: coarse 5g steps
+    const coarseDone = runPass(5, 200);
+    // Pass 2: fine 1g steps if coarse didn't solve it
+    if (!coarseDone) runPass(1, 500);
 
     return refined;
   }
@@ -663,6 +668,91 @@ ${foodList}
     if (!finalCheck.cOk) violations.push(bestTotals.carbs > fullCTarget ? `carbs_over_by_${(bestTotals.carbs - fullCTarget).toFixed(1)}g` : `carbs_under_by_${(fullCTarget - bestTotals.carbs).toFixed(1)}g`);
     if (!finalCheck.fOk) violations.push(bestTotals.fat > fullFTarget ? `fat_over_by_${(bestTotals.fat - fullFTarget).toFixed(1)}g` : `fat_under_by_${(fullFTarget - bestTotals.fat).toFixed(1)}g`);
 
+    // Generate SMART suggestions based on actual violations and available foods
+    const suggested_fixes: string[] = [];
+    const calDelta = fullCalTarget - bestTotals.calories;
+    const pDelta = fullPTarget - bestTotals.protein;
+    const cDelta = fullCTarget - bestTotals.carbs;
+    const fDelta = fullFTarget - bestTotals.fat;
+
+    // Check which foods are already in the plan (by name)
+    const existingFoodNames = items.map((i: any) => (i.name || '').toLowerCase());
+    const freeItemNames = freeItems.map((i: any) => (i.name || '').toLowerCase());
+
+    // Check if locked/fixed items already exceed targets
+    if (lockedMacros.calories > targets.calories) {
+      suggested_fixes.push(`Locked/fixed items already provide ${Math.round(lockedMacros.calories)}kcal which exceeds target ${fullCalTarget}kcal. Remove or reduce a locked item.`);
+    }
+    if (lockedMacros.protein > targets.protein) {
+      suggested_fixes.push(`Locked items already provide ${Math.round(lockedMacros.protein)}g protein which exceeds target ${fullPTarget}g.`);
+    }
+
+    // Carbs under by a lot — need carb-dense food
+    if (cDelta > 10) {
+      const carbFoods = freeItems
+        .filter((i: any) => i.carbs_per_100g > 40 && !isSeasoningItem(i))
+        .sort((a: any, b: any) => b.carbs_per_100g - a.carbs_per_100g);
+      if (carbFoods.length > 0) {
+        const top = carbFoods[0];
+        const maxG = top.max_portion_grams || 500;
+        const currentPortion = bestPortions.find((p: any) => p.id === top.id);
+        const currentG = currentPortion?.quantity_grams || 0;
+        if (currentG >= maxG) {
+          suggested_fixes.push(`${top.name} is already at max ${maxG}g. Increase its max_portion_grams or add another carb source (rice, pasta, bread, cereal).`);
+        } else {
+          suggested_fixes.push(`Increase ${top.name} (${top.carbs_per_100g}g carbs/100g) — currently ${currentG}g, room up to ${maxG}g.`);
+        }
+      } else {
+        suggested_fixes.push(`No carb-dense food (>40g carbs/100g) available. Add rice, pasta, bread, oats, or cereal to this day.`);
+      }
+    }
+
+    // Protein under by a lot — need lean protein
+    if (pDelta > 5) {
+      const proteinFoods = freeItems
+        .filter((i: any) => i.protein_per_100g > 15 && i.fat_per_100g < 10 && !isSeasoningItem(i))
+        .sort((a: any, b: any) => b.protein_per_100g - a.protein_per_100g);
+      if (proteinFoods.length > 0) {
+        const top = proteinFoods[0];
+        const maxG = top.max_portion_grams || 500;
+        const currentPortion = bestPortions.find((p: any) => p.id === top.id);
+        const currentG = currentPortion?.quantity_grams || 0;
+        if (currentG >= maxG) {
+          suggested_fixes.push(`${top.name} is at max ${maxG}g. Increase its limit or add another lean protein.`);
+        } else {
+          suggested_fixes.push(`Increase ${top.name} (${top.protein_per_100g}g P/100g) — currently ${currentG}g, max ${maxG}g.`);
+        }
+      } else {
+        suggested_fixes.push(`No lean protein available (<10g fat, >15g protein per 100g). Add chicken breast, turkey, white fish, or egg whites.`);
+      }
+    }
+
+    // Fat under by a small amount
+    if (fDelta > 1 && fDelta <= 10) {
+      const fatFoods = freeItems
+        .filter((i: any) => i.fat_per_100g > 10 && !isSeasoningItem(i))
+        .sort((a: any, b: any) => b.fat_per_100g - a.fat_per_100g);
+      if (fatFoods.length > 0) {
+        suggested_fixes.push(`Add 5-10g of ${fatFoods[0].name} (${fatFoods[0].fat_per_100g}g fat/100g) to fine-tune fat.`);
+      } else {
+        suggested_fixes.push(`No fat-adjustable food available. Add olive oil, nuts, or cheese for fine fat control.`);
+      }
+    }
+
+    // Calorie deficit — general
+    if (calDelta > 100 && suggested_fixes.length === 0) {
+      suggested_fixes.push(`${calDelta}kcal short. Add calorie-dense foods or increase portion limits on existing items.`);
+    }
+
+    // 5g rounding hint if deltas are small
+    if (suggested_fixes.length === 0 && (Math.abs(calDelta) <= 50 || Math.abs(pDelta) <= 5)) {
+      suggested_fixes.push('Targets are close but 5g rounding prevents exact match. Consider allowing 1g rounding steps on key foods.');
+    }
+
+    if (suggested_fixes.length === 0) {
+      suggested_fixes.push('Review portion min/max constraints — they may make the solve mathematically impossible.');
+    }
+
     return {
       success: false,
       status: 'FAIL_CONSTRAINTS',
@@ -670,12 +760,7 @@ ${foodList}
       totals: bestTotals,
       targets: { calories: fullCalTarget, protein: fullPTarget, carbs: fullCTarget, fat: fullFTarget },
       violations,
-      suggested_fixes: [
-        'Add a lean protein source (e.g. chicken breast) for fine protein adjustment',
-        'Add a pure carb source (e.g. rice, pasta) for carb adjustment',
-        'Allow smaller rounding (1g instead of 5g)',
-        'Check if locked/fixed items already exceed targets',
-      ],
+      suggested_fixes,
     };
   }
 
