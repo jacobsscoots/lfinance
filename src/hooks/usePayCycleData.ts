@@ -62,6 +62,10 @@ export interface PayCycleDataResult {
   totalNext7Days: number;
   totalRestOfCycle: number;
   
+  // Actual spending breakdown
+  billLinkedSpent: number;
+  discretionarySpent: number;
+  
   // Alerts
   alerts: Alert[];
   
@@ -146,6 +150,13 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const totalSpent = transactions
     .filter(t => t.type === "expense")
     .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // Split actual spending into bill-linked vs discretionary
+  const billLinkedSpent = transactions
+    .filter(t => t.type === "expense" && t.bill_id)
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  
+  const discretionarySpent = totalSpent - billLinkedSpent;
   
   // Calculate start balance (current + expenses - income since cycle start)
   const startBalance = totalBalance + totalSpent - totalIncome;
@@ -268,6 +279,8 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     billsRestOfCycle,
     totalNext7Days,
     totalRestOfCycle,
+    billLinkedSpent,
+    discretionarySpent,
     alerts,
     accounts,
     isLoading,
