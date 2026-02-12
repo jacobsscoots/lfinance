@@ -1,5 +1,5 @@
 import { useState } from "react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 
@@ -27,36 +27,42 @@ const SAMPLE_DEBTS = [
 export function SampleTemplateDownload() {
   const [downloading, setDownloading] = useState(false);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     setDownloading(true);
     try {
-      const wb = XLSX.utils.book_new();
-      const data: any[][] = [];
+      const workbook = new ExcelJS.Workbook();
+      const ws = workbook.addWorksheet("Settings");
 
       // Bills section
-      data.push(["Bills"]);
-      data.push(...SAMPLE_BILLS);
-      data.push([]);
+      ws.addRow(["Bills"]);
+      SAMPLE_BILLS.forEach((row) => ws.addRow(row));
+      ws.addRow([]);
 
       // Subscriptions section
-      data.push(["Subscriptions"]);
-      data.push(...SAMPLE_SUBSCRIPTIONS);
-      data.push([]);
+      ws.addRow(["Subscriptions"]);
+      SAMPLE_SUBSCRIPTIONS.forEach((row) => ws.addRow(row));
+      ws.addRow([]);
 
       // Debts section
-      data.push(["Debts"]);
-      data.push(...SAMPLE_DEBTS);
-
-      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws.addRow(["Debts"]);
+      SAMPLE_DEBTS.forEach((row) => ws.addRow(row));
 
       // Set column widths
-      ws["!cols"] = [
-        { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 10 },
-        { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 20 },
+      ws.columns = [
+        { width: 20 }, { width: 15 }, { width: 15 }, { width: 10 },
+        { width: 18 }, { width: 12 }, { width: 15 }, { width: 20 },
       ];
 
-      XLSX.utils.book_append_sheet(wb, ws, "Settings");
-      XLSX.writeFile(wb, "life-tracker-import-template.xlsx");
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "life-tracker-import-template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
     } finally {
       setDownloading(false);
     }
