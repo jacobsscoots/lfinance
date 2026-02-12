@@ -450,6 +450,7 @@ export default function CheaperBills() {
         results={comparisonResults}
         currentMonthlyCost={compareCost}
         serviceType={compareServiceType}
+        currentServices={services}
       />
       <TariffFormDialog
         open={tariffDialogOpen}
