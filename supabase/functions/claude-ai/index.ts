@@ -885,7 +885,7 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
   }
 
   if (!finalResult.ok) {
-    // FAIL
+    // FAIL — build detailed inter-constraint analysis
     const violations: string[] = [];
     if (finalTotals.calories > fullCalTarget) violations.push(`kcal_over_by_${finalTotals.calories - fullCalTarget}`);
     else if (finalTotals.calories < fullCalTarget - 50) violations.push(`kcal_under_by_${fullCalTarget - finalTotals.calories}`);
@@ -896,17 +896,120 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     if (finalTotals.fat > fullFTarget) violations.push(`fat_over_by_${(finalTotals.fat - fullFTarget).toFixed(1)}g`);
     else if (finalTotals.fat < fullFTarget - 2) violations.push(`fat_under_by_${(fullFTarget - finalTotals.fat).toFixed(1)}g`);
 
+    // ── Inter-constraint conflict analysis ──
+    // Identify WHY the solver couldn't hit all targets simultaneously.
+    // This is the key insight: each macro may be individually achievable,
+    // but the combination may not be (e.g., hitting carbs forces fat/kcal over).
     const suggested_fixes: string[] = [];
-    // Context-aware suggestions
-    for (const food of freeFoods) {
-      const g = finalResult.grams.get(food.id) || 0;
-      if (g >= food.maxG && !food.isSeasoning) {
-        suggested_fixes.push(`${food.name} is at max ${food.maxG}g. Increase max_portion_grams to allow more.`);
+
+    const isCalOver = finalTotals.calories > fullCalTarget;
+    const isFatOver = finalTotals.fat > fullFTarget;
+    const isCarbsUnder = finalTotals.carbs < fullCTarget - 2;
+    const isProtUnder = finalTotals.protein < fullPTarget - 2;
+    const isCalUnder = finalTotals.calories < fullCalTarget - 50;
+
+    // Compute per-food fat contribution at their minimum portions
+    const fatBudgetFromLocked = lockedMacros.fat;
+    const fatBudgetTotal = fullFTarget;
+    const fatRoomFromFree = fatBudgetTotal - fatBudgetFromLocked;
+    const fatAtMin = freeFoods.reduce((s, f) => s + f.fPer1g * f.minG, 0);
+    const fatHeadroom = fatRoomFromFree - fatAtMin;
+
+    // Find the biggest fat contributors (at min)
+    const fatContributors = freeFoods
+      .filter(f => !f.isSeasoning && f.fPer1g * f.minG > 0.5)
+      .map(f => ({ name: f.name, fatAtMin: f.fPer1g * f.minG, minG: f.minG, fPer100g: f.fPer1g * 100 }))
+      .sort((a, b) => b.fatAtMin - a.fatAtMin);
+
+    if (isFatOver || (isCarbsUnder && fatHeadroom < 5)) {
+      // Fat-carbs conflict: explain that adding carbs also adds fat
+      suggested_fixes.push(
+        `Fat budget conflict: locked items use ${fatBudgetFromLocked.toFixed(1)}g fat, ` +
+        `free items at minimum portions add ${fatAtMin.toFixed(1)}g fat, ` +
+        `leaving only ${fatHeadroom.toFixed(1)}g headroom (target: ${fatBudgetTotal}g). ` +
+        `Increasing carb portions pushes fat over.`
+      );
+      for (const fc of fatContributors.slice(0, 2)) {
+        suggested_fixes.push(
+          `${fc.name} at min ${fc.minG}g uses ${fc.fatAtMin.toFixed(1)}g fat (${fc.fPer100g.toFixed(1)}g/100g). ` +
+          `Reduce min_portion_grams or replace with a lower-fat alternative.`
+        );
       }
     }
-    if (suggested_fixes.length === 0) {
-      suggested_fixes.push('Solver converged to closest solution but 5g/1g rounding prevents exact hit. Try adjusting food list or targets.');
+
+    if (isCalOver && isCarbsUnder) {
+      // Calorie-carbs conflict: carb foods are too calorie-dense or other foods eat the calorie budget
+      const calDenseNonCarb = freeFoods
+        .filter(f => !f.isSeasoning && f.calPer1g > 0.8 && f.cPer1g < 0.1)
+        .map(f => ({ name: f.name, calAtMin: f.calPer1g * f.minG, minG: f.minG }))
+        .sort((a, b) => b.calAtMin - a.calAtMin);
+      if (calDenseNonCarb.length > 0) {
+        const top = calDenseNonCarb[0];
+        suggested_fixes.push(
+          `${top.name} at min ${top.minG}g uses ${top.calAtMin.toFixed(0)} kcal but only ` +
+          `${(freeFoods.find(f => f.name === top.name)!.cPer1g * top.minG).toFixed(1)}g carbs. ` +
+          `Reduce its min_portion_grams to free calories for carb-rich foods.`
+        );
+      }
     }
+
+    if (isCalOver && !isCarbsUnder && !isProtUnder) {
+      // All macros OK but calories over — find calorie-dense items that could be reduced
+      const calOverBy = finalTotals.calories - fullCalTarget;
+      suggested_fixes.push(
+        `Calories over target by ${calOverBy} kcal. Reduce portions of calorie-dense items ` +
+        `or replace with lower-calorie alternatives.`
+      );
+    }
+
+    if (isProtUnder && !isCalOver) {
+      const protFoods = freeFoods.filter(f => f.pPer1g > 0.15 && !f.isSeasoning);
+      if (protFoods.length > 0) {
+        const top = protFoods.sort((a, b) => b.pPer1g - a.pPer1g)[0];
+        const currentG = finalResult.grams.get(top.id) || 0;
+        if (currentG < top.maxG) {
+          suggested_fixes.push(`Increase ${top.name} from ${currentG}g (max ${top.maxG}g) to add protein.`);
+        }
+      } else {
+        suggested_fixes.push('Add a lean protein source (chicken, turkey, white fish).');
+      }
+    }
+
+    if (isCalUnder && isCarbsUnder) {
+      // Both under — need more calorie + carb dense food
+      const carbFoods = freeFoods.filter(f => f.cPer1g > 0.2 && !f.isSeasoning);
+      for (const cf of carbFoods.sort((a, b) => b.cPer1g - a.cPer1g).slice(0, 2)) {
+        const currentG = finalResult.grams.get(cf.id) || 0;
+        if (currentG >= cf.maxG) {
+          suggested_fixes.push(`${cf.name} is at max ${cf.maxG}g. Increase max_portion_grams to add more carbs + calories.`);
+        } else {
+          suggested_fixes.push(`Increase ${cf.name} from ${currentG}g toward ${cf.maxG}g.`);
+        }
+      }
+    }
+
+    // Per-food breakdown for the FAIL response
+    const foodBreakdown = freeFoods.map(f => {
+      const g = finalResult.grams.get(f.id) || 0;
+      return {
+        name: f.name,
+        currentGrams: g,
+        minG: f.minG,
+        maxG: f.maxG,
+        atMin: g <= f.minG,
+        atMax: g >= f.maxG,
+        isSeasoning: f.isSeasoning,
+        perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
+      };
+    });
+
+    if (suggested_fixes.length === 0) {
+      suggested_fixes.push('Targets may be impossible with current food list and portion constraints. Adjust targets or food list.');
+    }
+
+    console.log(`[solver] FAIL analysis: fatFromLocked=${fatBudgetFromLocked.toFixed(1)} fatAtMin=${fatAtMin.toFixed(1)} fatHeadroom=${fatHeadroom.toFixed(1)} fatTarget=${fatBudgetTotal}`);
+    console.log(`[solver] violations: ${violations.join(', ')}`);
+    console.log(`[solver] suggestions: ${suggested_fixes.join(' | ')}`);
 
     return {
       success: false,
@@ -916,9 +1019,13 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
       targets: { calories: fullCalTarget, protein: fullPTarget, carbs: fullCTarget, fat: fullFTarget },
       violations,
       suggested_fixes,
+      food_breakdown: foodBreakdown,
       feasibility: {
         theoretical_min: theoreticalMin,
         theoretical_max: theoreticalMax,
+        fat_headroom: fatHeadroom,
+        fat_at_min: fatAtMin,
+        locked_fat: fatBudgetFromLocked,
       },
     };
   }

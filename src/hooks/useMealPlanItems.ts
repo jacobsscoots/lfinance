@@ -1037,13 +1037,24 @@ export function useMealPlanItems(weekStart: Date) {
     },
     onSuccess: (result) => {
       if (result.failed) {
-        toast.error("AI couldn't meet targets — no portions saved.", { duration: 6000 });
-        if (result.violations?.length) {
-          toast.info(`Violations: ${result.violations.join(', ')}`, { duration: 8000 });
-        }
+        toast.error("AI couldn't meet targets — no portions were changed.", { duration: 8000 });
+        // Show the first (most important) suggestion — it explains the real constraint conflict
         if (result.suggested_fixes?.length) {
-          toast.info(`Try: ${result.suggested_fixes[0]}`, { duration: 8000 });
+          toast.info(result.suggested_fixes[0], { duration: 12000 });
         }
+        // Show additional suggestions if available
+        if (result.suggested_fixes && result.suggested_fixes.length > 1) {
+          toast.info(result.suggested_fixes.slice(1, 3).join(' • '), { duration: 12000 });
+        }
+        // Log full details for debugging
+        console.log("FAIL_DETAILS", {
+          violations: result.violations,
+          suggested_fixes: result.suggested_fixes,
+          totals: result.totals,
+          targets: result.targets,
+          food_breakdown: (result as any).food_breakdown,
+          feasibility: (result as any).feasibility,
+        });
       } else {
         queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
         toast.success(`AI planned ${result.updated} portions`);
