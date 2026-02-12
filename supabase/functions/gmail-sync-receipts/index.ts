@@ -8,7 +8,7 @@ const syncInputSchema = z.object({
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -25,24 +25,97 @@ const RECEIPT_KEYWORDS = [
   'your order',
 ];
 
-// Common receipt senders
-const RECEIPT_SENDERS = [
-  'amazon',
-  'tesco',
-  'sainsburys',
-  'asda',
-  'waitrose',
-  'ocado',
-  'morrisons',
-  'paypal',
-  'ebay',
-  'deliveroo',
-  'uber',
-  'justeat',
-  'netflix',
-  'spotify',
-  'apple',
-];
+/**
+ * Extract merchant name from email From header.
+ * Uses the display name first (e.g. "Myprotein <service@t.myprotein.com>")
+ * then falls back to domain parsing.
+ */
+function extractMerchant(from: string): string | null {
+  if (!from) return null;
+
+  // Try display name first: "Myprotein <service@...>"
+  const displayMatch = from.match(/^([^<]+)</);
+  if (displayMatch) {
+    const name = displayMatch[1].trim();
+    // Filter out generic names like "no-reply", "noreply", "info"
+    if (name && !/^(no-?reply|info|service|support|orders?|notifications?)$/i.test(name)) {
+      return name;
+    }
+  }
+
+  // Fall back to domain extraction: service@t.myprotein.com → myprotein
+  const domainMatch = from.match(/@(?:[^.]+\.)*([^.]+)\.[a-z]{2,}>/i) 
+    || from.match(/@(?:[^.]+\.)*([^.]+)\.[a-z]{2,}$/i);
+  if (domainMatch) {
+    const domain = domainMatch[1];
+    // Skip generic domains
+    if (domain && !['gmail', 'yahoo', 'outlook', 'hotmail', 'googlemail'].includes(domain.toLowerCase())) {
+      return domain.charAt(0).toUpperCase() + domain.slice(1);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract amounts from email text (subject + snippet + body snippet).
+ * Returns the most likely order total.
+ */
+function extractAmount(text: string): number | null {
+  const patterns = [
+    /(?:total|order total|amount|charged|paid)[:\s]*£\s*([\d,]+\.?\d*)/i,
+    /£\s*([\d,]+\.?\d*)\s*(?:total|paid|charged)/i,
+    /(?:total|order total|amount)[:\s]*(?:GBP)?\s*([\d,]+\.?\d*)/i,
+    /£\s*([\d,]+\.?\d*)/g, // fallback: any £ amount
+  ];
+
+  // Try specific patterns first
+  for (let i = 0; i < patterns.length - 1; i++) {
+    const match = text.match(patterns[i]);
+    if (match) {
+      const amount = parseFloat(match[1].replace(',', ''));
+      if (!isNaN(amount) && amount > 0 && amount < 10000) return amount;
+    }
+  }
+
+  // Fallback: collect all £ amounts, take the largest (likely the total)
+  const allAmounts: number[] = [];
+  const globalPattern = /£\s*([\d,]+\.?\d*)/g;
+  let m;
+  while ((m = globalPattern.exec(text)) !== null) {
+    const val = parseFloat(m[1].replace(',', ''));
+    if (!isNaN(val) && val > 0 && val < 10000) allAmounts.push(val);
+  }
+  if (allAmounts.length > 0) {
+    return Math.max(...allAmounts);
+  }
+
+  return null;
+}
+
+/**
+ * Decode email body from base64url parts
+ */
+function decodeBody(payload: any): string {
+  const parts: string[] = [];
+
+  function walk(node: any) {
+    if (node.body?.data) {
+      try {
+        // base64url → base64 → decode
+        const b64 = node.body.data.replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = atob(b64);
+        parts.push(decoded);
+      } catch { /* ignore decode errors */ }
+    }
+    if (node.parts) {
+      for (const p of node.parts) walk(p);
+    }
+  }
+
+  walk(payload);
+  return parts.join(' ');
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -58,346 +131,284 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    const { action } = parseResult.data;
 
-    // Get the authorization header
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
+    if (!authHeader) throw new Error('No authorization header');
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Verify the JWT and get user
     const jwt = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+    if (authError || !user) throw new Error('Unauthorized');
 
-    if (authError || !user) {
-      throw new Error('Unauthorized');
-    }
+    // Get user's Gmail connection
+    const { data: connection, error: connError } = await supabase
+      .from('gmail_connections')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
 
-    if (action === 'sync') {
-      // Get user's Gmail connection
-      const { data: connection, error: connError } = await supabase
+    if (connError || !connection) throw new Error('No Gmail connection found');
+
+    // Refresh token if expired
+    if (connection.token_expires_at && new Date(connection.token_expires_at) < new Date()) {
+      const refreshResponse = await fetch(`${SUPABASE_URL}/functions/v1/gmail-oauth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+        body: JSON.stringify({ action: 'refresh_token' }),
+      });
+      if (!refreshResponse.ok) throw new Error('Failed to refresh Gmail token');
+
+      const { data: updatedConnection } = await supabase
         .from('gmail_connections')
         .select('*')
         .eq('user_id', user.id)
         .single();
+      if (updatedConnection) connection.access_token = updatedConnection.access_token;
+    }
 
-      if (connError || !connection) {
-        throw new Error('No Gmail connection found');
+    // Get sync settings
+    const { data: settings } = await supabase
+      .from('gmail_sync_settings')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    const scanDays = settings?.scan_days || 30;
+    const afterDate = new Date();
+    afterDate.setDate(afterDate.getDate() - scanDays);
+
+    // Build Gmail search query
+    const searchParts = [
+      `after:${afterDate.toISOString().split('T')[0].replace(/-/g, '/')}`,
+      `(${RECEIPT_KEYWORDS.map(k => `subject:${k}`).join(' OR ')})`,
+    ];
+    if (settings?.allowed_domains?.length > 0) {
+      searchParts.push(`(${settings.allowed_domains.map((d: string) => `from:${d}`).join(' OR ')})`);
+    }
+    const searchQuery = searchParts.join(' ');
+
+    // Search Gmail
+    const searchResponse = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(searchQuery)}&maxResults=50`,
+      { headers: { Authorization: `Bearer ${connection.access_token}` } }
+    );
+    if (!searchResponse.ok) {
+      console.error('Gmail search error:', await searchResponse.text());
+      throw new Error('Failed to search Gmail');
+    }
+
+    const searchResult = await searchResponse.json();
+    const messages = searchResult.messages || [];
+
+    let receiptsFound = 0;
+    let receiptsMatched = 0;
+
+    // Process each message
+    for (const msg of messages.slice(0, 20)) {
+      const { data: existing } = await supabase
+        .from('gmail_receipts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('message_id', msg.id)
+        .single();
+      if (existing) continue;
+
+      const msgResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+        { headers: { Authorization: `Bearer ${connection.access_token}` } }
+      );
+      if (!msgResponse.ok) continue;
+
+      const msgData = await msgResponse.json();
+      const headers = msgData.payload?.headers || [];
+
+      const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
+      const from = headers.find((h: any) => h.name === 'From')?.value || '';
+      const date = headers.find((h: any) => h.name === 'Date')?.value;
+
+      // Smart merchant extraction from From header
+      const merchantName = extractMerchant(from);
+
+      // Extract amount from subject + snippet + body
+      const bodyText = decodeBody(msgData.payload);
+      const textToSearch = `${subject} ${msgData.snippet || ''} ${bodyText.slice(0, 2000)}`;
+      const amount = extractAmount(textToSearch);
+
+      // Extract order reference
+      let orderReference = null;
+      const orderPatterns = [
+        /order\s*(?:number|#|no\.?|ref(?:erence)?)?\s*:?\s*([A-Z0-9][-A-Z0-9]{3,})/i,
+        /reference\s*:?\s*([A-Z0-9][-A-Z0-9]{3,})/i,
+        /invoice\s*#?\s*([A-Z0-9][-A-Z0-9]{3,})/i,
+      ];
+      for (const pattern of orderPatterns) {
+        const match = textToSearch.match(pattern);
+        if (match) { orderReference = match[1]; break; }
       }
 
-      // Check if token is expired and refresh if needed
-      if (connection.token_expires_at && new Date(connection.token_expires_at) < new Date()) {
-        // Call refresh token endpoint
-        const refreshResponse = await fetch(`${SUPABASE_URL}/functions/v1/gmail-oauth`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader,
-          },
-          body: JSON.stringify({ action: 'refresh_token' }),
+      // Check for attachments
+      let attachmentType = null;
+      const parts = msgData.payload?.parts || [];
+      for (const part of parts) {
+        if (part.filename && (part.filename.endsWith('.pdf') || part.mimeType?.startsWith('image/'))) {
+          attachmentType = part.filename.endsWith('.pdf') ? 'pdf' : 'image';
+          break;
+        }
+      }
+
+      console.log(`Receipt: merchant=${merchantName}, amount=${amount}, subject="${subject.slice(0, 50)}"`);
+
+      const { error: insertError } = await supabase
+        .from('gmail_receipts')
+        .insert({
+          user_id: user.id,
+          gmail_connection_id: connection.id,
+          message_id: msg.id,
+          subject,
+          from_email: from,
+          received_at: date ? new Date(date).toISOString() : null,
+          merchant_name: merchantName,
+          amount,
+          order_reference: orderReference,
+          attachment_path: null,
+          attachment_type: attachmentType,
+          match_status: 'pending',
         });
 
-        if (!refreshResponse.ok) {
-          throw new Error('Failed to refresh Gmail token');
-        }
-
-        // Get updated connection
-        const { data: updatedConnection } = await supabase
-          .from('gmail_connections')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
-        if (updatedConnection) {
-          connection.access_token = updatedConnection.access_token;
-        }
-      }
-
-      // Get sync settings
-      const { data: settings } = await supabase
-        .from('gmail_sync_settings')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      const scanDays = settings?.scan_days || 30;
-      const afterDate = new Date();
-      afterDate.setDate(afterDate.getDate() - scanDays);
-
-      // Build Gmail search query
-      const searchParts = [
-        `after:${afterDate.toISOString().split('T')[0].replace(/-/g, '/')}`,
-        `(${RECEIPT_KEYWORDS.map(k => `subject:${k}`).join(' OR ')})`,
-      ];
-
-      if (settings?.allowed_domains?.length > 0) {
-        searchParts.push(`(${settings.allowed_domains.map((d: string) => `from:${d}`).join(' OR ')})`);
-      }
-
-      const searchQuery = searchParts.join(' ');
-
-      // Search Gmail for messages
-      const searchResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(searchQuery)}&maxResults=50`,
-        {
-          headers: { Authorization: `Bearer ${connection.access_token}` },
-        }
-      );
-
-      if (!searchResponse.ok) {
-        const error = await searchResponse.text();
-        console.error('Gmail search error:', error);
-        throw new Error('Failed to search Gmail');
-      }
-
-      const searchResult = await searchResponse.json();
-      const messages = searchResult.messages || [];
-
-      let receiptsFound = 0;
-      let receiptsMatched = 0;
-
-      // Process each message
-      for (const msg of messages.slice(0, 20)) { // Limit to 20 for performance
-        // Check if we already processed this message
-        const { data: existing } = await supabase
-          .from('gmail_receipts')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('message_id', msg.id)
-          .single();
-
-        if (existing) continue;
-
-        // Get message details
-        const msgResponse = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-          {
-            headers: { Authorization: `Bearer ${connection.access_token}` },
-          }
-        );
-
-        if (!msgResponse.ok) continue;
-
-        const msgData = await msgResponse.json();
-        const headers = msgData.payload?.headers || [];
-
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
-        const from = headers.find((h: any) => h.name === 'From')?.value || '';
-        const date = headers.find((h: any) => h.name === 'Date')?.value;
-
-        // Extract merchant name from sender
-        let merchantName = null;
-        const fromLower = from.toLowerCase();
-        for (const sender of RECEIPT_SENDERS) {
-          if (fromLower.includes(sender)) {
-            merchantName = sender.charAt(0).toUpperCase() + sender.slice(1);
-            break;
-          }
-        }
-
-        // Try to extract amount from subject or snippet
-        let amount = null;
-        const amountPatterns = [
-          /£\s*([\d,]+\.?\d*)/,
-          /GBP\s*([\d,]+\.?\d*)/i,
-          /\$\s*([\d,]+\.?\d*)/,
-        ];
-
-        const textToSearch = `${subject} ${msgData.snippet || ''}`;
-        for (const pattern of amountPatterns) {
-          const match = textToSearch.match(pattern);
-          if (match) {
-            amount = parseFloat(match[1].replace(',', ''));
-            break;
-          }
-        }
-
-        // Extract order reference
-        let orderReference = null;
-        const orderPatterns = [
-          /order\s*#?\s*(\w+[-\w]*)/i,
-          /reference\s*:?\s*(\w+[-\w]*)/i,
-          /invoice\s*#?\s*(\w+[-\w]*)/i,
-        ];
-
-        for (const pattern of orderPatterns) {
-          const match = textToSearch.match(pattern);
-          if (match) {
-            orderReference = match[1];
-            break;
-          }
-        }
-
-        // Check for attachments
-        let attachmentPath = null;
-        let attachmentType = null;
-        const parts = msgData.payload?.parts || [];
-        for (const part of parts) {
-          if (part.filename && (part.filename.endsWith('.pdf') || part.mimeType?.startsWith('image/'))) {
-            attachmentType = part.filename.endsWith('.pdf') ? 'pdf' : 'image';
-            // Note: Actual attachment download would require additional API calls
-            // and storage bucket upload - simplified for now
-            break;
-          }
-        }
-
-        // Insert receipt record
-        const { error: insertError } = await supabase
-          .from('gmail_receipts')
-          .insert({
-            user_id: user.id,
-            gmail_connection_id: connection.id,
-            message_id: msg.id,
-            subject,
-            from_email: from,
-            received_at: date ? new Date(date).toISOString() : null,
-            merchant_name: merchantName,
-            amount,
-            order_reference: orderReference,
-            attachment_path: attachmentPath,
-            attachment_type: attachmentType,
-            match_status: 'pending',
-          });
-
-        if (!insertError) {
-          receiptsFound++;
-        }
-      }
-
-      // Run matching algorithm
-      const { data: pendingReceipts } = await supabase
-        .from('gmail_receipts')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('match_status', 'pending');
-
-      if (pendingReceipts && pendingReceipts.length > 0) {
-        // Get user's transactions from last 90 days
-        const { data: transactions } = await supabase
-          .from('transactions')
-          .select('*, bank_accounts!inner(*)')
-          .eq('bank_accounts.user_id', user.id)
-          .gte('transaction_date', afterDate.toISOString().split('T')[0]);
-
-        if (transactions) {
-          for (const receipt of pendingReceipts) {
-            // Find best matching transaction
-            let bestMatch = null;
-            let bestScore = 0;
-
-            for (const tx of transactions) {
-              if (tx.type === 'income') continue;
-              if (tx.receipt_path) continue; // Already has a receipt
-
-              let score = 0;
-              const reasons: string[] = [];
-
-              // Amount matching
-              if (receipt.amount !== null) {
-                const diff = Math.abs(receipt.amount - tx.amount);
-                if (diff < 0.01) {
-                  score += 40;
-                  reasons.push('Exact amount match');
-                } else if (diff <= 0.50) {
-                  score += 25;
-                  reasons.push('Amount within £0.50');
-                }
-              }
-
-              // Date matching
-              if (receipt.received_at) {
-                const receiptDate = new Date(receipt.received_at);
-                const txDate = new Date(tx.transaction_date);
-                const daysDiff = Math.abs(Math.floor((receiptDate.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24)));
-
-                if (daysDiff === 0) {
-                  score += 30;
-                  reasons.push('Same day');
-                } else if (daysDiff <= 3) {
-                  score += 15;
-                  reasons.push('Within 3 days');
-                }
-              }
-
-              // Merchant matching
-              if (receipt.merchant_name && tx.merchant) {
-                if (tx.merchant.toLowerCase().includes(receipt.merchant_name.toLowerCase())) {
-                  score += 30;
-                  reasons.push('Merchant match');
-                }
-              }
-
-              if (score > bestScore) {
-                bestScore = score;
-                bestMatch = { transaction: tx, reasons };
-              }
-            }
-
-            // Determine match status
-            let matchStatus = 'no_match';
-            let matchConfidence = null;
-
-            if (bestMatch && bestScore >= 80) {
-              matchStatus = 'matched';
-              matchConfidence = 'high';
-            } else if (bestMatch && bestScore >= 50) {
-              matchStatus = 'review';
-              matchConfidence = 'medium';
-            }
-
-            // Update receipt with match info
-            if (matchStatus !== 'pending') {
-              await supabase
-                .from('gmail_receipts')
-                .update({
-                  match_status: matchStatus,
-                  match_confidence: matchConfidence,
-                  matched_transaction_id: matchStatus === 'matched' ? bestMatch?.transaction.id : null,
-                  matched_at: matchStatus === 'matched' ? new Date().toISOString() : null,
-                })
-                .eq('id', receipt.id);
-
-              if (matchStatus === 'matched') {
-                receiptsMatched++;
-
-                // Log the match
-                await supabase
-                  .from('gmail_match_log')
-                  .insert({
-                    user_id: user.id,
-                    receipt_id: receipt.id,
-                    transaction_id: bestMatch?.transaction.id,
-                    action: 'auto_matched',
-                    match_reasons: bestMatch?.reasons,
-                  });
-              }
-            }
-          }
-        }
-      }
-
-      // Update last synced timestamp
-      await supabase
-        .from('gmail_connections')
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq('id', connection.id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          receiptsFound,
-          receiptsMatched,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (!insertError) receiptsFound++;
     }
 
+    // --- Auto-matching ---
+    const { data: pendingReceipts } = await supabase
+      .from('gmail_receipts')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('match_status', 'pending');
+
+    if (pendingReceipts && pendingReceipts.length > 0) {
+      const { data: transactions } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'expense')
+        .gte('transaction_date', afterDate.toISOString().split('T')[0]);
+
+      if (transactions) {
+        // Get already-matched transaction IDs to avoid double-matching
+        const { data: alreadyMatched } = await supabase
+          .from('gmail_receipts')
+          .select('matched_transaction_id')
+          .eq('user_id', user.id)
+          .eq('match_status', 'matched')
+          .not('matched_transaction_id', 'is', null);
+        
+        const matchedTxIds = new Set((alreadyMatched || []).map(r => r.matched_transaction_id));
+
+        for (const receipt of pendingReceipts) {
+          let bestMatch: { transaction: any; score: number; reasons: string[] } | null = null;
+
+          for (const tx of transactions) {
+            if (matchedTxIds.has(tx.id)) continue;
+
+            let score = 0;
+            const reasons: string[] = [];
+
+            // Amount matching
+            if (receipt.amount !== null) {
+              const diff = Math.abs(receipt.amount - tx.amount);
+              if (diff < 0.01) { score += 40; reasons.push('Exact amount'); }
+              else if (diff <= 0.50) { score += 25; reasons.push('Amount ±£0.50'); }
+              else if (diff <= 2.00) { score += 10; reasons.push('Amount ±£2'); }
+            }
+
+            // Date matching
+            if (receipt.received_at) {
+              const rDate = new Date(receipt.received_at);
+              const tDate = new Date(tx.transaction_date);
+              const daysDiff = Math.abs(Math.floor((rDate.getTime() - tDate.getTime()) / 86400000));
+              if (daysDiff === 0) { score += 30; reasons.push('Same day'); }
+              else if (daysDiff <= 1) { score += 25; reasons.push('±1 day'); }
+              else if (daysDiff <= 3) { score += 15; reasons.push('±3 days'); }
+              else if (daysDiff <= 7) { score += 5; reasons.push('±7 days'); }
+            }
+
+            // Merchant matching — check against description (primary) AND from_email domain
+            const merchantLower = (receipt.merchant_name || '').toLowerCase();
+            const descLower = (tx.description || '').toLowerCase();
+
+            if (merchantLower && descLower) {
+              if (descLower.includes(merchantLower) || merchantLower.includes(descLower)) {
+                score += 30; reasons.push('Merchant in description');
+              } else {
+                // Word overlap
+                const mWords = merchantLower.split(/\s+/);
+                const dWords = descLower.split(/\s+/);
+                const overlap = mWords.filter(w => dWords.some(d => d.includes(w) || w.includes(d)));
+                if (overlap.length > 0) { score += 15; reasons.push('Partial merchant match'); }
+              }
+            }
+
+            // Email domain vs description
+            if (receipt.from_email && descLower) {
+              const domainMatch = receipt.from_email.match(/@(?:[^.]+\.)*([^.]+)\.[a-z]{2,}/i);
+              if (domainMatch && descLower.includes(domainMatch[1].toLowerCase())) {
+                score += 10; reasons.push('Email domain match');
+              }
+            }
+
+            if (!bestMatch || score > bestMatch.score) {
+              bestMatch = { transaction: tx, score, reasons };
+            }
+          }
+
+          // Determine match status
+          let matchStatus = 'no_match';
+          let matchConfidence = null;
+          if (bestMatch && bestMatch.score >= 60) {
+            matchStatus = 'matched';
+            matchConfidence = bestMatch.score >= 80 ? 'high' : 'medium';
+          } else if (bestMatch && bestMatch.score >= 40) {
+            matchStatus = 'review';
+            matchConfidence = 'low';
+          }
+
+          await supabase
+            .from('gmail_receipts')
+            .update({
+              match_status: matchStatus,
+              match_confidence: matchConfidence,
+              matched_transaction_id: matchStatus === 'matched' ? bestMatch?.transaction.id : null,
+              matched_at: matchStatus === 'matched' ? new Date().toISOString() : null,
+            })
+            .eq('id', receipt.id);
+
+          if (matchStatus === 'matched' && bestMatch) {
+            receiptsMatched++;
+            matchedTxIds.add(bestMatch.transaction.id);
+
+            await supabase
+              .from('gmail_match_log')
+              .insert({
+                user_id: user.id,
+                receipt_id: receipt.id,
+                transaction_id: bestMatch.transaction.id,
+                action: 'auto_matched',
+                match_reasons: bestMatch.reasons,
+              });
+          }
+        }
+      }
+    }
+
+    // Update last synced timestamp
+    await supabase
+      .from('gmail_connections')
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq('id', connection.id);
+
     return new Response(
-      JSON.stringify({ error: 'Unknown action' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, receiptsFound, receiptsMatched }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Gmail sync error:', error);
