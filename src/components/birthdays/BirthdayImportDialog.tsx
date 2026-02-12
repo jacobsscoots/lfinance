@@ -64,29 +64,59 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
         const currentYear = new Date().getFullYear();
 
         for (const row of rows) {
-          // Try to find name column
-          const name = row["Name"] || row["name"] || row["Person"] || row["person"] || row["Person Name"] || row["person_name"];
+          // Flexible name detection: "Name", "Person", or "First Name" + "Last Name"
+          let name = row["Name"] || row["name"] || row["Person"] || row["person"] || row["Person Name"] || row["person_name"];
+          if (!name) {
+            const first = row["First Name"] || row["first name"] || row["FirstName"] || row["First name"] || "";
+            const last = row["Last Name"] || row["last name"] || row["LastName"] || row["Last name"] || row["Surname"] || row["surname"] || "";
+            if (first || last) {
+              name = `${first} ${last}`.trim();
+            }
+          }
           if (!name) continue;
 
-          // Find month
-          const monthRaw = row["Month"] || row["month"] || row["Event Month"] || row["event_month"];
-          const month = parseMonth(monthRaw);
+          // Try "Birthday" column first (DD/MM or DD/MM/YYYY format)
+          const birthdayRaw = row["Birthday"] || row["birthday"] || row["DOB"] || row["dob"] || row["Date of Birth"] || row["Birth Date"];
+          let month: number | null = null;
+          let day: number | null = null;
+
+          if (birthdayRaw) {
+            const str = String(birthdayRaw).trim();
+            // Try DD/MM or DD/MM/YYYY
+            const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
+            if (slashMatch) {
+              day = parseInt(slashMatch[1], 10);
+              month = parseInt(slashMatch[2], 10);
+              // Validate
+              if (month < 1 || month > 12 || day < 1 || day > 31) {
+                month = null;
+                day = null;
+              }
+            }
+          }
+
+          // Fall back to separate Month / Day columns
+          if (!month) {
+            const monthRaw = row["Month"] || row["month"] || row["Event Month"] || row["event_month"];
+            month = parseMonth(monthRaw);
+          }
           if (!month) continue;
 
-          // Find day
-          const dayRaw = row["Day"] || row["day"] || row["Event Day"] || row["event_day"] || row["Date"];
-          const day = parseDay(dayRaw);
+          if (!day) {
+            const dayRaw = row["Day"] || row["day"] || row["Event Day"] || row["event_day"] || row["Date"];
+            day = parseDay(dayRaw);
+          }
 
           // Find occasion
           const occasionRaw = String(row["Occasion"] || row["occasion"] || row["Type"] || row["type"] || "birthday").toLowerCase().trim();
           const occasion = ["birthday", "christmas", "anniversary", "other"].includes(occasionRaw) ? occasionRaw : "birthday";
 
-          // Find budget
-          const budgetRaw = row["Budget"] || row["budget"] || 0;
+          // Find budget — check multiple column names
+          const budgetRaw = row["Budget"] || row["budget"] || row["Amount to give?"] || row["Amount to Give"] || row["Amount"] || row["amount"] || 0;
           const budget = parseFloat(String(budgetRaw).replace(/[£$,]/g, "")) || 0;
 
           // Find cost/amount (inline expense)
-          const costRaw = row["Cost"] || row["cost"] || row["Amount"] || row["amount"] || row["Total"] || row["total"];
+          const costRaw = row["Cost"] || row["cost"] || row["Total"] || row["total"];
           const cost = costRaw ? parseFloat(String(costRaw).replace(/[£$,]/g, "")) || 0 : 0;
 
           // Find item description
@@ -134,7 +164,7 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Upload an Excel file with columns: <strong>Name</strong>, <strong>Month</strong>, and optionally Day, Occasion, Budget, Item, Cost.
+            Upload an Excel file with columns like <strong>Name</strong> (or First/Last Name), <strong>Birthday</strong> (DD/MM), and optionally Budget or Amount to give.
           </p>
 
           <div className="border-2 border-dashed rounded-lg p-6 text-center">
