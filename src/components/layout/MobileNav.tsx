@@ -16,7 +16,8 @@ import {
   LogOut,
   CalendarRange,
   BarChart3,
-  Truck
+  Truck,
+  Gift
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,7 @@ const navGroups = [
     items: [
       { name: "Calendar", href: "/calendar", icon: CalendarDays },
       { name: "Deliveries", href: "/deliveries", icon: Truck },
+      { name: "Birthdays", href: "/birthdays", icon: Gift },
       { name: "Groceries", href: "/groceries", icon: ShoppingCart },
       { name: "Meal Plan", href: "/meal-plan", icon: UtensilsCrossed },
       { name: "Toiletries", href: "/toiletries", icon: Sparkles },

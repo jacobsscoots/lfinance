@@ -299,6 +299,98 @@ export type Database = {
           },
         ]
       }
+      birthday_events: {
+        Row: {
+          budget: number | null
+          created_at: string
+          event_day: number | null
+          event_month: number
+          id: string
+          is_active: boolean | null
+          notes: string | null
+          occasion: string
+          person_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget?: number | null
+          created_at?: string
+          event_day?: number | null
+          event_month: number
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          occasion?: string
+          person_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          budget?: number | null
+          created_at?: string
+          event_day?: number | null
+          event_month?: number
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          occasion?: string
+          person_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      birthday_expenses: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          event_id: string
+          id: string
+          is_purchased: boolean | null
+          notes: string | null
+          purchase_date: string | null
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          description: string
+          event_id: string
+          id?: string
+          is_purchased?: boolean | null
+          notes?: string | null
+          purchase_date?: string | null
+          updated_at?: string
+          user_id: string
+          year?: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          event_id?: string
+          id?: string
+          is_purchased?: boolean | null
+          notes?: string | null
+          purchase_date?: string | null
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "birthday_expenses_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "birthday_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bright_connections: {
         Row: {
           access_token: string | null
