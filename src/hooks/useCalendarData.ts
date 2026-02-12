@@ -148,30 +148,30 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
           let isPaid = false;
           let matchConfidence: string | undefined;
 
-          if (storedOcc) {
+          // FIRST: check if a linked transaction exists for this bill within ±3 days
+          const dueDateMs = date.getTime();
+          const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+          const foundLinked = linkedTransactions.find(txn => {
+            if (txn.bill_id !== occ.billId) return false;
+            const txnDate = new Date(txn.transaction_date + "T12:00:00").getTime();
+            return Math.abs(txnDate - dueDateMs) <= threeDaysMs;
+          });
+
+          if (foundLinked) {
+            // Transaction linked from Transactions page — auto-paid
+            status = "paid";
+            isPaid = true;
+            matchConfidence = "auto";
+          } else if (storedOcc) {
+            // Fall back to stored occurrence record
             const storedStatus = storedOcc.status;
             if (storedStatus === "paid" || storedStatus === "skipped" || storedStatus === "overdue" || storedStatus === "due") {
               status = storedStatus;
             }
             isPaid = storedStatus === "paid";
             matchConfidence = storedOcc.match_confidence || undefined;
-          } else {
-            // Check if a linked transaction exists for this bill within ±3 days
-            const dueDateMs = date.getTime();
-            const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-            const foundLinked = linkedTransactions.find(txn => {
-              if (txn.bill_id !== occ.billId) return false;
-              const txnDate = new Date(txn.transaction_date + "T12:00:00").getTime();
-              return Math.abs(txnDate - dueDateMs) <= threeDaysMs;
-            });
-
-            if (foundLinked) {
-              status = "paid";
-              isPaid = true;
-              matchConfidence = "auto";
-            } else if (isBefore(date, today) && !isSameDay(date, today)) {
-              status = "overdue";
-            }
+          } else if (isBefore(date, today) && !isSameDay(date, today)) {
+            status = "overdue";
           }
 
           return {
