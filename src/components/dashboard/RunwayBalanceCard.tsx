@@ -157,7 +157,7 @@ export function RunwayBalanceCard({ metrics, isLoading }: RunwayBalanceCardProps
           </div>
         </div>
 
-        {/* Budget Buffer - Ahead/Behind Plan */}
+        {/* Budget Buffer - Today / Tomorrow */}
         <div className="rounded-lg border p-3 space-y-1.5 text-sm">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground uppercase tracking-wide">Budget Plan (£{metrics.dailyBudget}/day)</span>
@@ -167,19 +167,27 @@ export function RunwayBalanceCard({ metrics, isLoading }: RunwayBalanceCardProps
             <span className="font-medium">{formatCurrency(metrics.planRemaining)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Start-of-day buffer</span>
+            <span className="text-muted-foreground">Buffer at start of today</span>
             <span className={cn("font-medium", metrics.bufferStart >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
               {metrics.bufferStart >= 0 ? "+" : ""}{formatCurrency(metrics.bufferStart)}
             </span>
           </div>
           <div className="border-t pt-1.5 flex justify-between font-semibold">
-            <span>{metrics.bufferTomorrow >= 0 ? "Ahead of plan" : "Behind plan"}</span>
+            <span className="flex items-center gap-1">
+              Tomorrow starts
+              <span className="text-[10px] font-normal text-muted-foreground">(after today's spend)</span>
+            </span>
             <span className={cn(
               metrics.bufferTomorrow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
             )}>
               {metrics.bufferTomorrow >= 0 ? "+" : ""}{formatCurrency(metrics.bufferTomorrow)}
             </span>
           </div>
+          {metrics.bufferTomorrow < 0 && (
+            <p className="text-[11px] text-destructive/80 mt-1">
+              ⚠ You'll start tomorrow £{Math.abs(metrics.bufferTomorrow).toFixed(2)} behind your daily budget plan
+            </p>
+          )}
         </div>
         
         {/* Balance Timeline */}
