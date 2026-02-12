@@ -31,7 +31,11 @@ export function MonthColumn({ data, onAddOverride, onDeleteOverride }: MonthColu
       <CardHeader className="pb-2 px-3 pt-3">
         <CardTitle className="text-sm font-semibold flex items-center justify-between">
           {MONTH_NAMES[data.month]}
-          {data.isPast && <Badge variant="secondary" className="text-[10px] px-1">Actual</Badge>}
+          {data.isPast ? (
+            <Badge variant="secondary" className="text-[10px] px-1">Actual</Badge>
+          ) : data.isEstimated ? (
+            <Badge variant="outline" className="text-[10px] px-1 border-primary/50 text-primary">Est.</Badge>
+          ) : null}
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-3 space-y-2 text-xs">
