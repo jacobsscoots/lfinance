@@ -201,9 +201,17 @@ export function calculateDelta(achieved: MacroTotals, targets: SolverTargets): M
 /**
  * Score a plan - lower is better
  *
- * SYMMETRIC scoring: penalize distance from target equally in both directions.
- * This prevents the old asymmetric bias that pushed all portions upward,
- * making fat impossible when protein/carbs slightly overshoot.
+ * ASYMMETRIC scoring matching the tolerance model:
+ *   P/C: penalize under-target heavily (hard floor), mild penalty for over
+ *   Fat: small allowance for 1g under, mild penalty for over
+ *   Calories: symmetric
+ *
+ * Among plans that are all within tolerance, this tiebreaker prefers:
+ *   - Protein/carbs slightly above target rather than exactly at it
+ *     (ensures the hard floor is safely met)
+ *   - Fat close to target (neither over nor under)
+ *   - Calories close to target
+ *   - Natural-looking portions (round numbers, mid-range)
  */
 export function scorePlan(
   portions: Map<string, number>,
@@ -215,14 +223,25 @@ export function scorePlan(
 
   let score = 0;
 
-  // Symmetric penalties — absolute distance from target
-  // Calories: weight 1 per kcal deviation
+  // Calories: symmetric
   score += Math.abs(delta.calories) * 1;
 
-  // Macros: weight 10 per gram deviation (macros are 1g precision)
-  score += Math.abs(delta.protein) * 10;
-  score += Math.abs(delta.carbs) * 10;
-  score += Math.abs(delta.fat) * 10;
+  // Protein: heavily penalize under, mild penalty for over
+  if (delta.protein < 0) {
+    score += (-delta.protein) * 20; // Under target = bad
+  } else {
+    score += delta.protein * 3; // Over target by small amount = mild
+  }
+
+  // Carbs: heavily penalize under, mild penalty for over
+  if (delta.carbs < 0) {
+    score += (-delta.carbs) * 20;
+  } else {
+    score += delta.carbs * 3;
+  }
+
+  // Fat: moderate penalty both directions (1g under allowed)
+  score += Math.abs(delta.fat) * 8;
 
   // Portion naturalness - prefer round numbers and middle-of-range portions
   for (const item of items) {
@@ -299,41 +318,70 @@ export function scaleSeasonings(items: SolverItem[], portions: Map<string, numbe
 // ============================================================================
 
 /**
- * Calculate net error for optimization — SYMMETRIC
+ * Calculate net error for optimization — ASYMMETRIC macros, SYMMETRIC calories
  *
- * Equal penalty for over and under, with extra penalty for exceeding tolerance.
- * This ensures the solver converges toward the center of the tolerance band
- * instead of biasing toward one side.
+ * Macro direction matters:
+ *   - Under target: penalized according to min tolerance (P/C have min=0,
+ *     meaning ANY undershoot is a hard violation; fat has min=1, allowing 1g)
+ *   - Over target: penalized according to max tolerance (all macros allow +2g)
+ * Calories are symmetric (±50 kcal).
+ *
+ * The penalty structure guides the solver to land at-or-above target for P/C,
+ * within the small band [target-1, target+2] for fat, and within ±50 for cal.
  */
 function calculateNetError(delta: MacroTotals, tolerances: ToleranceConfig): number {
   let error = 0;
 
-  // Symmetric base penalty: absolute distance from target
+  // --- Calories: symmetric ---
   error += Math.abs(delta.calories) * 1;
-  error += Math.abs(delta.protein) * 10;
-  error += Math.abs(delta.carbs) * 8;
-  error += Math.abs(delta.fat) * 10;
-
-  // Extra penalty for exceeding tolerance in EITHER direction
   const calAbs = Math.abs(delta.calories);
-  if (calAbs > tolerances.calories.max) {
+  if (delta.calories < 0 && calAbs > tolerances.calories.min) {
+    error += (calAbs - tolerances.calories.min) * 5;
+  } else if (delta.calories > 0 && calAbs > tolerances.calories.max) {
     error += (calAbs - tolerances.calories.max) * 5;
   }
 
-  const proAbs = Math.abs(delta.protein);
-  if (proAbs > tolerances.protein.max) {
-    error += (proAbs - tolerances.protein.max) * 30;
-  }
+  // --- Helper for asymmetric macro penalty ---
+  // under = delta < 0: violation boundary is -min (e.g., protein min=0 means no undershoot)
+  // over  = delta > 0: violation boundary is +max (e.g., protein max=2 means up to +2g ok)
+  const macroPenalty = (
+    d: number,
+    tol: { min: number; max: number },
+    baseWeight: number,
+    violationWeight: number
+  ): number => {
+    let p = 0;
+    if (d < 0) {
+      // Under target
+      const under = -d; // positive magnitude
+      if (under > tol.min) {
+        // Hard violation — heavily penalize beyond allowed undershoot
+        p += under * baseWeight;
+        p += (under - tol.min) * violationWeight;
+      } else {
+        // Within allowed undershoot (e.g., fat allows 1g)
+        p += under * baseWeight * 0.5;
+      }
+    } else {
+      // Over target
+      if (d > tol.max) {
+        // Over tolerance — penalize excess
+        p += d * baseWeight;
+        p += (d - tol.max) * violationWeight;
+      } else {
+        // Within allowed overshoot — mild preference toward target
+        p += d * baseWeight * 0.3;
+      }
+    }
+    return p;
+  };
 
-  const carbAbs = Math.abs(delta.carbs);
-  if (carbAbs > tolerances.carbs.max) {
-    error += (carbAbs - tolerances.carbs.max) * 20;
-  }
-
-  const fatAbs = Math.abs(delta.fat);
-  if (fatAbs > tolerances.fat.max) {
-    error += (fatAbs - tolerances.fat.max) * 30;
-  }
+  // Protein: min=0 (no undershoot), max=2 (+2g ok)
+  error += macroPenalty(delta.protein, tolerances.protein, 10, 30);
+  // Carbs: min=0 (no undershoot), max=2 (+2g ok)
+  error += macroPenalty(delta.carbs, tolerances.carbs, 8, 20);
+  // Fat: min=1 (1g undershoot ok), max=2 (+2g ok)
+  error += macroPenalty(delta.fat, tolerances.fat, 10, 30);
 
   return error;
 }

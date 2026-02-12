@@ -232,37 +232,61 @@ describe('clampToConstraints', () => {
 });
 
 describe('isWithinTolerance', () => {
+  // DEFAULT_TOLERANCES: cal ±50, protein 0/+2, carbs 0/+2, fat -1/+2
   const targets: SolverTargets = {
     calories: 500,
     protein: 40,
     carbs: 50,
     fat: 20,
   };
-  
+
   it('returns true when exactly at target', () => {
     const achieved: MacroTotals = { calories: 500, protein: 40, carbs: 50, fat: 20 };
     expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(true);
   });
-  
-  it('returns true when within upper tolerance', () => {
-    const achieved: MacroTotals = { calories: 545, protein: 41, carbs: 51, fat: 21 };
-    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(true);
-  });
-  
-  it('returns false when over tolerance', () => {
-    const achieved: MacroTotals = { calories: 560, protein: 40, carbs: 50, fat: 20 };
-    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(false);
-  });
-  
-  it('returns true when slightly under target (symmetric tolerance)', () => {
-    // With symmetric tolerances (±50 kcal, ±1g macros), 490 kcal is within ±50 of 500
-    const achieved: MacroTotals = { calories: 490, protein: 40, carbs: 50, fat: 20 };
+
+  it('returns true when within upper tolerance (+2g macros, +50 cal)', () => {
+    const achieved: MacroTotals = { calories: 545, protein: 42, carbs: 52, fat: 22 };
     expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(true);
   });
 
-  it('returns false when far under target', () => {
-    // 400 kcal is 100 under target of 500 — outside ±50 tolerance
-    const achieved: MacroTotals = { calories: 400, protein: 40, carbs: 50, fat: 20 };
+  it('returns false when calories over tolerance', () => {
+    const achieved: MacroTotals = { calories: 560, protein: 40, carbs: 50, fat: 20 };
+    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(false);
+  });
+
+  it('returns false when protein is 1g under target (min=0 means no undershoot)', () => {
+    const achieved: MacroTotals = { calories: 500, protein: 39, carbs: 50, fat: 20 };
+    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(false);
+  });
+
+  it('returns false when carbs is 1g under target (min=0 means no undershoot)', () => {
+    const achieved: MacroTotals = { calories: 500, protein: 40, carbs: 49, fat: 20 };
+    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(false);
+  });
+
+  it('returns true when fat is 1g under target (min=1 allows 1g undershoot)', () => {
+    const achieved: MacroTotals = { calories: 500, protein: 40, carbs: 50, fat: 19 };
+    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(true);
+  });
+
+  it('returns false when fat is 2g under target (exceeds min=1)', () => {
+    const achieved: MacroTotals = { calories: 500, protein: 40, carbs: 50, fat: 18 };
+    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(false);
+  });
+
+  it('returns false when protein is 3g over target (exceeds max=2)', () => {
+    const achieved: MacroTotals = { calories: 500, protein: 43, carbs: 50, fat: 20 };
+    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(false);
+  });
+
+  it('returns true when calories are 50 under target (cal min=50)', () => {
+    const achieved: MacroTotals = { calories: 450, protein: 40, carbs: 50, fat: 20 };
+    expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(true);
+  });
+
+  it('returns false when calories are 51 under target', () => {
+    const achieved: MacroTotals = { calories: 449, protein: 40, carbs: 50, fat: 20 };
     expect(isWithinTolerance(achieved, targets, DEFAULT_TOLERANCES)).toBe(false);
   });
 });
@@ -326,13 +350,15 @@ describe('solve - basic scenarios', () => {
     
     const result = solve(items, targets, { maxIterations: 500 });
 
-    // With symmetric tolerances, solver should find a valid solution
-    // Check macros are within ±1g and calories ±50 kcal
+    // Check macros within tolerance: P/C 0 to +2g, fat -1 to +2g, cal ±50
     if (result.success) {
       expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
-      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      expect(result.totals.protein - targets.protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - targets.protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - targets.carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - targets.carbs).toBeLessThanOrEqual(2);
+      expect(result.totals.fat - targets.fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - targets.fat).toBeLessThanOrEqual(2);
     }
     // If it fails, that's acceptable for this edge case with LOCKED veg
     expect(true).toBe(true);

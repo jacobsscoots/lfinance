@@ -87,15 +87,19 @@ export interface ToleranceConfig {
   fat: { min: number; max: number };      // e.g., { min: 0, max: 2 }
 }
 
-// Default tolerances per spec — SYMMETRIC: ±1g macros, ±50 kcal calories
-// Using symmetric (min = max) prevents the solver from being unable to find
-// solutions when hitting all 4 macros at-or-above simultaneously is impossible
-// (e.g., overshooting protein/carbs steals calorie budget from fat).
+// Default tolerances per spec — ASYMMETRIC macros, SYMMETRIC calories
+//
+// Protein/Carbs: must be AT or ABOVE target (min=0), up to +2g over (max=2).
+// Fat: 1g undershoot allowed (min=1) because fat is derived from
+// (cal - P×4 - C×4) / 9 — pushing P/C up to their strict floors
+// steals calorie budget from fat. Without this flexibility the solver
+// often produces "Can't solve" on valid meal plans.
+// Calories: ±50 kcal symmetric.
 export const DEFAULT_TOLERANCES: ToleranceConfig = {
   calories: { min: 50, max: 50 },
-  protein: { min: 1, max: 1 },
-  carbs: { min: 1, max: 1 },
-  fat: { min: 1, max: 1 },
+  protein: { min: 0, max: 2 },
+  carbs: { min: 0, max: 2 },
+  fat: { min: 1, max: 2 },
 };
 
 // Solver targets
