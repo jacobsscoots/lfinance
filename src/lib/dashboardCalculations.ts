@@ -41,6 +41,11 @@ export interface PayCycleMetrics {
   currentBalance: number;
   projectedEndBalance: BalanceProjection;
   
+  // Runway "restart from today"
+  anchorBalance: number;      // start-of-day balance (current + today's spend)
+  spentToday: number;         // posted spend today
+  remainingBalance: number;   // current non-credit balance
+  
   // Spending
   totalSpent: number;
   totalIncome: number;
