@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Receipt, Filter } from "lucide-react";
+import { RepeatPurchaseBanner } from "@/components/transactions/RepeatPurchaseBanner";
 import { useTransactions, Transaction, TransactionFilters as FilterType } from "@/hooks/useTransactions";
 import { TransactionList } from "@/components/transactions/TransactionList";
 import { TransactionFilters } from "@/components/transactions/TransactionFilters";
@@ -81,6 +82,9 @@ export default function Transactions() {
             Add Transaction
           </Button>
         </div>
+
+        {/* Repeat Purchase Suggestions */}
+        <RepeatPurchaseBanner />
 
         {/* Mobile: Collapsible Filters */}
         {isMobile ? (
