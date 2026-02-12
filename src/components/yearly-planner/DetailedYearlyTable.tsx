@@ -214,6 +214,28 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
               </tr>
             ))}
 
+            {/* Grocery forecast row (for future months) */}
+            {months.some(m => m.groceryForecast > 0) && (
+              <tr className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                <td className={cn(labelClass, "font-normal")}>
+                  <span className="flex items-center gap-1.5">
+                    🛒 Groceries
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">
+                      Est.
+                    </Badge>
+                  </span>
+                </td>
+                {months.map((m, i) => (
+                  <td key={i} className={cn(cellClass, m.groceryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
+                    {m.groceryForecast > 0 ? fmt(m.groceryForecast) : "—"}
+                  </td>
+                ))}
+                <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
+                  {fmt(months.reduce((s, m) => s + m.groceryForecast, 0))}
+                </td>
+              </tr>
+            )}
+
             {/* Override adjustments */}
             {overrideRows.filter(o => o.type === 'expense').map((row) => (
               <tr key={row.label} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
