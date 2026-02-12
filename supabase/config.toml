@@ -51,3 +51,6 @@ verify_jwt = false
 [functions.gmail-tracking-sync]
 verify_jwt = false
 
+[functions.claude-ai]
+verify_jwt = false
+

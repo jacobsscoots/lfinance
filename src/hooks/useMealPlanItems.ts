@@ -933,6 +933,94 @@ export function useMealPlanItems(weekStart: Date) {
     },
   });
 
+  // AI-powered portioning via Claude
+  const aiPlanDay = useMutation({
+    mutationFn: async ({
+      planId,
+      settings,
+      weeklyOverride,
+      previousWeekOverride
+    }: {
+      planId: string;
+      settings: NutritionSettings;
+      weeklyOverride?: WeeklyTargetsOverride | null;
+      previousWeekOverride?: WeeklyTargetsOverride | null;
+    }) => {
+      if (!user) throw new Error("Not authenticated");
+
+      const plan = mealPlans.find(p => p.id === planId);
+      if (!plan) throw new Error("Plan not found");
+
+      const items = plan.items || [];
+      if (items.length === 0) throw new Error("No items to plan");
+
+      const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
+      const targets = getDailyTargets(dayDate, settings, weeklyOverride, previousWeekOverride);
+
+      // Build item data for Claude
+      const itemsPayload = items.map(item => ({
+        id: item.id,
+        product_id: item.product_id,
+        name: item.product?.name || 'Unknown',
+        meal_type: item.meal_type,
+        is_locked: item.is_locked || item.product?.product_type === 'fixed',
+        quantity_grams: item.quantity_grams,
+        calories_per_100g: item.product?.calories_per_100g || 0,
+        protein_per_100g: item.product?.protein_per_100g || 0,
+        carbs_per_100g: item.product?.carbs_per_100g || 0,
+        fat_per_100g: item.product?.fat_per_100g || 0,
+        food_type: item.product?.food_type || 'other',
+        min_portion_grams: item.product?.min_portion_grams || 10,
+        max_portion_grams: item.product?.max_portion_grams || 500,
+        product_type: item.product?.product_type || 'editable',
+      }));
+
+      const { data, error } = await supabase.functions.invoke('claude-ai', {
+        body: {
+          feature: 'meal_planner',
+          input: {
+            items: itemsPayload,
+            targets: {
+              calories: targets.calories,
+              protein: targets.protein,
+              carbs: targets.carbs,
+              fat: targets.fat,
+            },
+          },
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success || !data?.portions) throw new Error(data?.error || "AI planning failed");
+
+      // Apply portions to DB
+      let updated = 0;
+      for (const portion of data.portions) {
+        const item = items.find(i => i.id === portion.id);
+        if (!item) continue;
+        if (item.is_locked || item.product?.product_type === 'fixed') continue;
+
+        const { error: updateError } = await supabase
+          .from("meal_plan_items")
+          .update({ quantity_grams: portion.quantity_grams })
+          .eq("id", portion.id)
+          .eq("user_id", user.id);
+
+        if (updateError) throw updateError;
+        updated++;
+      }
+
+      return { updated };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      toast.success(`AI planned ${result.updated} portions`);
+    },
+    onError: (error) => {
+      toast.error("AI planning failed: " + error.message);
+    },
+  });
+
   return {
     mealPlans,
     weekRange,
@@ -952,6 +1040,7 @@ export function useMealPlanItems(weekStart: Date) {
     clearWeek,
     recalculateDay,
     recalculateAll,
+    aiPlanDay,
     lastCalculated,
   };
 }

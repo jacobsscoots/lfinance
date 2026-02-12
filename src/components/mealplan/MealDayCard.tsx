@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parse } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +52,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const [copyToDateOpen, setCopyToDateOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
   
-  const { updateMealStatus, removeItem, updateItem, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay } = useMealPlanItems(weekStart);
+  const { updateMealStatus, removeItem, updateItem, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay, aiPlanDay } = useMealPlanItems(weekStart);
   
   // Parse as local date to avoid UTC-shift issues
   const date = parse(plan.meal_date, "yyyy-MM-dd", new Date());
@@ -184,6 +184,11 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
     recalculateDay.mutate({ planId: plan.id, settings, portioningSettings, weeklyOverride, previousWeekOverride });
   };
 
+  const handleAiPlan = () => {
+    if (!settings) return;
+    aiPlanDay.mutate({ planId: plan.id, settings, weeklyOverride, previousWeekOverride });
+  };
+
   return (
     <>
       <Card className={cn(
@@ -201,20 +206,36 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
             <div className="flex items-center gap-1">
               {/* Per-Day Generate Button */}
               {isTargetMode && hasItems && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={handleGenerate}
-                  disabled={recalculateDay.isPending}
-                  title="Generate portions for this day"
-                >
-                  {recalculateDay.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleAiPlan}
+                    disabled={aiPlanDay.isPending}
+                    title="AI Plan portions"
+                  >
+                    {aiPlanDay.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleGenerate}
+                    disabled={recalculateDay.isPending}
+                    title="Generate portions (solver)"
+                  >
+                    {recalculateDay.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                  </Button>
+                </>
               )}
               <Button
                 variant="ghost"

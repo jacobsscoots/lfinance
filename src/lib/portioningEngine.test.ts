@@ -1623,8 +1623,10 @@ describe('PROOF: Exhaustive Fallback Solver', () => {
     for (let i = 1; i < results.length; i++) {
       expect(results[i].success).toBe(ref.success);
       if (ref.success && results[i].success) {
-        expect(results[i].totals.calories).toBe(ref.totals.calories);
-        expect(results[i].totals.protein).toBe(ref.totals.protein);
+        const refSuccess = ref as import("./portioningTypes").SolverSuccess;
+        const iSuccess = results[i] as import("./portioningTypes").SolverSuccess;
+        expect(iSuccess.totals.calories).toBe(refSuccess.totals.calories);
+        expect(iSuccess.totals.protein).toBe(refSuccess.totals.protein);
       }
     }
   });

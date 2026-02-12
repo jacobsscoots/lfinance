@@ -42,11 +42,14 @@ export function BillsAssistant() {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('analyze-usage-ai', {
+      const { data, error } = await supabase.functions.invoke('claude-ai', {
         body: {
-          question: messageToSend,
-          readings: readings.slice(0, 90), // Last 90 readings
-          tariff: currentTariff,
+          feature: 'cheaper_bills',
+          input: {
+            question: messageToSend,
+            readings: readings.slice(0, 90),
+            tariff: currentTariff,
+          },
         },
       });
 
