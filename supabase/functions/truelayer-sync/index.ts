@@ -260,14 +260,19 @@ serve(async (req) => {
           syncedAccounts.push({ account_id: account.account_id, balance, action: 'created', type: 'account' });
         }
 
-        // Fetch transactions for this account
-        const txResponse = await fetch(
-          `${TRUELAYER_API_URL}/data/v1/accounts/${account.account_id}/transactions`,
-          { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        );
+        // Fetch settled + pending transactions for this account
+        const [txResponse, pendingTxResponse] = await Promise.all([
+          fetch(`${TRUELAYER_API_URL}/data/v1/accounts/${account.account_id}/transactions`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+          }),
+          fetch(`${TRUELAYER_API_URL}/data/v1/accounts/${account.account_id}/transactions/pending`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+          }).catch(() => null),
+        ]);
 
         if (txResponse.ok) {
           const { results: transactions } = await txResponse.json();
+          console.log(`[sync] Account ${account.account_id}: ${transactions?.length || 0} transactions from TrueLayer`);
           const { data: bankAccount } = await supabase
             .from('bank_accounts')
             .select('id')
@@ -276,17 +281,20 @@ serve(async (req) => {
             .maybeSingle();
 
           if (bankAccount) {
+            let insertedCount = 0;
+            let skippedCount = 0;
             for (const tx of (transactions || [])) {
               const { data: existingTx } = await supabase
                 .from('transactions')
                 .select('id')
                 .eq('external_id', tx.transaction_id)
+                .eq('account_id', bankAccount.id)
                 .maybeSingle();
 
               if (!existingTx) {
                 const txType = tx.amount < 0 ? 'expense' : 'income';
                 const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
-                const { data: newTx } = await supabase
+                const { data: newTx, error: insertErr } = await supabase
                   .from('transactions')
                   .insert({
                     account_id: bankAccount.id,
@@ -300,6 +308,12 @@ serve(async (req) => {
                   .select('id')
                   .single();
 
+                if (insertErr) {
+                  console.error(`[sync] Failed to insert tx ${tx.transaction_id}:`, insertErr.message);
+                } else {
+                  insertedCount++;
+                }
+
                 allNewTransactions.push({
                   account_id: bankAccount.id,
                   external_id: tx.transaction_id,
@@ -310,9 +324,51 @@ serve(async (req) => {
                   merchant: tx.merchant_name || null,
                   db_id: newTx?.id,
                 });
+              } else {
+                skippedCount++;
+              }
+            }
+            console.log(`[sync] Account ${account.account_id}: ${insertedCount} inserted, ${skippedCount} skipped (already exist)`);
+
+            // Process pending transactions
+            if (pendingTxResponse?.ok) {
+              const { results: pendingTxs } = await pendingTxResponse.json();
+              console.log(`[sync] Account ${account.account_id}: ${pendingTxs?.length || 0} pending transactions`);
+              let pendingInserted = 0;
+              for (const tx of (pendingTxs || [])) {
+                const pendingExtId = `pending_${tx.transaction_id}`;
+                const { data: existingTx } = await supabase
+                  .from('transactions')
+                  .select('id')
+                  .eq('external_id', pendingExtId)
+                  .eq('account_id', bankAccount.id)
+                  .maybeSingle();
+
+                if (!existingTx) {
+                  const txType = tx.amount < 0 ? 'expense' : 'income';
+                  const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
+                  await supabase
+                    .from('transactions')
+                    .insert({
+                      account_id: bankAccount.id,
+                      external_id: pendingExtId,
+                      description: tx.description || 'Pending transaction',
+                      amount: Math.abs(tx.amount),
+                      type: txType,
+                      transaction_date: txDate,
+                      merchant: tx.merchant_name || null,
+                      is_pending: true,
+                    });
+                  pendingInserted++;
+                }
+              }
+              if (pendingInserted > 0) {
+                console.log(`[sync] Account ${account.account_id}: ${pendingInserted} pending inserted`);
               }
             }
           }
+        } else {
+          console.error(`[sync] Failed to fetch transactions for account ${account.account_id}: ${txResponse.status}`);
         }
       }
     } else {
@@ -390,6 +446,7 @@ serve(async (req) => {
 
         if (txResponse.ok) {
           const { results: transactions } = await txResponse.json();
+          console.log(`[sync] Card ${card.account_id}: ${transactions?.length || 0} transactions from TrueLayer`);
           const { data: bankAccount } = await supabase
             .from('bank_accounts')
             .select('id')
@@ -398,18 +455,21 @@ serve(async (req) => {
             .maybeSingle();
 
           if (bankAccount) {
+            let insertedCount = 0;
+            let skippedCount = 0;
             for (const tx of (transactions || [])) {
               const { data: existingTx } = await supabase
                 .from('transactions')
                 .select('id')
                 .eq('external_id', tx.transaction_id)
+                .eq('account_id', bankAccount.id)
                 .maybeSingle();
 
               if (!existingTx) {
                 // Credit card: positive amount = purchase (expense), negative = payment/refund (income)
                 const txType = tx.amount > 0 ? 'expense' : 'income';
                 const txDate = tx.timestamp?.split('T')[0] || new Date().toISOString().split('T')[0];
-                const { data: newTx } = await supabase
+                const { data: newTx, error: insertErr } = await supabase
                   .from('transactions')
                   .insert({
                     account_id: bankAccount.id,
@@ -423,6 +483,12 @@ serve(async (req) => {
                   .select('id')
                   .single();
 
+                if (insertErr) {
+                  console.error(`[sync] Failed to insert card tx ${tx.transaction_id}:`, insertErr.message);
+                } else {
+                  insertedCount++;
+                }
+
                 allNewTransactions.push({
                   account_id: bankAccount.id,
                   external_id: tx.transaction_id,
@@ -433,8 +499,11 @@ serve(async (req) => {
                   merchant: tx.merchant_name || null,
                   db_id: newTx?.id,
                 });
+              } else {
+                skippedCount++;
               }
             }
+            console.log(`[sync] Card ${card.account_id}: ${insertedCount} inserted, ${skippedCount} skipped`);
           }
         }
       }
