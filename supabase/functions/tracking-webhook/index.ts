@@ -1,10 +1,27 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { timingSafeEqual } from "node:crypto";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+function safeCompare(a: string, b: string): boolean {
+  try {
+    const encoder = new TextEncoder();
+    const bufA = encoder.encode(a);
+    const bufB = encoder.encode(b);
+    if (bufA.byteLength !== bufB.byteLength) {
+      // Compare against self to maintain constant time
+      timingSafeEqual(bufA, bufA);
+      return false;
+    }
+    return timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
 
 function mapStatus(tmStatus: string): string {
   const s = (tmStatus || "").toLowerCase();
@@ -22,14 +39,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify webhook secret
+    // Verify webhook secret using constant-time comparison
     const webhookSecret = Deno.env.get("TRACKING_WEBHOOK_SECRET");
     if (webhookSecret) {
       const url = new URL(req.url);
-      const providedSecret = url.searchParams.get("secret") || req.headers.get("x-webhook-secret");
-      if (providedSecret !== webhookSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const providedSecret = url.searchParams.get("secret") || req.headers.get("x-webhook-secret") || "";
+      if (!providedSecret || !safeCompare(providedSecret, webhookSecret)) {
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
