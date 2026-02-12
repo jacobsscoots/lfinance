@@ -196,16 +196,19 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const totalRestOfCycle = billsRestOfCycle.reduce((sum, b) => sum + Number(b.amount), 0);
   const committedRemaining = totalNext7Days + totalRestOfCycle;
   
-  // Safe-to-spend: budget-based (accumulated daily budget minus discretionary spending)
-  // Excludes bills/subscriptions and credit card balances — purely discretionary
-  const dailyBudget = effectiveSettings.daily_budget;
-  const accumulatedBudget = dailyBudget * daysPassed;
-  const budgetRemaining = accumulatedBudget - discretionarySpent;
-  
   // Calculate balance excluding credit card accounts
   const nonCreditBalance = allAccounts
     .filter(a => !a.is_hidden && a.account_type !== 'credit')
     .reduce((sum, a) => sum + Number(a.balance), 0);
+  
+  // Safe-to-spend: (current non-credit balance - upcoming bills) / days remaining
+  const discretionaryRemaining = Math.max(0, nonCreditBalance - committedRemaining);
+  const safeToSpendPerDay = daysRemaining > 0 ? discretionaryRemaining / daysRemaining : 0;
+  
+  // Budget for pace calculation (income if available, otherwise start balance)
+  const effectiveBudget = totalIncome > 0 ? totalIncome : startBalance;
+  const expectedSpentByNow = daysTotal > 0 ? (effectiveBudget / daysTotal) * daysPassed : 0;
+  
   const projectedEndBalance = calculateProjectedEndBalance(
     nonCreditBalance,
     totalSpent,
@@ -213,15 +216,7 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     daysRemaining,
     committedRemaining
   );
-  
-  // Budget for pace calculation (income if available, otherwise start balance)
-  const effectiveBudget = totalIncome > 0 ? totalIncome : startBalance;
-  const expectedSpentByNow = daysTotal > 0 ? (effectiveBudget / daysTotal) * daysPassed : 0;
-  
-  // Safe-to-spend = budget surplus (accumulated daily budget - discretionary spent)
-  const safeToSpendPerDay = budgetRemaining;
-  const discretionaryRemaining = Math.max(0, nonCreditBalance - committedRemaining);
-  
+
   const isOverPace = totalSpent > expectedSpentByNow + 50;
   const runwayRisk = checkRunwayRisk(discretionaryRemaining, daysRemaining);
   

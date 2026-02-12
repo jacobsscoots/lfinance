@@ -306,7 +306,7 @@ export function getValueColorClass(value: number, inverse: boolean = false): str
  * Get safe-to-spend color based on daily amount
  */
 export function getSafeToSpendColor(amount: number): "default" | "warning" | "danger" {
-  if (amount >= 30) return "default";
-  if (amount >= 0) return "warning";
+  if (amount >= 20) return "default";
+  if (amount >= 10) return "warning";
   return "danger";
 }
