@@ -102,11 +102,20 @@ export function useYearlyPlannerData(year: number) {
     enabled: !!user,
   });
 
-  // Only count tracked income sources for the planner
+  // Only count tracked income sources for the planner (non-salary ones)
   const TRACKED_INCOME_PATTERNS = [
-    /thames\s*water/i,
     /rent\s*from\s*sarah/i,
+    /faster\s*payments.*sarah/i,
   ];
+
+  // Display-friendly names for tracked income sources
+  const TRACKED_INCOME_LABELS: Record<string, string> = {};
+  const getTrackedIncomeLabel = (description: string): string => {
+    if (/rent\s*from\s*sarah/i.test(description) || /faster\s*payments.*sarah/i.test(description)) {
+      return "Help from Mum for Rent";
+    }
+    return description;
+  };
 
   const isTrackedIncome = (description: string): boolean =>
     TRACKED_INCOME_PATTERNS.some(p => p.test(description));
@@ -258,11 +267,11 @@ export function useYearlyPlannerData(year: number) {
   // Build income breakdown: source name -> per-month amounts
   const incomeBreakdown: Record<string, number[]> = {};
 
-  // Tracked income from actual transactions
+  // Tracked income from actual transactions (excluding salary-level ones already in salary row)
   yearTransactions.forEach(t => {
     if (t.type !== 'income' || !isTrackedIncome(t.description)) return;
     const monthIdx = parseInt(t.transaction_date.substring(5, 7), 10) - 1;
-    const source = t.description || 'Other Income';
+    const source = getTrackedIncomeLabel(t.description || 'Other Income');
     if (!incomeBreakdown[source]) incomeBreakdown[source] = new Array(12).fill(0);
     incomeBreakdown[source][monthIdx] += Math.abs(Number(t.amount));
   });
