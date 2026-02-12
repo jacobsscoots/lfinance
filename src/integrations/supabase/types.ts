@@ -3602,7 +3602,7 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      get_requesting_user_id: { Args: never; Returns: string }
     }
     Enums: {
       bill_frequency:

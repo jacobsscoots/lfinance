@@ -61,6 +61,10 @@ function getNextOccurrence(bill: Bill, currentDate: Date): Date {
       // For monthly, move to the same day next month
       const nextMonth = addMonths(currentDate, 1);
       return getDueDateForMonth(bill, nextMonth.getFullYear(), nextMonth.getMonth());
+    case "bimonthly": {
+      const bimonthlyMonth = addMonths(currentDate, 2);
+      return getDueDateForMonth(bill, bimonthlyMonth.getFullYear(), bimonthlyMonth.getMonth());
+    }
     case "quarterly":
       const quarterMonth = addMonths(currentDate, 3);
       return getDueDateForMonth(bill, quarterMonth.getFullYear(), quarterMonth.getMonth());
