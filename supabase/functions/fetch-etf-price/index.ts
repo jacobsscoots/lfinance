@@ -1,4 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const etfInputSchema = z.object({
+  ticker: z.string().min(1).max(20).regex(/^[A-Za-z0-9._-]+$/, "Invalid ticker format"),
+  investment_account_id: z.string().uuid(),
+});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,14 +39,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { ticker, investment_account_id } = await req.json();
-
-    if (!ticker || !investment_account_id) {
-      return new Response(JSON.stringify({ error: 'ticker and investment_account_id required' }), {
+    const rawBody = await req.json();
+    const parseResult = etfInputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    const { ticker, investment_account_id } = parseResult.data;
 
     // Yahoo Finance v8 API for quote data
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=5d&interval=1d`;

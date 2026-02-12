@@ -1,8 +1,28 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { z } from "https://esm.sh/zod@3.23.8";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+
+const notificationSchema = z.object({
+  type: z.enum(["contract_reminder", "savings_alert", "usage_summary"]),
+  userId: z.string().uuid().optional(),
+  email: z.string().email().max(255).optional(),
+  data: z.object({
+    serviceName: z.string().max(200).optional(),
+    provider: z.string().max(200).optional(),
+    daysUntilEnd: z.number().int().min(0).max(3650).optional(),
+    contractEndDate: z.string().max(50).optional(),
+    savings: z.number().min(0).max(100000).optional(),
+    currentCost: z.number().min(0).max(100000).optional(),
+    bestDealProvider: z.string().max(200).optional(),
+    bestDealCost: z.number().min(0).max(100000).optional(),
+    period: z.string().max(50).optional(),
+    totalUsage: z.number().min(0).max(1000000).optional(),
+    totalCost: z.number().min(0).max(100000).optional(),
+  }).optional(),
+});
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -202,7 +222,15 @@ serve(async (req) => {
       }
     }
 
-    const body: NotificationRequest = await req.json();
+    const rawBody = await req.json();
+    const parseResult = notificationSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const body = parseResult.data;
     const { type, email, data } = body;
 
     // Get email from request or user settings

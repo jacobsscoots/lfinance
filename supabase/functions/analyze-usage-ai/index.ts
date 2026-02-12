@@ -1,5 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const readingSchema = z.object({
+  reading_date: z.string(),
+  consumption_kwh: z.number().min(0).max(10000).optional(),
+  fuel_type: z.string().max(50).optional(),
+});
+
+const tariffSchema = z.object({
+  provider: z.string().max(200),
+  tariff_name: z.string().max(200),
+  unit_rate_kwh: z.number().min(0).max(1000),
+  standing_charge_daily: z.number().min(0).max(1000).optional(),
+  is_fixed: z.boolean().optional(),
+});
+
+const inputSchema = z.object({
+  question: z.string().max(2000).optional(),
+  readings: z.array(readingSchema).max(1000).optional(),
+  tariff: tariffSchema.optional(),
+});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,7 +118,15 @@ serve(async (req) => {
       });
     }
 
-    const { question, readings, tariff } = await req.json();
+    const rawBody = await req.json();
+    const parseResult = inputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const { question, readings, tariff } = parseResult.data;
 
     // Fetch user's energy profile
     const { data: profile } = await supabase

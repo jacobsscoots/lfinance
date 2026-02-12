@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const syncInputSchema = z.object({
+  action: z.enum(["sync"]),
+});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,7 +50,15 @@ serve(async (req) => {
   }
 
   try {
-    const { action } = await req.json();
+    const rawBody = await req.json();
+    const parseResult = syncInputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input. Expected { action: 'sync' }" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const { action } = parseResult.data;
 
     // Get the authorization header
     const authHeader = req.headers.get('Authorization');

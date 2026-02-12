@@ -1,5 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const compareInputSchema = z.object({
+  serviceId: z.string().uuid().optional(),
+  serviceType: z.string().max(50),
+  currentMonthlyCost: z.number().min(0).max(100000).optional(),
+  annualConsumptionKwh: z.number().min(0).max(1000000).optional().default(2900),
+  currentTariff: z.object({
+    unitRate: z.number().min(0).max(1000),
+    standingCharge: z.number().min(0).max(1000),
+  }).optional(),
+  postcode: z.string().max(10).optional(),
+  currentSpeedMbps: z.number().min(0).max(10000).optional(),
+  preferredContractMonths: z.number().int().min(0).max(60).optional(),
+});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -330,17 +345,24 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const body = await req.json();
+    const rawBody = await req.json();
+    const parseResult = compareInputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     const {
       serviceId,
       serviceType,
       currentMonthlyCost,
-      annualConsumptionKwh = 2900, // UK average
+      annualConsumptionKwh,
       currentTariff,
       postcode,
       currentSpeedMbps,
       preferredContractMonths,
-    } = body;
+    } = parseResult.data;
 
     console.log(`Scanning ${serviceType} deals for user ${user.id}, serviceId: ${serviceId}, postcode: ${postcode}`);
 

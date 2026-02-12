@@ -1,4 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const searchInputSchema = z.object({
+  productName: z.string().min(1).max(500),
+  brand: z.string().max(200).optional(),
+  size: z.number().min(0).max(100000).optional(),
+  sizeUnit: z.string().max(20).optional(),
+});
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,14 +101,15 @@ serve(async (req) => {
   }
 
   try {
-    const { productName, brand, size, sizeUnit } = await req.json();
-
-    if (!productName) {
+    const rawBody = await req.json();
+    const parseResult = searchInputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return new Response(
-        JSON.stringify({ success: false, error: "Product name is required" }),
+        JSON.stringify({ success: false, error: "Invalid input", details: parseResult.error.flatten().fieldErrors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    const { productName, brand, size, sizeUnit } = parseResult.data;
 
     const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");

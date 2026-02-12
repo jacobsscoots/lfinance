@@ -1,4 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
+
+const registerInputSchema = z.object({
+  tracking_number: z.string().min(1).max(100).regex(/^[A-Za-z0-9-]+$/, "Invalid tracking number format"),
+  carrier_code: z.string().max(50).optional(),
+  order_id: z.string().uuid().optional(),
+});
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,13 +57,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { tracking_number, carrier_code, order_id } = await req.json();
-
-    if (!tracking_number) {
-      return new Response(JSON.stringify({ error: "tracking_number required" }), {
+    const rawBody = await req.json();
+    const parseResult = registerInputSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const { tracking_number, carrier_code, order_id } = parseResult.data;
 
     // Auto-detect carrier if not provided
     const resolvedCarrier = carrier_code || detectCarrier(tracking_number);
