@@ -132,9 +132,9 @@ export function RunwayBalanceCard({ metrics, isLoading }: RunwayBalanceCardProps
               safeToSpendColor === "warning" && "text-amber-600 dark:text-amber-400",
               safeToSpendColor === "default" && "text-emerald-600 dark:text-emerald-400"
             )}>
-              {formatCurrency(metrics.safeToSpendPerDay)}
+              {formatCurrency(metrics.safeToSpendPerDay)}<span className="text-sm font-normal">/day</span>
             </p>
-            <p className="text-[10px] text-muted-foreground">Budget surplus (excl. bills &amp; credit cards)</p>
+            <p className="text-[10px] text-muted-foreground">Excl. bills &amp; credit cards</p>
           </div>
         </div>
         
