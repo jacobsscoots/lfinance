@@ -380,28 +380,37 @@ async function handleMealPlanner(
     return `- ${item.name} (id: ${item.id}): ${item.calories_per_100g} kcal, ${item.protein_per_100g}g P, ${item.carbs_per_100g}g C, ${item.fat_per_100g}g F per 100g. Min: ${minG}g, Max: ${maxG}g. Meal: ${item.meal_type}.${isSeas ? ' ⚠️ SEASONING – MUST be 5-15g, never exceed 15g.' : ''}`;
   }).join('\n');
 
-  const systemPrompt = `You are a PRECISE meal portion calculator. Accuracy is critical — you must hit macro targets within tight tolerances.
+  const calTarget = Math.round(remainingTargets.calories);
+  const pTarget = Math.round(remainingTargets.protein);
+  const cTarget = Math.round(remainingTargets.carbs);
+  const fTarget = Math.round(remainingTargets.fat);
+
+  const systemPrompt = `You are a PRECISE meal portion calculator. You MUST hit macro targets exactly.
 
 ## STRICT Targets (remaining after locked items):
-- Calories: EXACTLY ${Math.round(remainingTargets.calories)} kcal (tolerance: ±50 kcal — MUST be between ${Math.round(remainingTargets.calories) - 50} and ${Math.round(remainingTargets.calories) + 50})
-- Protein: EXACTLY ${Math.round(remainingTargets.protein)}g (MUST be between ${Math.round(remainingTargets.protein)} and ${Math.round(remainingTargets.protein) + 2}g)
-- Carbs: EXACTLY ${Math.round(remainingTargets.carbs)}g (MUST be between ${Math.round(remainingTargets.carbs)} and ${Math.round(remainingTargets.carbs) + 2}g)
-- Fat: EXACTLY ${Math.round(remainingTargets.fat)}g (MUST be between ${Math.round(remainingTargets.fat) - 1} and ${Math.round(remainingTargets.fat) + 2}g)
+- Calories: ${calTarget} kcal (MUST be between ${calTarget} and ${calTarget + 50})
+- Protein: ${pTarget}g (MUST be between ${pTarget} and ${pTarget + 2}g — NEVER below ${pTarget}g)
+- Carbs: ${cTarget}g (MUST be between ${cTarget} and ${cTarget + 2}g — NEVER below ${cTarget}g)
+- Fat: ${fTarget}g (MUST be between ${fTarget} and ${fTarget + 2}g — NEVER below ${fTarget}g)
 
-## Locked items (already set, do not change):
+ALL macros must be AT or ABOVE target. Being under target is a FAILURE.
+
+## Locked items (do not change):
 ${lockedList}
 
 ## Available foods to portion:
 ${foodList}
 
-## CRITICAL Rules:
-1. You MUST hit ALL four targets within the tolerances above. Calculate the total macros from your portions and verify they match BEFORE returning.
-2. Seasonings (marked with ⚠️) have a HARD cap of 5-15g. NEVER assign more than 15g to any seasoning.
-3. Round portions to the nearest 5g.
-4. Approach: First calculate what macros you need. Then work out portions mathematically using the per-100g values. Verify totals before returning.
-5. Every food item must get a portion within its min/max range.
-6. Show your working: mentally calculate total P, C, F, Cal from your portions to verify they're within tolerance.
-7. Return ONLY the structured tool call with portions.`;
+## Method — follow this EXACTLY:
+1. Start by assigning minimum portions to all items.
+2. Calculate the macro deficit from target.
+3. Identify which items are richest in the needed macro (carbs, protein, fat).
+4. Increase those items' portions in 5g steps, recalculating totals each time.
+5. VERIFY your final totals: sum (portion/100 × per100g) for each macro.
+6. If ANY macro is below target, increase the appropriate item.
+7. Seasonings: HARD cap 5-15g. Never exceed 15g.
+8. Round all portions to nearest 5g.
+9. Return ONLY the set_portions tool call.`;
 
   const tools = [
     {
@@ -430,59 +439,109 @@ ${foodList}
     },
   ];
 
-  const aiData = await callAI({
-    system: systemPrompt,
-    userMessage: "Calculate portions for these foods to hit the macro targets. Use the set_portions tool.",
-    tools,
-    toolChoice: { type: "function", function: { name: "set_portions" } },
-  });
-
-  console.log(`[claude-ai] provider=lovable-ai feature=meal_planner model=${AI_MODEL} usage=${JSON.stringify(aiData.usage || {})}`);
-
-  // Extract tool call result (OpenAI-compatible format)
-  const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-  if (!toolCall?.function?.arguments) {
-    throw new Error("AI did not return portions via tool call");
-  }
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(toolCall.function.arguments);
-  } catch {
-    throw new Error("AI returned invalid JSON in tool call");
-  }
-
-  if (!parsed.portions || !Array.isArray(parsed.portions)) {
-    throw new Error("AI response missing portions array");
-  }
-
-  const portions: Array<{ id: string; quantity_grams: number }> = parsed.portions;
-
-  // Validate: cap seasonings, respect min/max
-  const validatedPortions = portions.map((p: any) => {
-    const item = items.find((i: any) => i.id === p.id);
-    if (!item) return p;
-    let qty = Math.round(p.quantity_grams / 5) * 5;
-    const isSeas = isSeasoningItem(item);
-    if (isSeas) {
-      qty = Math.min(qty, 15);
-      qty = Math.max(qty, 5);
+  // Helper: compute totals from portions
+  function computeTotals(portionList: Array<{ id: string; quantity_grams: number }>) {
+    let cal = 0, p = 0, c = 0, f = 0;
+    for (const portion of portionList) {
+      const item = items.find((i: any) => i.id === portion.id);
+      if (!item) continue;
+      const factor = portion.quantity_grams / 100;
+      cal += item.calories_per_100g * factor;
+      p += item.protein_per_100g * factor;
+      c += item.carbs_per_100g * factor;
+      f += item.fat_per_100g * factor;
     }
-    const minG = isSeas ? 5 : (item.min_portion_grams || 0);
-    const maxG = isSeas ? 15 : (item.max_portion_grams || 500);
-    qty = Math.max(minG, Math.min(maxG, qty));
-    return { id: p.id, quantity_grams: qty };
-  });
+    return { calories: Math.round(cal), protein: Math.round(p), carbs: Math.round(c), fat: Math.round(f) };
+  }
 
-  // Include locked items unchanged
-  const allPortions = [
-    ...lockedItems.map((item: any) => ({ id: item.id, quantity_grams: item.quantity_grams })),
-    ...validatedPortions,
-  ];
+  // Helper: check if totals meet targets
+  function meetsTargets(totals: { calories: number; protein: number; carbs: number; fat: number }) {
+    const calOk = totals.calories >= calTarget && totals.calories <= calTarget + 50;
+    const pOk = totals.protein >= pTarget && totals.protein <= pTarget + 2;
+    const cOk = totals.carbs >= cTarget && totals.carbs <= cTarget + 2;
+    const fOk = totals.fat >= fTarget && totals.fat <= fTarget + 2;
+    return { calOk, pOk, cOk, fOk, allOk: calOk && pOk && cOk && fOk };
+  }
+
+  // Retry loop: up to 3 attempts
+  let bestPortions: Array<{ id: string; quantity_grams: number }> = [];
+  let bestTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const MAX_ATTEMPTS = 3;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    let userMessage = "Calculate portions for these foods to hit the macro targets precisely. Use the set_portions tool.";
+    
+    if (attempt > 0) {
+      const check = meetsTargets(bestTotals);
+      const issues: string[] = [];
+      if (!check.pOk) issues.push(`Protein is ${bestTotals.protein}g but must be ${pTarget}-${pTarget + 2}g`);
+      if (!check.cOk) issues.push(`Carbs is ${bestTotals.carbs}g but must be ${cTarget}-${cTarget + 2}g`);
+      if (!check.fOk) issues.push(`Fat is ${bestTotals.fat}g but must be ${fTarget}-${fTarget + 2}g`);
+      if (!check.calOk) issues.push(`Calories is ${bestTotals.calories} but must be ${calTarget}-${calTarget + 50}`);
+      
+      userMessage = `Your previous attempt was WRONG. The totals were: ${bestTotals.calories}kcal, ${bestTotals.protein}g P, ${bestTotals.carbs}g C, ${bestTotals.fat}g F.\n\nPROBLEMS:\n${issues.join('\n')}\n\nFix these by adjusting portions. All macros must be AT or ABOVE target, never below. Recalculate and use set_portions.`;
+    }
+
+    const aiData = await callAI({
+      system: systemPrompt,
+      userMessage,
+      tools,
+      toolChoice: { type: "function", function: { name: "set_portions" } },
+    });
+
+    console.log(`[claude-ai] attempt=${attempt + 1} provider=lovable-ai feature=meal_planner model=${AI_MODEL} usage=${JSON.stringify(aiData.usage || {})}`);
+
+    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall?.function?.arguments) continue;
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(toolCall.function.arguments);
+    } catch {
+      continue;
+    }
+
+    if (!parsed.portions || !Array.isArray(parsed.portions)) continue;
+
+    // Validate: cap seasonings, respect min/max
+    const validatedPortions = parsed.portions.map((p: any) => {
+      const item = items.find((i: any) => i.id === p.id);
+      if (!item) return p;
+      let qty = Math.round(p.quantity_grams / 5) * 5;
+      const isSeas = isSeasoningItem(item);
+      if (isSeas) {
+        qty = Math.min(qty, 15);
+        qty = Math.max(qty, 5);
+      }
+      const minG = isSeas ? 5 : (item.min_portion_grams || 0);
+      const maxG = isSeas ? 15 : (item.max_portion_grams || 500);
+      qty = Math.max(minG, Math.min(maxG, qty));
+      return { id: p.id, quantity_grams: qty };
+    });
+
+    // Combine with locked items for total check
+    const allPortions = [
+      ...lockedItems.map((item: any) => ({ id: item.id, quantity_grams: item.quantity_grams })),
+      ...validatedPortions,
+    ];
+
+    const totals = computeTotals(allPortions);
+    const check = meetsTargets(totals);
+
+    bestPortions = allPortions;
+    bestTotals = totals;
+
+    if (check.allOk) {
+      console.log(`[claude-ai] converged on attempt ${attempt + 1}: ${JSON.stringify(totals)}`);
+      break;
+    }
+    
+    console.log(`[claude-ai] attempt ${attempt + 1} missed targets: ${JSON.stringify(totals)} vs cal=${calTarget} p=${pTarget} c=${cTarget} f=${fTarget}`);
+  }
 
   return {
     success: true,
-    portions: allPortions,
+    portions: bestPortions,
   };
 }
 
