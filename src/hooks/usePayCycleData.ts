@@ -28,6 +28,36 @@ import type { Tables } from "@/integrations/supabase/types";
 type Transaction = Tables<"transactions">;
 type Bill = Tables<"bills">;
 
+// Patterns that indicate internal transfers, not real outgoings
+const TRANSFER_PATTERNS = [
+  /\[transfer out\]/i,
+  /\[transfer in\]/i,
+  /^chip$/i,
+  /saving challenge/i,
+  /chipx investing/i,
+  /moved to pot/i,
+  /pot transfer/i,
+];
+
+function isInternalTransfer(t: Transaction): boolean {
+  const desc = t.description || "";
+  return TRANSFER_PATTERNS.some(p => p.test(desc));
+}
+
+/**
+ * Deduplicate transactions: if same date + amount + description appears multiple times
+ * in the same account, only count the first occurrence.
+ */
+function deduplicateTransactions(txns: Transaction[]): Transaction[] {
+  const seen = new Set<string>();
+  return txns.filter(t => {
+    const key = `${t.account_id}-${t.transaction_date}-${Number(t.amount).toFixed(2)}-${t.description}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 interface BillWithDueDate extends Bill {
   dueDate: Date;
   category?: {
@@ -65,6 +95,18 @@ export interface PayCycleDataResult {
   // Actual spending breakdown
   billLinkedSpent: number;
   discretionarySpent: number;
+  
+  // Outgoings breakdown for drill-down
+  outgoingsBreakdown: Array<{
+    id: string;
+    description: string;
+    amount: number;
+    date: string;
+    accountName: string;
+    isBillLinked: boolean;
+    isTransferExcluded: boolean;
+    isDuplicate: boolean;
+  }>;
   
   // Alerts
   alerts: Alert[];
@@ -142,13 +184,16 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const transactions = transactionsQuery.data || [];
   const bills = billsQuery.data || [];
   
-  // Income and expenses
-  const totalIncome = transactions
-    .filter(t => t.type === "income")
+  // Deduplicate and filter transfers
+  const cleanTransactions = deduplicateTransactions(transactions);
+  const realExpenses = cleanTransactions.filter(t => t.type === "expense" && !isInternalTransfer(t));
+  const realIncome = cleanTransactions.filter(t => t.type === "income" && !isInternalTransfer(t));
+
+  // Income and expenses (from deduplicated, non-transfer transactions)
+  const totalIncome = realIncome
     .reduce((sum, t) => sum + Number(t.amount), 0);
   
-  const totalSpent = transactions
-    .filter(t => t.type === "expense")
+  const totalSpent = realExpenses
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   // Get credit card account IDs to exclude from discretionary calc
@@ -158,8 +203,8 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
 
   // Split actual spending into bill-linked vs discretionary
   // Only count transactions from non-credit accounts for discretionary budget tracking
-  const nonCreditExpenses = transactions.filter(
-    t => t.type === "expense" && !creditAccountIds.has(t.account_id)
+  const nonCreditExpenses = realExpenses.filter(
+    t => !creditAccountIds.has(t.account_id)
   );
   const billLinkedSpent = nonCreditExpenses
     .filter(t => t.bill_id)
@@ -239,7 +284,7 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const runwayRisk = checkRunwayRisk(discretionaryRemaining, daysRemaining);
   
   // Build daily spending data for charts
-  const dailySpending = buildDailySpendingData(cycle, transactions, effectiveBudget);
+  const dailySpending = buildDailySpendingData(cycle, cleanTransactions.filter(t => !isInternalTransfer(t)), effectiveBudget);
   
   // Buffer = projected end balance in best case
   const bufferAmount = projectedEndBalance.best;
@@ -307,6 +352,25 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     };
   });
   
+  // Build outgoings breakdown for drill-down
+  const accountNameMap = new Map(allAccounts.map(a => [a.id, a.display_name || a.name]));
+  const dedupedAll = deduplicateTransactions(transactions);
+  const dedupKeys = new Set(dedupedAll.map(t => t.id));
+  
+  const outgoingsBreakdown = transactions
+    .filter(t => t.type === "expense")
+    .map(t => ({
+      id: t.id,
+      description: t.description,
+      amount: Number(t.amount),
+      date: t.transaction_date,
+      accountName: accountNameMap.get(t.account_id) || "Unknown",
+      isBillLinked: !!t.bill_id,
+      isTransferExcluded: isInternalTransfer(t),
+      isDuplicate: !dedupKeys.has(t.id),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+  
   // Cycle label
   const cycleLabel = `${format(cycle.start, "d MMM")} → ${format(cycle.end, "d MMM yyyy")}`;
   
@@ -323,6 +387,7 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     totalRestOfCycle,
     billLinkedSpent,
     discretionarySpent,
+    outgoingsBreakdown,
     alerts,
     accounts,
     isLoading,

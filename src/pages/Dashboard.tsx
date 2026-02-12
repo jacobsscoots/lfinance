@@ -13,6 +13,7 @@ import { UpcomingBillsExpanded } from "@/components/dashboard/UpcomingBillsExpan
 import { SpendPaceChart } from "@/components/dashboard/SpendPaceChart";
 import { OutgoingsBreakdownChart } from "@/components/dashboard/OutgoingsBreakdownChart";
 import { NetTrendChart } from "@/components/dashboard/NetTrendChart";
+import { OutgoingsBreakdown } from "@/components/dashboard/OutgoingsBreakdown";
 
 export default function Dashboard() {
   const {
@@ -25,6 +26,7 @@ export default function Dashboard() {
     totalRestOfCycle,
     billLinkedSpent,
     discretionarySpent,
+    outgoingsBreakdown,
     alerts,
     accounts,
     isLoading,
@@ -87,6 +89,13 @@ export default function Dashboard() {
               totalNext7Days={totalNext7Days}
               totalRestOfCycle={totalRestOfCycle}
               discretionaryRemaining={metrics.discretionaryRemaining}
+              isLoading={isLoading}
+            />
+            
+            {/* Outgoings Breakdown Drill-Down */}
+            <OutgoingsBreakdown
+              items={outgoingsBreakdown}
+              totalSpent={metrics.totalSpent}
               isLoading={isLoading}
             />
           </div>
