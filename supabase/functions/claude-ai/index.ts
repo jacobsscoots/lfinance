@@ -920,6 +920,9 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     else if (finalTotals.fat < fullFTarget - 2) violations.push(`fat_under_by_${(fullFTarget - finalTotals.fat).toFixed(1)}g`);
 
     // ── Context-aware suggestions based on ACTUAL solver state ──
+    // IMPORTANT: Suggestions must reference the ORIGINAL saved grams (from items[]),
+    // not the solver's attempted grams. The solver output is never saved on FAIL,
+    // so the UI still shows the original portions.
     const suggested_fixes: string[] = [];
 
     const isCarbsUnder = finalTotals.carbs < fullCTarget - 2;
@@ -931,7 +934,10 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     // Analyze what the solver actually did — which foods are at max, at 0, etc.
     const foodStates = freeFoods.map(f => {
       const g = finalResult.grams.get(f.id) || 0;
-      return { ...f, currentG: g, atMax: g >= f.maxG, atZero: g === 0, atSoftMin: g > 0 && g <= f.softMinG };
+      // Find the original saved grams from the input items
+      const originalItem = items.find((i: any) => i.id === f.id);
+      const savedG = originalItem?.quantity_grams ?? 0;
+      return { ...f, solverG: g, savedG, atMax: g >= f.maxG, atZero: g === 0, atSoftMin: g > 0 && g <= f.softMinG };
     });
 
     // Find foods the solver excluded (0g) and what they'd contribute
@@ -939,88 +945,132 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     // Find foods at their max
     const maxedFoods = foodStates.filter(f => f.atMax && !f.isSeasoning);
 
-    if (isCarbsUnder || isCalUnder) {
-      // Which carb foods are at max?
+    // ── INTER-CONSTRAINT CONFLICT detection ──
+    // When fat is over AND carbs/kcal are under, the real problem is:
+    // "hitting carb targets requires so much food volume that it pushes fat/kcal over"
+    // In this case, do NOT suggest "reduce portion" — that makes things worse.
+    const isInterConstraintConflict = (isCarbsUnder || isCalUnder) && (isFatOver || isCalOver);
+
+    if (isInterConstraintConflict) {
+      // Explain the real conflict
+      const carbShortfall = fullCTarget - finalTotals.carbs;
+      const calOvershoot = finalTotals.calories - fullCalTarget;
+      const fatOvershoot = finalTotals.fat - fullFTarget;
+
+      suggested_fixes.push(
+        `Inter-constraint conflict: reaching ${fullCTarget}g carbs requires food volume that pushes ` +
+        `calories ${calOvershoot > 0 ? `${Math.round(calOvershoot)} over` : 'near'} target` +
+        `${fatOvershoot > 0 ? ` and fat ${fatOvershoot.toFixed(1)}g over` : ''}. ` +
+        `The available carb sources also carry too many calories or fat per gram.`
+      );
+
+      // Identify the highest-calorie carb sources — these are the bottleneck
+      const carbFoods = foodStates.filter(f => f.cPer1g > 0.05 && !f.isSeasoning && f.solverG > 0)
+        .sort((a, b) => (b.calPer1g / Math.max(b.cPer1g, 0.01)) - (a.calPer1g / Math.max(a.cPer1g, 0.01)));
+
+      // Suggest replacing high cal-per-carb foods with pure carb sources
+      for (const cf of carbFoods.slice(0, 2)) {
+        const calPerGramCarb = cf.calPer1g / Math.max(cf.cPer1g, 0.01);
+        if (calPerGramCarb > 6) { // more than 6 kcal per gram of carb = inefficient
+          suggested_fixes.push(
+            `${cf.name} costs ${calPerGramCarb.toFixed(0)} kcal per gram of carb (${(cf.cPer1g * 100).toFixed(0)}g C, ${(cf.calPer1g * 100).toFixed(0)} kcal per 100g). ` +
+            `Replace with a more carb-efficient food (e.g. pure rice ~3.5 kcal/g-carb).`
+          );
+        }
+      }
+
+      // If there are maxed carb foods, suggest increasing their limits
       const carbMaxed = maxedFoods.filter(f => f.cPer1g > 0.2);
-      for (const cf of carbMaxed.slice(0, 2)) {
+      for (const cf of carbMaxed.slice(0, 1)) {
         suggested_fixes.push(
-          `${cf.name} is at max ${cf.maxG}g (provides ${(cf.cPer1g * cf.currentG).toFixed(0)}g carbs). ` +
-          `Increase max_portion_grams to allow more carbs.`
+          `${cf.name} is at its max of ${cf.maxG}g. Increase max_portion_grams to allow more carbs without adding new fat sources.`
         );
       }
 
-      // Are there excluded carb-rich foods?
-      const excludedCarb = excludedFoods.filter(f => f.cPer1g > 0.2);
-      if (excludedCarb.length > 0) {
-        // Solver chose to exclude them — probably because including them pushes another macro over
+      // Suggest removing high-fat non-carb foods to free fat budget
+      const highFatLowCarb = foodStates.filter(f => !f.isSeasoning && f.solverG > 0 && f.fPer1g > 0.05 && f.cPer1g < 0.1)
+        .sort((a, b) => (b.fPer1g * b.solverG) - (a.fPer1g * a.solverG));
+      for (const hf of highFatLowCarb.slice(0, 1)) {
+        suggested_fixes.push(
+          `${hf.name} adds ${(hf.fPer1g * hf.solverG).toFixed(1)}g fat but only ${(hf.cPer1g * hf.solverG).toFixed(0)}g carbs. ` +
+          `Remove or replace with a lower-fat alternative to free fat budget for carb-rich foods.`
+        );
+      }
+    } else {
+      // Non-conflicting failures — handle each independently
+      if (isCarbsUnder || isCalUnder) {
+        const carbMaxed = maxedFoods.filter(f => f.cPer1g > 0.2);
+        for (const cf of carbMaxed.slice(0, 2)) {
+          suggested_fixes.push(
+            `${cf.name} is at max ${cf.maxG}g (provides ${(cf.cPer1g * cf.solverG).toFixed(0)}g carbs). ` +
+            `Increase max_portion_grams to allow more carbs.`
+          );
+        }
+
+        const excludedCarb = excludedFoods.filter(f => f.cPer1g > 0.2);
         for (const ec of excludedCarb.slice(0, 1)) {
           const fatPer100g = ec.fPer1g * 100;
           if (fatPer100g > 3) {
             suggested_fixes.push(
-              `${ec.name} was excluded by solver (${(ec.cPer1g * 100).toFixed(0)}g carbs/100g but also ${fatPer100g.toFixed(1)}g fat/100g). ` +
-              `Replace with a lower-fat carb source to hit carbs without exceeding fat.`
+              `${ec.name} was excluded (${(ec.cPer1g * 100).toFixed(0)}g carbs/100g but ${fatPer100g.toFixed(1)}g fat/100g). ` +
+              `Replace with a lower-fat carb source.`
             );
+          }
+        }
+
+        if (carbMaxed.length === 0 && excludedCarb.length === 0) {
+          const carbFoods = foodStates.filter(f => f.cPer1g > 0.2 && !f.isSeasoning);
+          if (carbFoods.length === 0) {
+            suggested_fixes.push('No carb-dense food available. Add rice, pasta, bread, oats, or cereal.');
           }
         }
       }
 
-      // If no carb foods are maxed or excluded, the issue is likely not enough carb sources
-      if (carbMaxed.length === 0 && excludedCarb.length === 0) {
-        const carbFoods = foodStates.filter(f => f.cPer1g > 0.2 && !f.isSeasoning);
-        if (carbFoods.length === 0) {
-          suggested_fixes.push('No carb-dense food available. Add rice, pasta, bread, oats, or cereal.');
-        } else {
-          for (const cf of carbFoods.slice(0, 1)) {
-            suggested_fixes.push(
-              `${cf.name} at ${cf.currentG}g of ${cf.maxG}g max. ` +
-              `Solver couldn't increase further without breaking another constraint (likely fat or calories).`
-            );
-          }
+      if (isFatOver) {
+        const fatContribs = foodStates
+          .filter(f => !f.isSeasoning && f.solverG > 0)
+          .map(f => ({ ...f, fatContrib: f.fPer1g * f.solverG }))
+          .sort((a, b) => b.fatContrib - a.fatContrib);
+        for (const fc of fatContribs.slice(0, 2)) {
+          suggested_fixes.push(
+            `${fc.name} at ${fc.solverG}g contributes ${fc.fatContrib.toFixed(1)}g fat. ` +
+            `Replace with a lower-fat alternative or reduce portion.`
+          );
         }
       }
-    }
 
-    if (isFatOver) {
-      // Which foods contribute most fat at their current portions?
-      const fatContribs = foodStates
-        .filter(f => !f.isSeasoning && f.currentG > 0)
-        .map(f => ({ ...f, fatContrib: f.fPer1g * f.currentG }))
-        .sort((a, b) => b.fatContrib - a.fatContrib);
-      for (const fc of fatContribs.slice(0, 2)) {
-        suggested_fixes.push(
-          `${fc.name} at ${fc.currentG}g contributes ${fc.fatContrib.toFixed(1)}g fat (${(fc.fPer1g * 100).toFixed(1)}g/100g). ` +
-          `Replace with a lower-fat alternative or reduce portion.`
-        );
-      }
-    }
-
-    if (isProtUnder && !isCalOver) {
-      const protFoods = foodStates.filter(f => f.pPer1g > 0.15 && !f.isSeasoning && !f.atMax);
-      if (protFoods.length > 0) {
-        const top = protFoods.sort((a, b) => b.pPer1g - a.pPer1g)[0];
-        suggested_fixes.push(`Increase ${top.name} from ${top.currentG}g (max ${top.maxG}g) to add protein.`);
-      } else {
-        const protMaxed = maxedFoods.filter(f => f.pPer1g > 0.15);
-        if (protMaxed.length > 0) {
-          suggested_fixes.push(`${protMaxed[0].name} at max ${protMaxed[0].maxG}g. Increase max_portion_grams for more protein.`);
+      if (isProtUnder && !isCalOver) {
+        const protFoods = foodStates.filter(f => f.pPer1g > 0.15 && !f.isSeasoning && !f.atMax);
+        if (protFoods.length > 0) {
+          const top = protFoods.sort((a, b) => b.pPer1g - a.pPer1g)[0];
+          suggested_fixes.push(`Increase ${top.name} to add protein (currently at ${top.solverG}g, max ${top.maxG}g).`);
         } else {
-          suggested_fixes.push('Add a lean protein source (chicken, turkey, white fish).');
+          const protMaxed = maxedFoods.filter(f => f.pPer1g > 0.15);
+          if (protMaxed.length > 0) {
+            suggested_fixes.push(`${protMaxed[0].name} at max ${protMaxed[0].maxG}g. Increase max_portion_grams for more protein.`);
+          } else {
+            suggested_fixes.push('Add a lean protein source (chicken, turkey, white fish).');
+          }
         }
       }
     }
 
     // Per-food breakdown for the FAIL response
+    // Include both solver attempted grams AND original saved grams
     const foodBreakdown = freeFoods.map(f => {
-      const g = finalResult.grams.get(f.id) || 0;
+      const solverG = finalResult.grams.get(f.id) || 0;
+      const originalItem = items.find((i: any) => i.id === f.id);
+      const savedG = originalItem?.quantity_grams ?? 0;
       return {
         name: f.name,
-        currentGrams: g,
+        savedGrams: savedG,      // what UI currently shows (unchanged on FAIL)
+        solverAttemptedGrams: solverG, // what solver tried (NOT saved)
         softMinG: f.softMinG,
         minG: f.minG,
         maxG: f.maxG,
-        atMin: g <= f.minG,
-        atMax: g >= f.maxG,
-        excluded: g === 0,
+        atMin: solverG <= f.minG,
+        atMax: solverG >= f.maxG,
+        excluded: solverG === 0,
         isSeasoning: f.isSeasoning,
         perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
       };
@@ -1033,7 +1083,7 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     console.log(`[solver] FAIL analysis: violations=${violations.join(', ')}`);
     console.log(`[solver] suggestions: ${suggested_fixes.join(' | ')}`);
     for (const fb of foodBreakdown) {
-      console.log(`[solver] breakdown: ${fb.name} = ${fb.currentGrams}g (softMin=${fb.softMinG} max=${fb.maxG} excluded=${fb.excluded} atMax=${fb.atMax})`);
+      console.log(`[solver] breakdown: ${fb.name} saved=${fb.savedGrams}g solver=${fb.solverAttemptedGrams}g (softMin=${fb.softMinG} max=${fb.maxG} excluded=${fb.excluded} atMax=${fb.atMax})`);
     }
 
     return {
