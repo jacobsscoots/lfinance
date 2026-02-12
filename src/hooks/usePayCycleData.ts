@@ -151,12 +151,23 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     .filter(t => t.type === "expense")
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
+  // Get credit card account IDs to exclude from discretionary calc
+  const creditAccountIds = new Set(
+    allAccounts.filter(a => a.account_type === 'credit').map(a => a.id)
+  );
+
   // Split actual spending into bill-linked vs discretionary
-  const billLinkedSpent = transactions
-    .filter(t => t.type === "expense" && t.bill_id)
+  // Only count transactions from non-credit accounts for discretionary budget tracking
+  const nonCreditExpenses = transactions.filter(
+    t => t.type === "expense" && !creditAccountIds.has(t.account_id)
+  );
+  const billLinkedSpent = nonCreditExpenses
+    .filter(t => t.bill_id)
     .reduce((sum, t) => sum + Number(t.amount), 0);
   
-  const discretionarySpent = totalSpent - billLinkedSpent;
+  const discretionarySpent = nonCreditExpenses
+    .filter(t => !t.bill_id)
+    .reduce((sum, t) => sum + Number(t.amount), 0);
   
   // Calculate start balance (current + expenses - income since cycle start)
   const startBalance = totalBalance + totalSpent - totalIncome;
