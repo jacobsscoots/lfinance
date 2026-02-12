@@ -369,6 +369,10 @@ async function handleMealPlanner(
     return SEASONING_NAME_PATTERNS.some(p => name.includes(p));
   }
 
+  const lockedList = lockedItems.length > 0
+    ? lockedItems.map((item: any) => `- ${item.name}: ${item.quantity_grams}g (LOCKED – do not change)`).join('\n')
+    : 'None';
+
   const foodList = freeItems.map((item: any) => {
     const isSeas = isSeasoningItem(item);
     const maxG = isSeas ? 15 : (item.max_portion_grams || 500);
