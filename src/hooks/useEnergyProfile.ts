@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -103,11 +104,11 @@ export function useEnergyProfile() {
     },
   });
 
-  // Return merged profile with defaults
-  const mergedProfile = {
+  // Memoize merged profile to prevent unnecessary re-renders / useEffect triggers
+  const mergedProfile = useMemo(() => ({
     ...DEFAULT_PROFILE,
     ...profile,
-  } as EnergyProfile;
+  } as EnergyProfile), [profile]);
 
   return {
     profile: mergedProfile,
