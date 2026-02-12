@@ -148,6 +148,29 @@ export function useYearlyPlannerData(year: number) {
   const averageTrackedIncome = getMonthlyTrackedIncome();
   const activeBills = bills.filter(b => b.is_active);
 
+  // April 2026 inflation adjustments (researched from official/reputable sources)
+  // Bills in a fixed-term contract are excluded (Broadband/Fibrely, Electric)
+  const APRIL_2026_INFLATION: Record<string, { type: 'percent' | 'flat' | 'fixed'; value: number; source: string }> = {
+    'Council Tax':        { type: 'percent', value: 5,    source: 'Gov 5% referendum cap 2026/27' },
+    'TV License':         { type: 'fixed',   value: 180,  source: 'BBC/Gov confirmed £180 from Apr 2026' },
+    'TV Licence':         { type: 'fixed',   value: 180,  source: 'BBC/Gov confirmed £180 from Apr 2026' },
+    'EE Phone Payment':   { type: 'flat',    value: 4,    source: 'EE handset plan +£4/mo (Uswitch/EE confirmed)' },
+    // Protected by contract — NO increase:
+    // 'Broadband' (Fibrely, in 18-month contract)
+    // 'Electric' (in fixed-term contract)
+  };
+
+  const getInflationAdjustedAmount = (billName: string, baseAmount: number, yr: number, mo: number): number => {
+    // Only apply from April 2026 onwards
+    if (yr < 2026 || (yr === 2026 && mo < 3)) return baseAmount; // mo is 0-indexed, April = 3
+    const rule = APRIL_2026_INFLATION[billName];
+    if (!rule) return baseAmount;
+    if (rule.type === 'percent') return baseAmount * (1 + rule.value / 100);
+    if (rule.type === 'flat') return baseAmount + rule.value;
+    if (rule.type === 'fixed') return rule.value / (billName.toLowerCase().includes('tv') ? 1 : 1); // fixed annual → return as-is, occurrence engine handles frequency
+    return baseAmount;
+  };
+
   let runningSurplus = 0;
 
   for (let month = 0; month < 12; month++) {
@@ -191,7 +214,7 @@ export function useYearlyPlannerData(year: number) {
       // Future: use projected salary + tracked income average + projected bills + grocery forecast
       income = estimatedSalary + averageTrackedIncome;
       const occurrences = getBillOccurrencesForMonth(activeBills, year, month);
-      billsTotal = occurrences.reduce((s, o) => s + o.expectedAmount, 0);
+      billsTotal = occurrences.reduce((s, o) => s + getInflationAdjustedAmount(o.billName, o.expectedAmount, year, month), 0);
       groceryForecast = groceryMonthlyForecast;
     }
 
