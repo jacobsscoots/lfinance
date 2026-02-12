@@ -1136,6 +1136,170 @@ function runGradientSolve(
 }
 
 /**
+ * PHASE 3 fallback: Exhaustive grid search over practical portion sizes.
+ *
+ * When gradient descent gets trapped in a local minimum (e.g., -27g carbs),
+ * this searches the full combinatorial space using each item's step sizes.
+ * For 5 adjustable items with ~15 steps each: 15^5 ≈ 760K combinations.
+ * Calorie-based branch pruning keeps actual evaluations under ~200K.
+ *
+ * Runs only when gradient + greedy both fail.
+ */
+function runExhaustiveSearch(
+  items: SolverItem[],
+  targets: SolverTargets,
+  tolerances: ToleranceConfig,
+  seasoningsCountMacros: boolean,
+  maxCombinations: number = 500_000
+): SolverResult & { iterationsRun: number } {
+  const adjustableItems = items.filter(item =>
+    item.editableMode !== 'LOCKED' && item.category !== 'seasoning'
+  );
+
+  // Build portion options for each adjustable item: [min, min+step, ..., max]
+  const portionOptions: number[][] = adjustableItems.map(item => {
+    const step = Math.max(item.portionStepGrams, 1);
+    const options: number[] = [];
+    for (let g = item.minPortionGrams; g <= item.maxPortionGrams; g += step) {
+      options.push(g);
+    }
+    // Ensure max is included
+    if (options[options.length - 1] !== item.maxPortionGrams) {
+      options.push(item.maxPortionGrams);
+    }
+    return options;
+  });
+
+  // Estimate total combos; if too large, widen step sizes
+  let totalEstimate = portionOptions.reduce((prod, opts) => prod * opts.length, 1);
+  if (totalEstimate > maxCombinations * 2) {
+    // Thin out options to stay within budget
+    const thinFactor = Math.ceil(Math.pow(totalEstimate / maxCombinations, 1 / adjustableItems.length));
+    for (let i = 0; i < portionOptions.length; i++) {
+      if (portionOptions[i].length > 5) {
+        const orig = portionOptions[i];
+        const thinned: number[] = [];
+        for (let j = 0; j < orig.length; j += thinFactor) {
+          thinned.push(orig[j]);
+        }
+        // Always include min and max
+        if (thinned[0] !== orig[0]) thinned.unshift(orig[0]);
+        if (thinned[thinned.length - 1] !== orig[orig.length - 1]) thinned.push(orig[orig.length - 1]);
+        portionOptions[i] = thinned;
+      }
+    }
+    totalEstimate = portionOptions.reduce((prod, opts) => prod * opts.length, 1);
+  }
+
+  // Precompute cal/100g density for each adjustable item (for calorie pruning)
+  const calDensity = adjustableItems.map(item =>
+    (item.nutritionPer100g.calories / 100) * (item.eatenFactor ?? 1)
+  );
+
+  // Compute locked item calorie contribution (constant baseline)
+  const lockedPortions = new Map<string, number>();
+  let lockedCalories = 0;
+  for (const item of items) {
+    if (item.editableMode === 'LOCKED' || item.category === 'seasoning') {
+      const g = item.currentGrams;
+      lockedPortions.set(item.id, g);
+      if (seasoningsCountMacros || item.category !== 'seasoning') {
+        lockedCalories += (item.nutritionPer100g.calories / 100) * g * (item.eatenFactor ?? 1);
+      }
+    }
+  }
+
+  const calCeiling = targets.calories + tolerances.calories.max + 100; // prune generously
+  let bestPortions: Map<string, number> | null = null;
+  let bestError = Infinity;
+  let bestTotals: MacroTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  let tested = 0;
+
+  // Recursive DFS with calorie pruning
+  function search(idx: number, current: number[], runningCal: number) {
+    if (tested >= maxCombinations) return;
+
+    if (idx === adjustableItems.length) {
+      // Build full portion map
+      const portions = new Map(lockedPortions);
+      for (let i = 0; i < adjustableItems.length; i++) {
+        portions.set(adjustableItems[i].id, current[i]);
+      }
+      scaleSeasonings(items, portions);
+      const totals = sumMacros(items, portions, seasoningsCountMacros);
+      const delta = calculateDelta(totals, targets);
+      const error = calculateNetError(delta, tolerances);
+      tested++;
+
+      if (error < bestError) {
+        bestError = error;
+        bestPortions = new Map(portions);
+        bestTotals = roundMacros(totals);
+      }
+      return;
+    }
+
+    for (const grams of portionOptions[idx]) {
+      const addedCal = calDensity[idx] * grams;
+      const newRunningCal = runningCal + addedCal;
+
+      // Prune: if already over calorie ceiling, skip heavier options
+      if (newRunningCal > calCeiling) continue;
+
+      current[idx] = grams;
+      search(idx + 1, current, newRunningCal);
+    }
+  }
+
+  search(0, new Array(adjustableItems.length).fill(0), lockedCalories);
+
+  // Check if best result is within tolerance
+  if (bestPortions) {
+    if (isWithinTolerance(bestTotals, targets, tolerances)) {
+      const score = scorePlan(bestPortions, bestTotals, targets, items);
+      return {
+        success: true,
+        portions: bestPortions,
+        totals: bestTotals,
+        score,
+        iterationsRun: tested,
+      };
+    }
+
+    // Failed but have best-effort
+    const delta = calculateDelta(bestTotals, targets);
+    return {
+      success: false,
+      failure: {
+        reason: 'max_iterations_exceeded',
+        blockers: collectBlockers(items, bestPortions, targets, tolerances),
+        closestTotals: bestTotals,
+        targetDelta: delta,
+        iterationsRun: tested,
+      },
+      bestEffortPortions: bestPortions,
+      iterationsRun: tested,
+    } as SolverResult & { iterationsRun: number };
+  }
+
+  // No combos tested (shouldn't happen)
+  const fallback = initializePortions(items);
+  const totals = sumMacros(items, fallback, seasoningsCountMacros);
+  return {
+    success: false,
+    failure: {
+      reason: 'max_iterations_exceeded',
+      blockers: [],
+      closestTotals: roundMacros(totals),
+      targetDelta: calculateDelta(totals, targets),
+      iterationsRun: tested,
+    },
+    bestEffortPortions: fallback,
+    iterationsRun: tested,
+  } as SolverResult & { iterationsRun: number };
+}
+
+/**
  * Main solver function
  *
  * IMPORTANT: Always returns usable portions — even when the exact tolerance
@@ -1374,6 +1538,24 @@ export function solve(
     const validResult = evaluateResult(result);
     if (validResult) {
       winningStrategy = 'greedy:midpoint';
+      if (opts.debugMode) return { ...validResult, debugLog: buildDebugLog() };
+      return validResult;
+    }
+  }
+
+  // ============================================================
+  // PHASE 3: Exhaustive grid search over practical portion sizes.
+  // Only runs when gradient + greedy both fail. Searches the full
+  // combinatorial space with calorie pruning.
+  // ============================================================
+  {
+    const result = runExhaustiveSearch(
+      items, targets, tolerances, seasoningsCountMacros
+    );
+    logStrategy('exhaustive', result);
+    const validResult = evaluateResult(result);
+    if (validResult) {
+      winningStrategy = 'exhaustive';
       if (opts.debugMode) return { ...validResult, debugLog: buildDebugLog() };
       return validResult;
     }
