@@ -681,7 +681,7 @@ export function useMealPlanItems(weekStart: Date) {
   // Generate portions for a single day using V2 engine.
   //
   // STRICT MODE: Only writes to DB when solver returns success=true
-  // (all macros within ±1g, calories within ±50 kcal).
+  // (P/C at or above target up to +2g, fat within -1/+2g, calories ±50 kcal).
   // On failure: returns diagnostics but does NOT overwrite saved plan.
   const recalculateDay = useMutation({
     mutationFn: async ({
@@ -737,7 +737,7 @@ export function useMealPlanItems(weekStart: Date) {
         } else if (failure.reason === 'no_adjustable_items') {
           diagnostics.push("Can't solve: all items are fixed/locked — no adjustable portions.");
         } else {
-          diagnostics.push("Can't solve: could not find portions within tolerance (±1g macros, ±50 kcal).");
+          diagnostics.push("Can't solve: could not find portions within tolerance (P/C ≥target +2g, fat -1/+2g, cal ±50).");
         }
         diagnostics.push(
           `Closest achievable: ${t.calories}kcal, ${t.protein}g P, ${t.carbs}g C, ${t.fat}g F`

@@ -262,9 +262,12 @@ describe("Macro Accuracy: Solver hits targets within tolerance", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
-      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      expect(result.totals.protein - targets.protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - targets.protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - targets.carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - targets.carbs).toBeLessThanOrEqual(2);
+      expect(result.totals.fat - targets.fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - targets.fat).toBeLessThanOrEqual(2);
 
       // No portion should be 0g for main foods
       expect(result.portions.get("chicken")).toBeGreaterThan(0);
@@ -325,9 +328,14 @@ describe("Macro Accuracy: Solver hits targets within tolerance", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
-      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      // P/C: at or above target, up to +2g
+      expect(result.totals.protein - targets.protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - targets.protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - targets.carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - targets.carbs).toBeLessThanOrEqual(2);
+      // Fat: -1 to +2g
+      expect(result.totals.fat - targets.fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - targets.fat).toBeLessThanOrEqual(2);
     }
   });
 
@@ -402,11 +410,11 @@ describe("Macro Accuracy: Solver hits targets within tolerance", () => {
     // Both meals should solve
     expect(solvedMeals).toBe(2);
 
-    // Day total must be within tolerance of day targets (2 meals × ±tolerance)
+    // Day total must be within tolerance of day targets (2 meals × tolerance)
     expect(Math.abs(totalCal - dayTargets.calories)).toBeLessThanOrEqual(100); // 2 × ±50
-    expect(Math.abs(totalPro - dayTargets.protein)).toBeLessThanOrEqual(2);    // 2 × ±1
-    expect(Math.abs(totalCarb - dayTargets.carbs)).toBeLessThanOrEqual(2);
-    expect(Math.abs(totalFat - dayTargets.fat)).toBeLessThanOrEqual(2);
+    expect(Math.abs(totalPro - dayTargets.protein)).toBeLessThanOrEqual(4);    // 2 × +2g max
+    expect(Math.abs(totalCarb - dayTargets.carbs)).toBeLessThanOrEqual(4);     // 2 × +2g max
+    expect(Math.abs(totalFat - dayTargets.fat)).toBeLessThanOrEqual(4);        // 2 × (-1/+2g)
   });
 });
 
@@ -699,9 +707,12 @@ describe("Fat derivation: consistent with calorie budget", () => {
 
     // With a fat source (olive oil) available, the solver should be able to hit fat target
     if (result.success) {
-      expect(Math.abs(result.totals.fat - fat)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.protein - protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - carbs)).toBeLessThanOrEqual(1);
+      expect(result.totals.fat - fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - fat).toBeLessThanOrEqual(2);
+      expect(result.totals.protein - protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - carbs).toBeLessThanOrEqual(2);
       expect(Math.abs(result.totals.calories - calories)).toBeLessThanOrEqual(50);
     }
   });
@@ -862,9 +873,14 @@ describe("Strict mode: solver failure returns success=false", () => {
     if (result.success) {
       // Verify all macros are actually within tolerance
       expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
-      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      // P/C: at or above target, up to +2g
+      expect(result.totals.protein - targets.protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - targets.protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - targets.carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - targets.carbs).toBeLessThanOrEqual(2);
+      // Fat: -1 to +2g
+      expect(result.totals.fat - targets.fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - targets.fat).toBeLessThanOrEqual(2);
     }
   });
 
@@ -1223,9 +1239,12 @@ describe("Meal-level minimums: no obviously broken meals", () => {
     if (result.success) {
       // Verify all macros within tolerance
       expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
-      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      expect(result.totals.protein - targets.protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - targets.protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - targets.carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - targets.carbs).toBeLessThanOrEqual(2);
+      expect(result.totals.fat - targets.fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - targets.fat).toBeLessThanOrEqual(2);
     }
   });
 
@@ -1548,9 +1567,12 @@ describe("Solver Proof: hits MFP-day targets with same foods", () => {
     if (result.success) {
       // Verify all macros within tolerance
       expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
-      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      expect(result.totals.protein - targets.protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - targets.protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - targets.carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - targets.carbs).toBeLessThanOrEqual(2);
+      expect(result.totals.fat - targets.fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - targets.fat).toBeLessThanOrEqual(2);
 
       // Locked items must retain their grams
       expect(result.portions.get("hunters-pasta")).toBe(550);
@@ -1648,9 +1670,12 @@ describe("Solver Proof: hits MFP-day targets with same foods", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(Math.abs(result.totals.calories - targets.calories)).toBeLessThanOrEqual(50);
-      expect(Math.abs(result.totals.protein - targets.protein)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.carbs - targets.carbs)).toBeLessThanOrEqual(1);
-      expect(Math.abs(result.totals.fat - targets.fat)).toBeLessThanOrEqual(1);
+      expect(result.totals.protein - targets.protein).toBeGreaterThanOrEqual(0);
+      expect(result.totals.protein - targets.protein).toBeLessThanOrEqual(2);
+      expect(result.totals.carbs - targets.carbs).toBeGreaterThanOrEqual(0);
+      expect(result.totals.carbs - targets.carbs).toBeLessThanOrEqual(2);
+      expect(result.totals.fat - targets.fat).toBeGreaterThanOrEqual(-1);
+      expect(result.totals.fat - targets.fat).toBeLessThanOrEqual(2);
     }
   });
 });
