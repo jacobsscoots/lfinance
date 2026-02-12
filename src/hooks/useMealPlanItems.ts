@@ -992,8 +992,12 @@ export function useMealPlanItems(weekStart: Date) {
 
       if (error) throw error;
       
+      // DEBUG: log raw AI response for verification
+      console.log("AI_RESPONSE", { success: data?.success, status: data?.status, totals: data?.totals, targets: data?.targets, violations: data?.violations, portionCount: data?.portions?.length });
+      
       // HARD VALIDATION GATE: If server says FAIL_CONSTRAINTS, do NOT save
       if (!data?.success || data?.status === 'FAIL_CONSTRAINTS') {
+        console.log("SAVE_CALLED?", "NO — FAIL_CONSTRAINTS gate blocked save");
         const violations = data?.violations || [];
         const fixes = data?.suggested_fixes || [];
         return {
@@ -1010,6 +1014,8 @@ export function useMealPlanItems(weekStart: Date) {
         throw new Error("AI returned no portions");
       }
 
+      console.log("SAVE_CALLED?", "YES — PASS, saving", data.portions.length, "portions");
+      
       // PASS: Apply validated portions to DB
       let updated = 0;
       for (const portion of data.portions) {
