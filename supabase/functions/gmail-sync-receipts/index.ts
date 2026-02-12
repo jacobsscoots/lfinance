@@ -279,21 +279,46 @@ serve(async (req) => {
     }
 
     // --- Auto-matching ---
-    const { data: pendingReceipts } = await supabase
+    console.log(`[match] Looking for pending receipts for user ${user.id}`);
+    const { data: pendingReceipts, error: pendingError } = await supabase
       .from('gmail_receipts')
       .select('*')
       .eq('user_id', user.id)
       .eq('match_status', 'pending');
 
+    console.log(`[match] Found ${pendingReceipts?.length ?? 0} pending receipts, error: ${pendingError?.message ?? 'none'}`);
     if (pendingReceipts && pendingReceipts.length > 0) {
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('type', 'expense')
-        .gte('transaction_date', afterDate.toISOString().split('T')[0]);
+      // Use earliest pending receipt date (minus 7 day buffer) for transaction lookup
+      const earliestReceipt = pendingReceipts.reduce((earliest, r) => {
+        if (!r.received_at) return earliest;
+        const d = new Date(r.received_at);
+        return d < earliest ? d : earliest;
+      }, afterDate);
+      const txLookbackDate = new Date(earliestReceipt);
+      txLookbackDate.setDate(txLookbackDate.getDate() - 7);
 
-      if (transactions) {
+      // Transactions don't have user_id — they belong to bank_accounts
+      // First get the user's account IDs
+      const { data: userAccounts } = await supabase
+        .from('bank_accounts')
+        .select('id')
+        .eq('user_id', user.id)
+        .is('deleted_at', null);
+
+      const accountIds = (userAccounts || []).map(a => a.id);
+      console.log(`[match] User has ${accountIds.length} accounts`);
+
+      const { data: transactions } = accountIds.length > 0
+        ? await supabase
+            .from('transactions')
+            .select('*')
+            .in('account_id', accountIds)
+            .eq('type', 'expense')
+            .gte('transaction_date', txLookbackDate.toISOString().split('T')[0])
+        : { data: [] as any[] };
+
+      console.log(`[match] Found ${transactions?.length ?? 0} candidate transactions from ${txLookbackDate.toISOString().split('T')[0]}`);
+      if (transactions && transactions.length > 0) {
         // Get already-matched transaction IDs to avoid double-matching
         const { data: alreadyMatched } = await supabase
           .from('gmail_receipts')
@@ -335,25 +360,46 @@ serve(async (req) => {
             // Merchant matching — check against description (primary) AND from_email domain
             const merchantLower = (receipt.merchant_name || '').toLowerCase();
             const descLower = (tx.description || '').toLowerCase();
+            const txMerchantLower = (tx.merchant || '').toLowerCase();
 
-            if (merchantLower && descLower) {
-              if (descLower.includes(merchantLower) || merchantLower.includes(descLower)) {
+            // Normalise for comparison: strip whitespace, lowercase
+            const normMerchant = merchantLower.replace(/\s+/g, '');
+            const normDesc = descLower.replace(/\s+/g, '');
+            const normTxMerchant = txMerchantLower.replace(/\s+/g, '');
+
+            if (normMerchant) {
+              // Check description
+              if (normDesc && (normDesc.includes(normMerchant) || normMerchant.includes(normDesc))) {
                 score += 30; reasons.push('Merchant in description');
-              } else {
-                // Word overlap
+              }
+              // Check tx.merchant field too
+              else if (normTxMerchant && (normTxMerchant.includes(normMerchant) || normMerchant.includes(normTxMerchant))) {
+                score += 30; reasons.push('Merchant field match');
+              }
+              else if (descLower) {
+                // Word overlap (handles "MyProtein Manchester" matching "Myprotein")
                 const mWords = merchantLower.split(/\s+/);
                 const dWords = descLower.split(/\s+/);
-                const overlap = mWords.filter(w => dWords.some(d => d.includes(w) || w.includes(d)));
-                if (overlap.length > 0) { score += 15; reasons.push('Partial merchant match'); }
+                const overlap = mWords.filter(w => w.length >= 3 && dWords.some(d => d.includes(w) || w.includes(d)));
+                if (overlap.length > 0) { score += 20; reasons.push('Partial merchant match'); }
               }
             }
 
             // Email domain vs description
-            if (receipt.from_email && descLower) {
+            if (receipt.from_email && (descLower || txMerchantLower)) {
               const domainMatch = receipt.from_email.match(/@(?:[^.]+\.)*([^.]+)\.[a-z]{2,}/i);
-              if (domainMatch && descLower.includes(domainMatch[1].toLowerCase())) {
-                score += 10; reasons.push('Email domain match');
+              if (domainMatch) {
+                const domain = domainMatch[1].toLowerCase();
+                if ((descLower && descLower.includes(domain)) || (txMerchantLower && txMerchantLower.includes(domain))) {
+                  score += 15; reasons.push('Email domain match');
+                }
               }
+            }
+
+            // Boost: if merchant matches strongly but no amount on receipt, still allow match
+            // (handles emails where amount extraction failed)
+            if (receipt.amount === null && score >= 40) {
+              score += 10; reasons.push('No-amount merchant+date boost');
             }
 
             if (!bestMatch || score > bestMatch.score) {
@@ -361,13 +407,14 @@ serve(async (req) => {
             }
           }
 
+          console.log(`[match] Receipt ${receipt.id} (${receipt.merchant_name}): best score=${bestMatch?.score ?? 0}, reasons=${bestMatch?.reasons?.join(',')}`, bestMatch ? `tx=${bestMatch.transaction.description} £${bestMatch.transaction.amount}` : '');
           // Determine match status
           let matchStatus = 'no_match';
           let matchConfidence = null;
-          if (bestMatch && bestMatch.score >= 60) {
+          if (bestMatch && bestMatch.score >= 50) {
             matchStatus = 'matched';
-            matchConfidence = bestMatch.score >= 80 ? 'high' : 'medium';
-          } else if (bestMatch && bestMatch.score >= 40) {
+            matchConfidence = bestMatch.score >= 80 ? 'high' : bestMatch.score >= 60 ? 'medium' : 'low';
+          } else if (bestMatch && bestMatch.score >= 35) {
             matchStatus = 'review';
             matchConfidence = 'low';
           }
