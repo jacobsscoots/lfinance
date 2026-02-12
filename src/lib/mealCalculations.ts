@@ -115,9 +115,10 @@ export function calculateMealMacros(
  * This ensures calorie/macro consistency.
  */
 export function getTargetsForDate(
-  date: Date, 
+  date: Date,
   settings: NutritionSettings,
-  weeklyOverride?: WeeklyTargetsOverride | null
+  weeklyOverride?: WeeklyTargetsOverride | null,
+  previousWeekOverride?: UnifiedOverride | null
 ): MacroTotals {
   // Convert to unified format and delegate
   const unifiedOverride: UnifiedOverride | undefined = weeklyOverride ? {
@@ -127,15 +128,16 @@ export function getTargetsForDate(
     carbs: weeklyOverride.carbs,
     fat: weeklyOverride.fat, // Will be ignored - fat is derived
   } : undefined;
-  
-  return getDailyTargets(date, settings, unifiedOverride);
+
+  return getDailyTargets(date, settings, unifiedOverride, previousWeekOverride);
 }
 
 // Calculate macros for a day
 export function calculateDayMacros(
   plan: MealPlan,
   settings?: NutritionSettings | null,
-  weeklyOverride?: WeeklyTargetsOverride | null
+  weeklyOverride?: WeeklyTargetsOverride | null,
+  previousWeekOverride?: UnifiedOverride | null
 ): DayMacros {
   const items = plan.items || [];
   
@@ -161,7 +163,7 @@ export function calculateDayMacros(
     // Use day-specific targets (weekday vs weekend, or weekly override)
     // Parse as local date to avoid UTC-shift bugs when resolving week/day targets.
     const planDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
-    const targets = getTargetsForDate(planDate, settings, weeklyOverride);
+    const targets = getTargetsForDate(planDate, settings, weeklyOverride, previousWeekOverride);
 
     targetDiff = {
       calories: totals.calories - targets.calories,
