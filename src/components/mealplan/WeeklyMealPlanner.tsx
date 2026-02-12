@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, formatDistanceToNow, subWeeks } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Palmtree } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Palmtree, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,7 +59,7 @@ export function WeeklyMealPlanner() {
   const [resetWeekOpen, setResetWeekOpen] = useState(false);
   const isMobile = useIsMobile();
   
-  const { mealPlans, weekDates, isLoading, copyFromPreviousWeek, clearWeek, recalculateAll, lastCalculated } = useMealPlanItems(weekRange.start);
+  const { mealPlans, weekDates, isLoading, copyFromPreviousWeek, clearWeek, recalculateAll, aiPlanWeek, lastCalculated } = useMealPlanItems(weekRange.start);
   const { blackouts } = useMealPlanBlackouts();
   const { settings, isLoading: settingsLoading, isTargetMode } = useNutritionSettings();
   const { products, isLoading: productsLoading } = useProducts();
@@ -163,6 +163,11 @@ export function WeeklyMealPlanner() {
     recalculateAll.mutate({ settings, portioningSettings, weeklyOverride, previousWeekOverride });
   };
 
+  const handleAiGenerateWeek = () => {
+    if (!settings) return;
+    aiPlanWeek.mutate({ settings, weeklyOverride, previousWeekOverride });
+  };
+
   if (isLoading || settingsLoading || productsLoading) {
     return (
       <div className="space-y-4">
@@ -199,27 +204,48 @@ export function WeeklyMealPlanner() {
             {isTargetMode ? "Target Mode" : "Manual Mode"}
           </Badge>
           
-          {/* Generate Button - only in Target Mode */}
+          {/* Generate Buttons - only in Target Mode */}
           {isTargetMode && (
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={handleRecalculate}
-              disabled={recalculateAll.isPending || !settings}
-              className="gap-1.5"
-            >
-              {recalculateAll.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">
-                {recalculateAll.isPending ? "Generating..." : "Generate Portions"}
-              </span>
-              <span className="sm:hidden">
-                {recalculateAll.isPending ? "..." : "Generate"}
-              </span>
-            </Button>
+            <>
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleRecalculate}
+                disabled={recalculateAll.isPending || aiPlanWeek.isPending || !settings}
+                className="gap-1.5"
+              >
+                {recalculateAll.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {recalculateAll.isPending ? "Generating..." : "Generate Portions"}
+                </span>
+                <span className="sm:hidden">
+                  {recalculateAll.isPending ? "..." : "Generate"}
+                </span>
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={handleAiGenerateWeek}
+                disabled={aiPlanWeek.isPending || recalculateAll.isPending || !settings}
+                className="gap-1.5"
+              >
+                {aiPlanWeek.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {aiPlanWeek.isPending ? "AI Planning..." : "AI Generate Week"}
+                </span>
+                <span className="sm:hidden">
+                  {aiPlanWeek.isPending ? "..." : "✨ Week"}
+                </span>
+              </Button>
+            </>
           )}
           
           {isMobile ? (
