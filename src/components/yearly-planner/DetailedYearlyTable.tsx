@@ -229,51 +229,87 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
               </td>
             </tr>
 
-            {/* Individual bill rows */}
-            {billRows.map((row) => (
-              <tr key={row.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                <td className={cn(labelClass, "font-normal")}>
-                  <span className="flex items-center gap-1.5">
-                    {row.name}
-                    {row.frequency && row.frequency !== "monthly" && (
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-muted-foreground">
-                        {FREQ_LABELS[row.frequency] || row.frequency}
-                      </Badge>
-                    )}
-                  </span>
-                </td>
-                {row.amounts.map((amt, i) => (
-                  <td key={i} className={cn(cellClass, amt > 0 ? "text-foreground" : "text-muted-foreground/40")}>
-                    {amt > 0 ? fmt(amt) : "—"}
-                  </td>
-                ))}
-                <td className={cn(cellClass, "font-semibold bg-muted/50")}>
-                  {row.total > 0 ? fmt(row.total) : "—"}
-                </td>
-              </tr>
-            ))}
+            {/* Individual bill rows + Groceries inserted after utilities */}
+            {(() => {
+              const groceryPriority = 2.5; // After utilities (2), before phone (4)
+              const hasGrocery = months.some(m => m.groceryForecast > 0);
+              let groceryInserted = false;
 
-            {/* Grocery forecast row (for future months) */}
-            {months.some(m => m.groceryForecast > 0) && (
-              <tr className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                <td className={cn(labelClass, "font-normal")}>
-                  <span className="flex items-center gap-1.5">
-                    🛒 Groceries
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">
-                      Est.
-                    </Badge>
-                  </span>
-                </td>
-                {months.map((m, i) => (
-                  <td key={i} className={cn(cellClass, m.groceryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
-                    {m.groceryForecast > 0 ? fmt(m.groceryForecast) : "—"}
-                  </td>
-                ))}
-                <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
-                  {fmt(months.reduce((s, m) => s + m.groceryForecast, 0))}
-                </td>
-              </tr>
-            )}
+              const rows: React.ReactNode[] = [];
+              billRows.forEach((row) => {
+                // Insert groceries before the first bill with priority > groceryPriority
+                if (hasGrocery && !groceryInserted && row.priority > groceryPriority) {
+                  groceryInserted = true;
+                  rows.push(
+                    <tr key="grocery-forecast" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                      <td className={cn(labelClass, "font-normal")}>
+                        <span className="flex items-center gap-1.5">
+                          🛒 Groceries
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">
+                            Est.
+                          </Badge>
+                        </span>
+                      </td>
+                      {months.map((m, i) => (
+                        <td key={i} className={cn(cellClass, m.groceryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
+                          {m.groceryForecast > 0 ? fmt(m.groceryForecast) : "—"}
+                        </td>
+                      ))}
+                      <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
+                        {fmt(months.reduce((s, m) => s + m.groceryForecast, 0))}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                rows.push(
+                  <tr key={row.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                    <td className={cn(labelClass, "font-normal")}>
+                      <span className="flex items-center gap-1.5">
+                        {row.name}
+                        {row.frequency && row.frequency !== "monthly" && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-muted-foreground">
+                            {FREQ_LABELS[row.frequency] || row.frequency}
+                          </Badge>
+                        )}
+                      </span>
+                    </td>
+                    {row.amounts.map((amt, i) => (
+                      <td key={i} className={cn(cellClass, amt > 0 ? "text-foreground" : "text-muted-foreground/40")}>
+                        {amt > 0 ? fmt(amt) : "—"}
+                      </td>
+                    ))}
+                    <td className={cn(cellClass, "font-semibold bg-muted/50")}>
+                      {row.total > 0 ? fmt(row.total) : "—"}
+                    </td>
+                  </tr>
+                );
+              });
+
+              // If all bills have priority <= groceryPriority, append at end
+              if (hasGrocery && !groceryInserted) {
+                rows.push(
+                  <tr key="grocery-forecast" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                    <td className={cn(labelClass, "font-normal")}>
+                      <span className="flex items-center gap-1.5">
+                        🛒 Groceries
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">Est.</Badge>
+                      </span>
+                    </td>
+                    {months.map((m, i) => (
+                      <td key={i} className={cn(cellClass, m.groceryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
+                        {m.groceryForecast > 0 ? fmt(m.groceryForecast) : "—"}
+                      </td>
+                    ))}
+                    <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
+                      {fmt(months.reduce((s, m) => s + m.groceryForecast, 0))}
+                    </td>
+                  </tr>
+                );
+              }
+
+              return rows;
+            })()}
 
             {/* Override adjustments */}
             {overrideRows.filter(o => o.type === 'expense').map((row) => (
