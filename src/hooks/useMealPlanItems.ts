@@ -1037,24 +1037,22 @@ export function useMealPlanItems(weekStart: Date) {
     },
     onSuccess: (result) => {
       if (result.failed) {
-        toast.error("AI couldn't meet targets — no portions were changed.", { duration: 8000 });
-        // Show the first (most important) suggestion — it explains the real constraint conflict
+        // FAIL: No DB writes occurred. UI state is unchanged.
+        toast.error("AI Plan failed — no changes were saved.", { duration: 8000 });
         if (result.suggested_fixes?.length) {
-          toast.info(result.suggested_fixes[0], { duration: 12000 });
+          // Show top 2 suggestions as separate toasts for readability
+          for (const fix of result.suggested_fixes.slice(0, 2)) {
+            toast.info(fix, { duration: 15000 });
+          }
         }
-        // Show additional suggestions if available
-        if (result.suggested_fixes && result.suggested_fixes.length > 1) {
-          toast.info(result.suggested_fixes.slice(1, 3).join(' • '), { duration: 12000 });
-        }
-        // Log full details for debugging
+        console.log("SAVE_CALLED?", "NO — FAIL_CONSTRAINTS");
         console.log("FAIL_DETAILS", {
           violations: result.violations,
           suggested_fixes: result.suggested_fixes,
           totals: result.totals,
           targets: result.targets,
-          food_breakdown: (result as any).food_breakdown,
-          feasibility: (result as any).feasibility,
         });
+        // DO NOT invalidate queries — keep UI showing saved state
       } else {
         queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
         toast.success(`AI planned ${result.updated} portions`);

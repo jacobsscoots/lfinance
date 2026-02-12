@@ -290,9 +290,13 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
           
           {/* Macro Summary */}
           <div className="mt-2">
-            {hasUncalculatedItems && isTargetMode ? (
+          {hasUncalculatedItems && isTargetMode ? (
               <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1.5 text-center">
                 <span className="font-medium">Add items → click Generate</span>
+              </div>
+            ) : aiPlanDay.data?.failed ? (
+              <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 text-center">
+                <span className="font-medium">AI Plan failed — no changes saved</span>
               </div>
             ) : (
               <DayMacroSummary
