@@ -19,6 +19,8 @@ export const BANK_PROVIDER_LABELS: Record<string, string> = {
   virgin: "Virgin Money",
   revolut: "Revolut",
   chase: "Chase UK",
+  "capital-one": "Capital One",
+  capitalone: "Capital One",
   
   // TrueLayer Open Banking prefixed IDs (ob-xxx format)
   "ob-monzo": "Monzo",
@@ -40,6 +42,8 @@ export const BANK_PROVIDER_LABELS: Record<string, string> = {
   "ob-first-direct": "First Direct",
   "ob-tide": "Tide",
   "ob-starling-bank": "Starling Bank",
+  "ob-capital-one": "Capital One",
+  "ob-capitalone": "Capital One",
   
   // Generic fallbacks - map to "Bank Account" not "Connected Bank"
   truelayer: "Bank Account",

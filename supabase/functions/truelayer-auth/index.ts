@@ -156,6 +156,7 @@ serve(async (req) => {
         'accounts',
         'balance',
         'transactions',
+        'cards',
         'offline_access'
       ].join('%20');
 
