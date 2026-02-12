@@ -7,6 +7,7 @@
  */
 
 import { 
+  addDays,
   addWeeks, 
   addMonths, 
   startOfMonth, 
@@ -53,6 +54,8 @@ function getDueDateForMonth(bill: Bill, year: number, month: number): Date {
  */
 function getNextOccurrence(bill: Bill, currentDate: Date): Date {
   switch (bill.frequency) {
+    case "daily":
+      return addDays(currentDate, 1);
     case "weekly":
       return addWeeks(currentDate, 1);
     case "fortnightly":
@@ -94,7 +97,7 @@ export function generateBillOccurrences(
   const billEnd = bill.end_date ? parseISO(bill.end_date) : null;
   
   // For weekly/fortnightly, use a different approach
-  if (bill.frequency === "weekly" || bill.frequency === "fortnightly") {
+  if (bill.frequency === "daily" || bill.frequency === "weekly" || bill.frequency === "fortnightly") {
     // Start from the bill start date or range start, whichever is later
     let currentDate = billStart;
     

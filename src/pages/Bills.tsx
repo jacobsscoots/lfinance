@@ -35,9 +35,11 @@ export default function Bills() {
   const totalMonthly = allActiveBills.reduce((sum, bill) => {
     const amount = Number(bill.amount);
     switch (bill.frequency) {
+      case "daily": return sum + amount * 30;
       case "weekly": return sum + amount * 4.33;
       case "fortnightly": return sum + amount * 2.17;
       case "monthly": return sum + amount;
+      case "bimonthly": return sum + amount / 2;
       case "quarterly": return sum + amount / 3;
       case "biannual": return sum + amount / 6;
       case "yearly": return sum + amount / 12;
