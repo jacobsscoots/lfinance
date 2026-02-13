@@ -1148,7 +1148,10 @@ export function useMealPlanItems(weekStart: Date) {
       return { updated: totalUpdated, daysSucceeded: successCount, daysFailed: failedCount };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      // Bug 6 fix: only invalidate if at least one day succeeded
+      if (result.daysSucceeded > 0) {
+        queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      }
       if (result.daysFailed === 0) {
         toast.success(`AI planned ${result.daysSucceeded} days (${result.updated} items)`);
       } else if (result.daysSucceeded > 0) {

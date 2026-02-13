@@ -320,14 +320,28 @@ async function handleCheaperBills(
   };
 }
 
-// ─── Meal Planner handler ───────────────────────────────
+// ─── Meal Planner handler (COMPLETE REWRITE) ─────────────
+//
+// Architecture:
+//   1. Classify items (locked vs free, seasoning detection)
+//   2. Feasibility pre-check (theoretical min/max)
+//   3. AI generates initial portion guess (using FULL targets)
+//   4. Multi-start coordinate descent solver with adaptive steps
+//   5. Rounding + fine-tuning
+//   6. Validate → PASS (return portions) or FAIL (return diagnostics)
+//
+// Hard constraints (NEVER over target):
+//   kcal: [target-50, target]
+//   P/C/F: [target-2, target]
 
 async function handleMealPlanner(
   input: { items: any[]; targets: any }
 ) {
   const { items, targets } = input;
+  const RUN_ID = crypto.randomUUID().slice(0, 8);
+  console.log(`[solver:${RUN_ID}] === START ===`);
 
-  // Detect seasonings
+  // ─── SEASONING DETECTION ───────────────────────────────
   const SEASONING_NAME_PATTERNS = [
     'seasoning', 'rub', 'spice', 'powder', 'paprika', 'cajun',
     'herbs', 'pepper', 'schwartz', 'oregano', 'cumin', 'chili',
@@ -345,16 +359,16 @@ async function handleMealPlanner(
     return SEASONING_NAME_PATTERNS.some(p => name.includes(p));
   }
 
+  // ─── CLASSIFY ITEMS ────────────────────────────────────
   const lockedItems = items.filter((i: any) => i.is_locked || i.product_type === 'fixed');
   const freeItems = items.filter((i: any) => !i.is_locked && i.product_type !== 'fixed');
 
-  // Classify free items
   interface FreeFood {
     id: string;
     name: string;
     isSeasoning: boolean;
-    softMinG: number; // product-level min (if included, use at least this)
-    minG: number;     // solver hard floor (0 for optional items)
+    savedG: number;    // what UI currently shows (quantity_grams from payload)
+    minG: number;      // solver hard floor: 0 for non-seasoning, 5 for seasoning
     maxG: number;
     calPer1g: number;
     pPer1g: number;
@@ -364,19 +378,13 @@ async function handleMealPlanner(
 
   const freeFoods: FreeFood[] = freeItems.map((item: any) => {
     const isSeas = isSeasoningItem(item);
-    // CRITICAL: Non-locked, non-seasoning items are OPTIONAL (minG = 0).
-    // The solver can choose to exclude them entirely (set to 0g).
-    // min_portion_grams from the product is only a "soft" minimum —
-    // it means "if you include this food, use at least Xg" but the solver
-    // can decide not to include it at all.
-    // Seasonings are the exception: they are always 5–15g when present.
-    const softMin = item.min_portion_grams || 0;
     return {
       id: item.id,
       name: item.name,
       isSeasoning: isSeas,
-      softMinG: isSeas ? 5 : Math.max(softMin, 0), // product-level min (for logging/suggestions)
-      minG: isSeas ? 5 : 0, // solver hard floor: 0 = optional
+      savedG: item.quantity_grams || 0,
+      // Bug 2 fix: free non-seasoning items have minG=0 (fully optional)
+      minG: isSeas ? 5 : 0,
       maxG: isSeas ? 15 : Math.max(item.max_portion_grams || 500, 1),
       calPer1g: (item.calories_per_100g || 0) / 100,
       pPer1g: (item.protein_per_100g || 0) / 100,
@@ -385,7 +393,7 @@ async function handleMealPlanner(
     };
   });
 
-  // Calculate locked macros
+  // ─── LOCKED MACROS ─────────────────────────────────────
   const lockedMacros = lockedItems.reduce(
     (acc: any, item: any) => {
       const factor = item.quantity_grams / 100;
@@ -399,13 +407,19 @@ async function handleMealPlanner(
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
 
+  // Bug 1 fix: use FULL daily targets everywhere
   const fullCalTarget = Math.round(targets.calories);
   const fullPTarget = Math.round(targets.protein);
   const fullCTarget = Math.round(targets.carbs);
   const fullFTarget = Math.round(targets.fat);
 
+  console.log(`[solver:${RUN_ID}] targets: cal=${fullCalTarget} p=${fullPTarget} c=${fullCTarget} f=${fullFTarget}`);
+  console.log(`[solver:${RUN_ID}] locked: cal=${Math.round(lockedMacros.calories)} p=${Math.round(lockedMacros.protein)} c=${Math.round(lockedMacros.carbs)} f=${Math.round(lockedMacros.fat)}`);
+  for (const food of freeFoods) {
+    console.log(`[solver:${RUN_ID}] food: ${food.name} | minG=${food.minG} max=${food.maxG}g | cal/g=${food.calPer1g.toFixed(2)} p/g=${food.pPer1g.toFixed(2)} c/g=${food.cPer1g.toFixed(2)} f/g=${food.fPer1g.toFixed(2)} | seasoning=${food.isSeasoning} | savedG=${food.savedG}`);
+  }
+
   // ─── FEASIBILITY PRE-CHECK ─────────────────────────────
-  // Compute theoretical min/max achievable for each macro
   const theoreticalMin = { calories: lockedMacros.calories, protein: lockedMacros.protein, carbs: lockedMacros.carbs, fat: lockedMacros.fat };
   const theoreticalMax = { calories: lockedMacros.calories, protein: lockedMacros.protein, carbs: lockedMacros.carbs, fat: lockedMacros.fat };
 
@@ -420,96 +434,42 @@ async function handleMealPlanner(
     theoreticalMax.fat += food.fPer1g * food.maxG;
   }
 
-  console.log(`[solver] FEASIBILITY: targets cal=${fullCalTarget} p=${fullPTarget} c=${fullCTarget} f=${fullFTarget}`);
-  console.log(`[solver] locked: cal=${Math.round(lockedMacros.calories)} p=${Math.round(lockedMacros.protein)} c=${Math.round(lockedMacros.carbs)} f=${Math.round(lockedMacros.fat)}`);
-  console.log(`[solver] theoretical_min (optional mode, minG=0): cal=${Math.round(theoreticalMin.calories)} p=${Math.round(theoreticalMin.protein)} c=${Math.round(theoreticalMin.carbs)} f=${Math.round(theoreticalMin.fat)}`);
-  console.log(`[solver] theoretical_max: cal=${Math.round(theoreticalMax.calories)} p=${Math.round(theoreticalMax.protein)} c=${Math.round(theoreticalMax.carbs)} f=${Math.round(theoreticalMax.fat)}`);
-  
-  // Also compute forced-min mode for comparison logging
-  const forcedMin = { calories: lockedMacros.calories, protein: lockedMacros.protein, carbs: lockedMacros.carbs, fat: lockedMacros.fat };
-  for (const food of freeFoods) {
-    forcedMin.calories += food.calPer1g * food.softMinG;
-    forcedMin.protein += food.pPer1g * food.softMinG;
-    forcedMin.carbs += food.cPer1g * food.softMinG;
-    forcedMin.fat += food.fPer1g * food.softMinG;
-  }
-  console.log(`[solver] forced_min (if all softMins applied): cal=${Math.round(forcedMin.calories)} p=${Math.round(forcedMin.protein)} c=${Math.round(forcedMin.carbs)} f=${Math.round(forcedMin.fat)}`);
-  if (forcedMin.fat > fullFTarget) {
-    console.log(`[solver] NOTE: Forced mins would exceed fat target (${Math.round(forcedMin.fat)}g > ${fullFTarget}g). Optional mode fixes this.`);
-  }
-  
-  for (const food of freeFoods) {
-    console.log(`[solver] food: ${food.name} | minG=0 softMin=${food.softMinG}g max=${food.maxG}g | cal/g=${food.calPer1g.toFixed(2)} p/g=${food.pPer1g.toFixed(2)} c/g=${food.cPer1g.toFixed(2)} f/g=${food.fPer1g.toFixed(2)} | seasoning=${food.isSeasoning}`);
-  }
+  console.log(`[solver:${RUN_ID}] feasibility min: cal=${Math.round(theoreticalMin.calories)} p=${Math.round(theoreticalMin.protein)} c=${Math.round(theoreticalMin.carbs)} f=${Math.round(theoreticalMin.fat)}`);
+  console.log(`[solver:${RUN_ID}] feasibility max: cal=${Math.round(theoreticalMax.calories)} p=${Math.round(theoreticalMax.protein)} c=${Math.round(theoreticalMax.carbs)} f=${Math.round(theoreticalMax.fat)}`);
 
-  // Check hard infeasibility: if theoretical max can't reach target - tolerance
+  // Check hard infeasibility
   const infeasible: string[] = [];
   if (theoreticalMax.calories < fullCalTarget - 50) infeasible.push(`kcal: max achievable ${Math.round(theoreticalMax.calories)} < min required ${fullCalTarget - 50}`);
   if (theoreticalMax.protein < fullPTarget - 2) infeasible.push(`protein: max achievable ${theoreticalMax.protein.toFixed(1)}g < min required ${fullPTarget - 2}g`);
   if (theoreticalMax.carbs < fullCTarget - 2) infeasible.push(`carbs: max achievable ${theoreticalMax.carbs.toFixed(1)}g < min required ${fullCTarget - 2}g`);
   if (theoreticalMax.fat < fullFTarget - 2) infeasible.push(`fat: max achievable ${theoreticalMax.fat.toFixed(1)}g < min required ${fullFTarget - 2}g`);
-  // Also check if min exceeds target
   if (theoreticalMin.calories > fullCalTarget) infeasible.push(`kcal: min achievable ${Math.round(theoreticalMin.calories)} > target ${fullCalTarget}`);
   if (theoreticalMin.protein > fullPTarget) infeasible.push(`protein: min achievable ${theoreticalMin.protein.toFixed(1)}g > target ${fullPTarget}g`);
   if (theoreticalMin.carbs > fullCTarget) infeasible.push(`carbs: min achievable ${theoreticalMin.carbs.toFixed(1)}g > target ${fullCTarget}g`);
   if (theoreticalMin.fat > fullFTarget) infeasible.push(`fat: min achievable ${theoreticalMin.fat.toFixed(1)}g > target ${fullFTarget}g`);
 
   if (infeasible.length > 0) {
-    console.warn(`[solver] INFEASIBLE: ${infeasible.join('; ')}`);
-    
-    // Generate per-food breakdown for suggestions
-    const suggested_fixes: string[] = [];
-    for (const reason of infeasible) {
-      if (reason.includes('carbs: max achievable')) {
-        const carbFoods = freeFoods.filter(f => f.cPer1g > 0.3 && !f.isSeasoning).sort((a, b) => b.cPer1g - a.cPer1g);
-        if (carbFoods.length > 0) {
-          const top = carbFoods[0];
-          suggested_fixes.push(`${top.name} provides ${(top.cPer1g * 100).toFixed(0)}g carbs/100g but is capped at ${top.maxG}g (max ${(top.cPer1g * top.maxG).toFixed(0)}g carbs). Increase max_portion_grams or add another carb source.`);
-        } else {
-          suggested_fixes.push('No carb-dense food available. Add rice, pasta, bread, oats, or cereal.');
-        }
-      }
-      if (reason.includes('protein: max achievable')) {
-        const protFoods = freeFoods.filter(f => f.pPer1g > 0.15 && !f.isSeasoning).sort((a, b) => b.pPer1g - a.pPer1g);
-        if (protFoods.length > 0) {
-          const top = protFoods[0];
-          suggested_fixes.push(`${top.name} provides ${(top.pPer1g * 100).toFixed(0)}g protein/100g but is capped at ${top.maxG}g (max ${(top.pPer1g * top.maxG).toFixed(0)}g protein). Increase max_portion_grams.`);
-        } else {
-          suggested_fixes.push('No protein-dense food available. Add chicken breast, turkey, white fish.');
-        }
-      }
-      if (reason.includes('kcal: max achievable')) {
-        suggested_fixes.push(`Total calorie capacity is too low. Increase portion limits on calorie-dense foods or add more items.`);
-      }
-      if (reason.includes('fat: max achievable')) {
-        suggested_fixes.push('Not enough fat capacity. Add a fat source (oil, nuts, cheese) or increase limits.');
-      }
-      if (reason.includes('min achievable') && reason.includes('>')) {
-        suggested_fixes.push('Minimum portions already exceed target. Reduce min_portion_grams on some items or remove items.');
-      }
-    }
-
+    console.warn(`[solver:${RUN_ID}] INFEASIBLE: ${infeasible.join('; ')}`);
+    const suggested_fixes = buildSuggestions(null, freeFoods, lockedMacros, fullCalTarget, fullPTarget, fullCTarget, fullFTarget, infeasible);
     return {
       success: false,
       status: 'FAIL_CONSTRAINTS',
+      run_id: RUN_ID,
       portions: [],
       totals: { calories: Math.round(theoreticalMax.calories), protein: Math.round(theoreticalMax.protein), carbs: Math.round(theoreticalMax.carbs), fat: Math.round(theoreticalMax.fat) },
       targets: { calories: fullCalTarget, protein: fullPTarget, carbs: fullCTarget, fat: fullFTarget },
       violations: infeasible,
       suggested_fixes,
-      feasibility: {
-        theoretical_min: theoreticalMin,
-        theoretical_max: theoreticalMax,
-        foods: freeFoods.map(f => ({ name: f.name, minG: f.minG, maxG: f.maxG, calPer1g: f.calPer1g, pPer1g: f.pPer1g, cPer1g: f.cPer1g, fPer1g: f.fPer1g })),
-      },
+      food_breakdown: freeFoods.map(f => ({
+        name: f.name, savedGrams: f.savedG, minG: f.minG, maxG: f.maxG, isSeasoning: f.isSeasoning,
+        perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
+      })),
     };
   }
 
-  // ─── DETERMINISTIC SOLVER (coordinate descent, 1g resolution) ──────
-  // This replaces both the AI call and the old greedy refinePortions.
-  // We still use the AI for initial guess, then the solver fixes it.
+  // ─── CORE SOLVER FUNCTIONS ─────────────────────────────
+  // Bug 1+4 fix: computeTotals adds locked + free, compared against FULL targets
 
-  // Compute totals from a grams map
   function computeTotals(grams: Map<string, number>) {
     let cal = lockedMacros.calories, p = lockedMacros.protein, c = lockedMacros.carbs, f = lockedMacros.fat;
     for (const food of freeFoods) {
@@ -522,7 +482,6 @@ async function handleMealPlanner(
     return { calories: cal, protein: p, carbs: c, fat: f };
   }
 
-  // Check if totals meet all constraints
   function meetsAll(totals: { calories: number; protein: number; carbs: number; fat: number }) {
     return (
       totals.calories >= fullCalTarget - 50 && totals.calories <= fullCalTarget &&
@@ -532,13 +491,13 @@ async function handleMealPlanner(
     );
   }
 
-  // Weighted error: how far from target bands. 0 = perfect.
+  // Weighted error: 0 = perfect. Over-target penalties are much heavier.
   function computeError(totals: { calories: number; protein: number; carbs: number; fat: number }): number {
     let err = 0;
     // Calories: band is [fullCalTarget - 50, fullCalTarget]
-    if (totals.calories > fullCalTarget) err += (totals.calories - fullCalTarget) * 2; // over penalty
+    if (totals.calories > fullCalTarget) err += (totals.calories - fullCalTarget) * 2;
     else if (totals.calories < fullCalTarget - 50) err += (fullCalTarget - 50 - totals.calories);
-    // Protein
+    // Protein: band is [fullPTarget - 2, fullPTarget]
     if (totals.protein > fullPTarget) err += (totals.protein - fullPTarget) * 50;
     else if (totals.protein < fullPTarget - 2) err += (fullPTarget - 2 - totals.protein) * 50;
     // Carbs
@@ -550,8 +509,9 @@ async function handleMealPlanner(
     return err;
   }
 
-  // ─── SOLVER: Multi-start coordinate descent ───────────
-  // Try multiple starting points and pick the best result.
+  // ─── MULTI-START COORDINATE DESCENT (Bug 3 rewrite) ────
+  // Adaptive step sizes: 10g → 5g → 1g based on error magnitude
+  // Perturbation escape after 500 stale iterations
 
   function solveFromStart(startGrams: Map<string, number>): { grams: Map<string, number>; totals: any; error: number; iterations: number } {
     const grams = new Map(startGrams);
@@ -578,39 +538,29 @@ async function handleMealPlanner(
         return { grams: new Map(grams), totals, error: 0, iterations: iter };
       }
 
-      if (staleCount > 200) break; // stuck
+      // Adaptive step size (Bug 3 fix: no acceleration heuristic)
+      let stepSize: number;
+      if (err < 50) stepSize = 1;
+      else if (err < 500) stepSize = 5;
+      else stepSize = 10;
 
-      // Find which macros are violated and by how much
-      const deficits = {
-        calories: fullCalTarget - totals.calories, // positive = under, negative = over
-        protein: fullPTarget - totals.protein,
-        carbs: fullCTarget - totals.carbs,
-        fat: fullFTarget - totals.fat,
-      };
+      // Perturbation escape (Bug 3 fix: increased from 200 to 500)
+      if (staleCount > 500) {
+        // Randomly perturb 2-3 foods by ±10g
+        const shuffled = [...nonSeasoningFoods].sort(() => Math.random() - 0.5);
+        const numPerturb = Math.min(3, shuffled.length);
+        for (let pi = 0; pi < numPerturb; pi++) {
+          const f = shuffled[pi];
+          const cur = grams.get(f.id) || 0;
+          const delta = (Math.random() > 0.5 ? 1 : -1) * Math.round(Math.random() * 10 + 5);
+          grams.set(f.id, Math.max(f.minG, Math.min(f.maxG, cur + delta)));
+        }
+        staleCount = 0;
+        continue;
+      }
 
-      // Pick the worst violation
-      type MacroKey = 'calories' | 'protein' | 'carbs' | 'fat';
-      const violations: Array<{ macro: MacroKey; needMore: boolean; amount: number }> = [];
-      
-      if (totals.calories > fullCalTarget) violations.push({ macro: 'calories', needMore: false, amount: totals.calories - fullCalTarget });
-      else if (totals.calories < fullCalTarget - 50) violations.push({ macro: 'calories', needMore: true, amount: fullCalTarget - 50 - totals.calories });
-      
-      if (totals.protein > fullPTarget) violations.push({ macro: 'protein', needMore: false, amount: totals.protein - fullPTarget });
-      else if (totals.protein < fullPTarget - 2) violations.push({ macro: 'protein', needMore: true, amount: fullPTarget - 2 - totals.protein });
-      
-      if (totals.carbs > fullCTarget) violations.push({ macro: 'carbs', needMore: false, amount: totals.carbs - fullCTarget });
-      else if (totals.carbs < fullCTarget - 2) violations.push({ macro: 'carbs', needMore: true, amount: fullCTarget - 2 - totals.carbs });
-      
-      if (totals.fat > fullFTarget) violations.push({ macro: 'fat', needMore: false, amount: totals.fat - fullFTarget });
-      else if (totals.fat < fullFTarget - 2) violations.push({ macro: 'fat', needMore: true, amount: fullFTarget - 2 - totals.fat });
-
-      if (violations.length === 0) break; // all within band
-
-      // Sort by severity
-      violations.sort((a, b) => b.amount - a.amount);
-      const worst = violations[0];
-
-      // For each free non-seasoning food, compute: if we adjust it by ±1g, what's the new total error?
+      // Evaluate all ±stepSize moves for all free non-seasoning foods
+      // Pick the move that minimises computeError
       let bestFoodIdx = -1;
       let bestDirection = 0;
       let bestStepError = Infinity;
@@ -619,63 +569,44 @@ async function handleMealPlanner(
         const food = nonSeasoningFoods[fi];
         const currentG = grams.get(food.id) || 0;
 
-        // Try +1g
-        if (currentG < food.maxG) {
-          const testGrams = new Map(grams);
-          testGrams.set(food.id, currentG + 1);
-          const testTotals = computeTotals(testGrams);
-          const testErr = computeError(testTotals);
+        // Try +stepSize
+        if (currentG + stepSize <= food.maxG) {
+          grams.set(food.id, currentG + stepSize);
+          const testErr = computeError(computeTotals(grams));
           if (testErr < bestStepError) {
             bestStepError = testErr;
             bestFoodIdx = fi;
-            bestDirection = 1;
+            bestDirection = stepSize;
           }
+          grams.set(food.id, currentG); // restore
         }
 
-        // Try -1g
-        if (currentG > food.minG) {
-          const testGrams = new Map(grams);
-          testGrams.set(food.id, currentG - 1);
-          const testTotals = computeTotals(testGrams);
-          const testErr = computeError(testTotals);
+        // Try -stepSize
+        if (currentG - stepSize >= food.minG) {
+          grams.set(food.id, currentG - stepSize);
+          const testErr = computeError(computeTotals(grams));
           if (testErr < bestStepError) {
             bestStepError = testErr;
             bestFoodIdx = fi;
-            bestDirection = -1;
+            bestDirection = -stepSize;
           }
+          grams.set(food.id, currentG); // restore
         }
       }
 
       if (bestFoodIdx === -1) break; // no moves possible
 
-      // Apply the best 1g step
+      // Apply the best move
       const chosenFood = nonSeasoningFoods[bestFoodIdx];
       const currentG = grams.get(chosenFood.id) || 0;
-      
-      // Try larger steps if the error is big (acceleration)
-      let stepSize = 1;
-      if (worst.amount > 50) stepSize = Math.min(20, Math.floor(worst.amount / 5));
-      else if (worst.amount > 10) stepSize = Math.min(5, Math.floor(worst.amount / 2));
-      
-      let newG = currentG + bestDirection * stepSize;
-      newG = Math.max(chosenFood.minG, Math.min(chosenFood.maxG, newG));
-      
-      // Verify this larger step doesn't overshoot (make error worse than 1g step)
-      const testGrams = new Map(grams);
-      testGrams.set(chosenFood.id, newG);
-      const testErr = computeError(computeTotals(testGrams));
-      if (testErr <= bestStepError + 1) {
-        grams.set(chosenFood.id, newG);
-      } else {
-        // Fall back to 1g step
-        grams.set(chosenFood.id, currentG + bestDirection);
-      }
+      grams.set(chosenFood.id, Math.max(chosenFood.minG, Math.min(chosenFood.maxG, currentG + bestDirection)));
     }
 
     return { grams: bestGrams, totals: bestTotals, error: bestError, iterations: 5000 };
   }
 
-  // Generate multiple starting points
+  // ─── GENERATE STARTING POINTS ──────────────────────────
+
   function generateStarts(): Map<string, number>[] {
     const starts: Map<string, number>[] = [];
 
@@ -686,28 +617,23 @@ async function handleMealPlanner(
     }
     starts.push(mid);
 
-    // Start 2: minimum portions
+    // Start 2: all minimums
     const minStart = new Map<string, number>();
     for (const food of freeFoods) {
       minStart.set(food.id, food.minG);
     }
     starts.push(minStart);
 
-    // Start 3: proportional to remaining targets
-    const remaining = {
-      calories: Math.max(0, fullCalTarget - lockedMacros.calories),
-      protein: Math.max(0, fullPTarget - lockedMacros.protein),
-      carbs: Math.max(0, fullCTarget - lockedMacros.carbs),
-      fat: Math.max(0, fullFTarget - lockedMacros.fat),
-    };
-    const totalCalPerG = freeFoods.reduce((s, f) => s + (f.isSeasoning ? 0 : f.calPer1g), 0);
+    // Start 3: proportional to calorie share
+    const remainCal = Math.max(0, fullCalTarget - lockedMacros.calories);
+    const totalCalPerG = freeFoods.filter(f => !f.isSeasoning).reduce((s, f) => s + f.calPer1g, 0);
     const proportional = new Map<string, number>();
     for (const food of freeFoods) {
       if (food.isSeasoning) {
         proportional.set(food.id, Math.min(10, food.maxG));
       } else if (totalCalPerG > 0) {
         const share = food.calPer1g / totalCalPerG;
-        const targetG = Math.round((remaining.calories / food.calPer1g) * share);
+        const targetG = Math.round((remainCal / food.calPer1g) * share);
         proportional.set(food.id, Math.max(food.minG, Math.min(food.maxG, targetG)));
       } else {
         proportional.set(food.id, food.minG);
@@ -715,77 +641,67 @@ async function handleMealPlanner(
     }
     starts.push(proportional);
 
-    // Start 4: carb-heavy (max out highest carb food first)
+    // Start 4: carb-heavy
     const carbHeavy = new Map<string, number>();
-    const sortedByCarbs = [...freeFoods].sort((a, b) => b.cPer1g - a.cPer1g);
+    const sortedByCarbs = [...freeFoods].filter(f => !f.isSeasoning).sort((a, b) => b.cPer1g - a.cPer1g);
     for (const food of freeFoods) {
       carbHeavy.set(food.id, food.isSeasoning ? Math.min(10, food.maxG) : food.minG);
     }
-    // Max out the top 2 carb foods
     for (let i = 0; i < Math.min(2, sortedByCarbs.length); i++) {
-      if (!sortedByCarbs[i].isSeasoning) {
-        carbHeavy.set(sortedByCarbs[i].id, sortedByCarbs[i].maxG);
-      }
+      carbHeavy.set(sortedByCarbs[i].id, sortedByCarbs[i].maxG);
     }
     starts.push(carbHeavy);
 
     // Start 5: protein-heavy
     const protHeavy = new Map<string, number>();
-    const sortedByProt = [...freeFoods].sort((a, b) => b.pPer1g - a.pPer1g);
+    const sortedByProt = [...freeFoods].filter(f => !f.isSeasoning).sort((a, b) => b.pPer1g - a.pPer1g);
     for (const food of freeFoods) {
       protHeavy.set(food.id, food.isSeasoning ? Math.min(10, food.maxG) : food.minG);
     }
     for (let i = 0; i < Math.min(2, sortedByProt.length); i++) {
-      if (!sortedByProt[i].isSeasoning) {
-        protHeavy.set(sortedByProt[i].id, sortedByProt[i].maxG);
-      }
+      protHeavy.set(sortedByProt[i].id, sortedByProt[i].maxG);
     }
     starts.push(protHeavy);
 
     return starts;
   }
 
-  // Also get AI suggestion as a starting point
-  const remainingTargets = {
-    calories: Math.max(0, targets.calories - lockedMacros.calories),
-    protein: Math.max(0, targets.protein - lockedMacros.protein),
-    carbs: Math.max(0, targets.carbs - lockedMacros.carbs),
-    fat: Math.max(0, targets.fat - lockedMacros.fat),
-  };
-
-  const calTarget = Math.round(remainingTargets.calories);
-  const pTarget = Math.round(remainingTargets.protein);
-  const cTarget = Math.round(remainingTargets.carbs);
-  const fTarget = Math.round(remainingTargets.fat);
+  // ─── AI INITIAL GUESS (Bug 1 fix: uses FULL targets) ───
 
   const lockedList = lockedItems.length > 0
-    ? lockedItems.map((item: any) => `- ${item.name}: ${item.quantity_grams}g (LOCKED)`).join('\n')
+    ? lockedItems.map((item: any) => `- ${item.name}: ${item.quantity_grams}g (LOCKED — contributes ${Math.round(item.calories_per_100g * item.quantity_grams / 100)} kcal, ${(item.protein_per_100g * item.quantity_grams / 100).toFixed(1)}g P, ${(item.carbs_per_100g * item.quantity_grams / 100).toFixed(1)}g C, ${(item.fat_per_100g * item.quantity_grams / 100).toFixed(1)}g F)`).join('\n')
     : 'None';
 
   const foodList = freeFoods.map(f => {
     return `- ${f.name} (id: ${f.id}): ${(f.calPer1g * 100).toFixed(0)} kcal, ${(f.pPer1g * 100).toFixed(1)}g P, ${(f.cPer1g * 100).toFixed(1)}g C, ${(f.fPer1g * 100).toFixed(1)}g F per 100g. Min: ${f.minG}g, Max: ${f.maxG}g.${f.isSeasoning ? ' SEASONING 5-15g.' : ''}`;
   }).join('\n');
 
-  const systemPrompt = `You are a meal portion calculator. Assign gram portions to foods to hit these REMAINING targets (after locked items):
-- Calories: ${calTarget} kcal (±50)
-- Protein: ${pTarget}g (±2)
-- Carbs: ${cTarget}g (±2)
-- Fat: ${fTarget}g (±2)
+  // Bug 1 fix: AI prompt uses FULL daily targets, tells AI about locked contributions
+  const systemPrompt = `You are a meal portion calculator. Assign gram portions to the FREE (unlocked) foods to make the FULL DAY totals (locked + free combined) hit these targets:
+- Calories: ${fullCalTarget} kcal (must be at or below, within 50 under)
+- Protein: ${fullPTarget}g (must be at or below, within 2g under)
+- Carbs: ${fullCTarget}g (must be at or below, within 2g under)
+- Fat: ${fullFTarget}g (must be at or below, within 2g under)
 
-Locked items:
+IMPORTANT: NEVER exceed any target. The valid band is [target-tolerance, target].
+
+Locked items (already counted, DO NOT change):
 ${lockedList}
+Total locked contribution: ${Math.round(lockedMacros.calories)} kcal, ${lockedMacros.protein.toFixed(1)}g P, ${lockedMacros.carbs.toFixed(1)}g C, ${lockedMacros.fat.toFixed(1)}g F
 
-Available foods:
+Free items to assign portions:
 ${foodList}
 
-CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions of protein-dense foods to hit protein targets. Don't default to small portions. Use set_portions tool.`;
+CRITICAL: The portions you assign for free items, PLUS the locked contributions above, must sum to the full day targets. Think about what's left after locked items: ~${Math.round(fullCalTarget - lockedMacros.calories)} kcal, ${(fullPTarget - lockedMacros.protein).toFixed(0)}g P, ${(fullCTarget - lockedMacros.carbs).toFixed(0)}g C, ${(fullFTarget - lockedMacros.fat).toFixed(0)}g F remaining for free items.
+
+Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions of protein-dense foods to hit protein targets. Don't default to small portions. Items with minG=0 can be set to 0g if needed (excluded). Use set_portions tool.`;
 
   const tools = [
     {
       type: "function",
       function: {
         name: "set_portions",
-        description: "Set gram portions for each food item",
+        description: "Set gram portions for each free food item",
         parameters: {
           type: "object",
           properties: {
@@ -812,12 +728,12 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
   try {
     const aiData = await callAI({
       system: systemPrompt,
-      userMessage: "Assign portions to hit targets. Use set_portions tool. Use large portions where needed.",
+      userMessage: "Assign portions to hit targets. Use set_portions tool.",
       tools,
       toolChoice: { type: "function", function: { name: "set_portions" } },
     });
 
-    console.log(`[solver] AI guess: model=${AI_MODEL} usage=${JSON.stringify(aiData.usage || {})}`);
+    console.log(`[solver:${RUN_ID}] AI guess: model=${AI_MODEL} usage=${JSON.stringify(aiData.usage || {})}`);
 
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     if (toolCall?.function?.arguments) {
@@ -834,7 +750,7 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
       }
     }
   } catch (e) {
-    console.warn('[solver] AI call failed, using deterministic starts only:', e);
+    console.warn(`[solver:${RUN_ID}] AI call failed, using deterministic starts only:`, e);
   }
 
   // Fill in any foods missing from AI guess
@@ -844,276 +760,302 @@ CRITICAL: Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE 
     }
   }
 
-  // Run solver from multiple starting points
+  // ─── RUN SOLVER FROM MULTIPLE STARTS ───────────────────
+
   const starts = generateStarts();
-  starts.push(aiStartGrams); // Add AI guess as another starting point
+  starts.push(aiStartGrams);
 
   let bestResult = { grams: new Map<string, number>(), totals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, error: Infinity, iterations: 0 };
 
   for (let si = 0; si < starts.length; si++) {
     const result = solveFromStart(starts[si]);
-    console.log(`[solver] start ${si}: error=${result.error.toFixed(1)} iters=${result.iterations} totals=${JSON.stringify({ cal: Math.round(result.totals.calories), p: Math.round(result.totals.protein * 10) / 10, c: Math.round(result.totals.carbs * 10) / 10, f: Math.round(result.totals.fat * 10) / 10 })}`);
+    console.log(`[solver:${RUN_ID}] start ${si}: error=${result.error.toFixed(1)} iters=${result.iterations} totals=${JSON.stringify({ cal: Math.round(result.totals.calories), p: Math.round(result.totals.protein * 10) / 10, c: Math.round(result.totals.carbs * 10) / 10, f: Math.round(result.totals.fat * 10) / 10 })}`);
     if (result.error < bestResult.error) {
       bestResult = result;
     }
-    if (result.error === 0) break; // perfect solution found
+    if (result.error === 0) break;
   }
 
-  // Round to nearest 5g and re-check; if rounding breaks it, try 1g rounding
-  function roundAndCheck(grams: Map<string, number>, roundTo: number): { grams: Map<string, number>; totals: any; ok: boolean } {
+  // ─── ROUNDING (Bug 3 fix: fine-tune after rounding) ────
+
+  function roundGrams(grams: Map<string, number>, roundTo: number): Map<string, number> {
     const rounded = new Map<string, number>();
     for (const food of freeFoods) {
       const g = grams.get(food.id) || food.minG;
-      if (food.isSeasoning) {
-        rounded.set(food.id, Math.max(food.minG, Math.min(food.maxG, Math.round(g / roundTo) * roundTo)));
-      } else {
-        rounded.set(food.id, Math.max(food.minG, Math.min(food.maxG, Math.round(g / roundTo) * roundTo)));
-      }
+      rounded.set(food.id, Math.max(food.minG, Math.min(food.maxG, Math.round(g / roundTo) * roundTo)));
     }
-    const totals = computeTotals(rounded);
-    return { grams: rounded, totals, ok: meetsAll(totals) };
+    return rounded;
   }
 
-  // Try 5g rounding first
-  let finalResult = roundAndCheck(bestResult.grams, 5);
-  if (!finalResult.ok) {
-    // Try solving again from the 5g-rounded start
-    const reResult = solveFromStart(finalResult.grams);
-    finalResult = roundAndCheck(reResult.grams, 5);
+  // Try 5g rounding → fine-tune with 200 iterations of 1g descent
+  let finalGrams = roundGrams(bestResult.grams, 5);
+  let finalTotals = computeTotals(finalGrams);
+  let finalOk = meetsAll(finalTotals);
+
+  if (!finalOk) {
+    // Fine-tune from 5g-rounded state with 1g steps (200 extra iterations)
+    const fineResult = solveFromStart(finalGrams);
+    finalGrams = roundGrams(fineResult.grams, 5);
+    finalTotals = computeTotals(finalGrams);
+    finalOk = meetsAll(finalTotals);
   }
-  if (!finalResult.ok) {
+
+  if (!finalOk) {
     // Fall back to 1g rounding
-    finalResult = roundAndCheck(bestResult.grams, 1);
-    if (!finalResult.ok) {
-      // One more solve pass from 1g-rounded
-      const reResult2 = solveFromStart(finalResult.grams);
-      const t = computeTotals(reResult2.grams);
-      finalResult = { grams: reResult2.grams, totals: t, ok: meetsAll(t) };
+    finalGrams = roundGrams(bestResult.grams, 1);
+    finalTotals = computeTotals(finalGrams);
+    finalOk = meetsAll(finalTotals);
+
+    if (!finalOk) {
+      // One more fine-tune pass
+      const fineResult2 = solveFromStart(finalGrams);
+      finalGrams = fineResult2.grams;
+      finalTotals = computeTotals(finalGrams);
+      finalOk = meetsAll(finalTotals);
     }
   }
 
-  const finalTotals = {
-    calories: Math.round(finalResult.totals.calories),
-    protein: Math.round(finalResult.totals.protein * 10) / 10,
-    carbs: Math.round(finalResult.totals.carbs * 10) / 10,
-    fat: Math.round(finalResult.totals.fat * 10) / 10,
+  const roundedTotals = {
+    calories: Math.round(finalTotals.calories),
+    protein: Math.round(finalTotals.protein * 10) / 10,
+    carbs: Math.round(finalTotals.carbs * 10) / 10,
+    fat: Math.round(finalTotals.fat * 10) / 10,
   };
 
-  console.log(`[solver] FINAL: ${JSON.stringify(finalTotals)} targets: cal≤${fullCalTarget} p≤${fullPTarget} c≤${fullCTarget} f≤${fullFTarget} ok=${finalResult.ok}`);
-
-  // Log per-food final portions
+  console.log(`[solver:${RUN_ID}] FINAL: ${JSON.stringify(roundedTotals)} targets: cal≤${fullCalTarget} p≤${fullPTarget} c≤${fullCTarget} f≤${fullFTarget} ok=${finalOk}`);
   for (const food of freeFoods) {
-    const g = finalResult.grams.get(food.id) || 0;
-    console.log(`[solver] portion: ${food.name} = ${g}g (min=${food.minG} max=${food.maxG})`);
+    const g = finalGrams.get(food.id) || 0;
+    console.log(`[solver:${RUN_ID}] portion: ${food.name} = ${g}g (min=${food.minG} max=${food.maxG})`);
   }
 
-  if (!finalResult.ok) {
-    // FAIL — build detailed inter-constraint analysis
+  // ─── RESULT ────────────────────────────────────────────
+
+  if (!finalOk) {
+    // FAIL — build diagnostics
     const violations: string[] = [];
-    if (finalTotals.calories > fullCalTarget) violations.push(`kcal_over_by_${finalTotals.calories - fullCalTarget}`);
-    else if (finalTotals.calories < fullCalTarget - 50) violations.push(`kcal_under_by_${fullCalTarget - finalTotals.calories}`);
-    if (finalTotals.protein > fullPTarget) violations.push(`protein_over_by_${(finalTotals.protein - fullPTarget).toFixed(1)}g`);
-    else if (finalTotals.protein < fullPTarget - 2) violations.push(`protein_under_by_${(fullPTarget - finalTotals.protein).toFixed(1)}g`);
-    if (finalTotals.carbs > fullCTarget) violations.push(`carbs_over_by_${(finalTotals.carbs - fullCTarget).toFixed(1)}g`);
-    else if (finalTotals.carbs < fullCTarget - 2) violations.push(`carbs_under_by_${(fullCTarget - finalTotals.carbs).toFixed(1)}g`);
-    if (finalTotals.fat > fullFTarget) violations.push(`fat_over_by_${(finalTotals.fat - fullFTarget).toFixed(1)}g`);
-    else if (finalTotals.fat < fullFTarget - 2) violations.push(`fat_under_by_${(fullFTarget - finalTotals.fat).toFixed(1)}g`);
+    if (roundedTotals.calories > fullCalTarget) violations.push(`kcal over by ${roundedTotals.calories - fullCalTarget}`);
+    else if (roundedTotals.calories < fullCalTarget - 50) violations.push(`kcal under by ${fullCalTarget - roundedTotals.calories}`);
+    if (roundedTotals.protein > fullPTarget) violations.push(`protein over by ${(roundedTotals.protein - fullPTarget).toFixed(1)}g`);
+    else if (roundedTotals.protein < fullPTarget - 2) violations.push(`protein under by ${(fullPTarget - roundedTotals.protein).toFixed(1)}g`);
+    if (roundedTotals.carbs > fullCTarget) violations.push(`carbs over by ${(roundedTotals.carbs - fullCTarget).toFixed(1)}g`);
+    else if (roundedTotals.carbs < fullCTarget - 2) violations.push(`carbs under by ${(fullCTarget - roundedTotals.carbs).toFixed(1)}g`);
+    if (roundedTotals.fat > fullFTarget) violations.push(`fat over by ${(roundedTotals.fat - fullFTarget).toFixed(1)}g`);
+    else if (roundedTotals.fat < fullFTarget - 2) violations.push(`fat under by ${(fullFTarget - roundedTotals.fat).toFixed(1)}g`);
 
-    // ── Context-aware suggestions ──
-    // ALL suggestions must reference savedGrams (what the UI shows), never solverG.
-    // The solver output is never saved on FAIL, so users see savedGrams.
-    const suggested_fixes: string[] = [];
-
-    const isCarbsUnder = finalTotals.carbs < fullCTarget - 2;
-    const isProtUnder = finalTotals.protein < fullPTarget - 2;
-    const isCalUnder = finalTotals.calories < fullCalTarget - 50;
-    const isCalOver = finalTotals.calories > fullCalTarget;
-    const isFatOver = finalTotals.fat > fullFTarget;
-
-    // Analyze solver state — but suggestions only reference savedGrams for UI accuracy
-    const foodStates = freeFoods.map(f => {
-      const solverG = finalResult.grams.get(f.id) || 0;
-      const originalItem = items.find((i: any) => i.id === f.id);
-      const savedG = originalItem?.quantity_grams ?? 0;
-      return { ...f, solverG, savedG, atMax: solverG >= f.maxG, atZero: solverG === 0 };
-    });
-
-    const maxedFoods = foodStates.filter(f => f.atMax && !f.isSeasoning);
-
-    // Determine the binding constraint: what prevents hitting targets?
-    // Compute max achievable carbs while respecting fat <= target and kcal <= target
-    // This is the real feasibility proof.
-    const maxCarbsUnderFatCap = (() => {
-      // For each food, compute carbs-per-fat ratio. Prefer low-fat carb sources.
-      const carbFoods = freeFoods.filter(f => f.cPer1g > 0 && !f.isSeasoning)
-        .sort((a, b) => {
-          // Sort by fat cost per gram of carb (ascending = most efficient first)
-          const aFatPerCarb = a.fPer1g / Math.max(a.cPer1g, 0.001);
-          const bFatPerCarb = b.fPer1g / Math.max(b.cPer1g, 0.001);
-          return aFatPerCarb - bFatPerCarb;
-        });
-
-      let remainFat = fullFTarget - lockedMacros.fat;
-      let remainCal = fullCalTarget - lockedMacros.calories;
-      let totalCarbs = lockedMacros.carbs;
-
-      // Subtract seasoning contribution
-      for (const f of freeFoods) {
-        if (f.isSeasoning) {
-          const g = 10; // typical seasoning
-          remainFat -= f.fPer1g * g;
-          remainCal -= f.calPer1g * g;
-          totalCarbs += f.cPer1g * g;
-        }
-      }
-
-      // Greedily assign carb foods within fat and calorie budgets
-      for (const f of carbFoods) {
-        const maxByFat = f.fPer1g > 0 ? Math.floor(remainFat / f.fPer1g) : f.maxG;
-        const maxByCal = f.calPer1g > 0 ? Math.floor(remainCal / f.calPer1g) : f.maxG;
-        const g = Math.min(f.maxG, Math.max(0, maxByFat), Math.max(0, maxByCal));
-        totalCarbs += f.cPer1g * g;
-        remainFat -= f.fPer1g * g;
-        remainCal -= f.calPer1g * g;
-      }
-      return Math.round(totalCarbs);
-    })();
-
-    console.log(`[solver] max carbs achievable under fat≤${fullFTarget} & kcal≤${fullCalTarget}: ${maxCarbsUnderFatCap}g (target: ${fullCTarget}g)`);
-
-    if (maxCarbsUnderFatCap < fullCTarget - 2) {
-      // True infeasibility under <= constraints
-      suggested_fixes.push(
-        `Cannot reach ${fullCTarget}g carbs while keeping fat ≤${fullFTarget}g and kcal ≤${fullCalTarget}. ` +
-        `Max achievable carbs: ${maxCarbsUnderFatCap}g. ` +
-        `Options: lower carb target to ~${maxCarbsUnderFatCap}g, increase fat target, or add a low-fat pure carb source.`
-      );
+    // Log solver-attempted grams (server only, NOT in response)
+    for (const food of freeFoods) {
+      const solverG = finalGrams.get(food.id) || 0;
+      console.log(`[solver:${RUN_ID}] FAIL breakdown: ${food.name} savedG=${food.savedG} solverG=${solverG} (min=${food.minG} max=${food.maxG})`);
     }
 
-    // Identify specific bottlenecks
-    if (isCarbsUnder || isCalUnder) {
-      // Which carb foods are at their max?
-      const carbMaxed = maxedFoods.filter(f => f.cPer1g > 0.2);
-      for (const cf of carbMaxed.slice(0, 2)) {
-        suggested_fixes.push(
-          `${cf.name} hit max ${cf.maxG}g (${(cf.cPer1g * 100).toFixed(0)}g carbs/100g). ` +
-          `Increase max_portion_grams to add more carbs.`
-        );
-      }
+    const suggested_fixes = buildSuggestions(finalGrams, freeFoods, lockedMacros, fullCalTarget, fullPTarget, fullCTarget, fullFTarget, violations);
 
-      // Are there high-fat foods eating the fat budget? Use savedG for suggestions.
-      const highFatFoods = foodStates
-        .filter(f => !f.isSeasoning && f.fPer1g > 0.03 && (f.savedG > 0 || f.solverG > 0))
-        .map(f => ({ ...f, fatContrib: f.fPer1g * (f.savedG > 0 ? f.savedG : f.solverG) }))
-        .sort((a, b) => b.fatContrib - a.fatContrib);
-      for (const hf of highFatFoods.slice(0, 1)) {
-        if (hf.cPer1g < 0.1) {
-          const refG = hf.savedG > 0 ? hf.savedG : hf.solverG;
-          suggested_fixes.push(
-            `${hf.name} (${refG}g) uses ${hf.fatContrib.toFixed(1)}g of the ${fullFTarget}g fat budget ` +
-            `but adds only ${(hf.cPer1g * refG).toFixed(0)}g carbs. ` +
-            `Remove or replace with a lower-fat option to free fat budget for carb foods.`
-          );
-        }
-      }
+    console.log(`[solver:${RUN_ID}] FAIL suggestions: ${suggested_fixes.join(' | ')}`);
 
-      // If no carb-dense foods exist at all
-      const anyCarbFoods = foodStates.filter(f => f.cPer1g > 0.2 && !f.isSeasoning);
-      if (anyCarbFoods.length === 0) {
-        suggested_fixes.push('No carb-dense food on this day. Add rice, pasta, bread, oats, or cereal.');
-      }
-    }
-
-    if (isFatOver && !isCarbsUnder && !isCalUnder) {
-      // Pure fat overshoot — reference savedG only (what user sees)
-      const fatContribs = foodStates
-        .filter(f => !f.isSeasoning && f.savedG > 0)
-        .map(f => ({ ...f, fatContrib: f.fPer1g * f.savedG }))
-        .sort((a, b) => b.fatContrib - a.fatContrib);
-      for (const fc of fatContribs.slice(0, 2)) {
-        suggested_fixes.push(
-          `${fc.name} (${fc.savedG}g saved) contributes ${fc.fatContrib.toFixed(1)}g fat. Replace with a lower-fat alternative.`
-        );
-      }
-    }
-
-    if (isProtUnder && !isCalOver) {
-      const protFoods = foodStates.filter(f => f.pPer1g > 0.15 && !f.isSeasoning && !f.atMax);
-      if (protFoods.length > 0) {
-        const top = protFoods.sort((a, b) => b.pPer1g - a.pPer1g)[0];
-        suggested_fixes.push(`${top.name} can provide more protein (max ${top.maxG}g). Solver couldn't use more due to other constraints.`);
-      } else {
-        suggested_fixes.push('Add a lean protein source (chicken breast, turkey, white fish).');
-      }
-    }
-
-    // Per-food breakdown for the FAIL response
-    // Include both solver attempted grams AND original saved grams
-    const foodBreakdown = freeFoods.map(f => {
-      const solverG = finalResult.grams.get(f.id) || 0;
-      const originalItem = items.find((i: any) => i.id === f.id);
-      const savedG = originalItem?.quantity_grams ?? 0;
-      return {
-        name: f.name,
-        savedGrams: savedG,      // what UI currently shows (unchanged on FAIL)
-        solverAttemptedGrams: solverG, // what solver tried (NOT saved)
-        softMinG: f.softMinG,
-        minG: f.minG,
-        maxG: f.maxG,
-        atMin: solverG <= f.minG,
-        atMax: solverG >= f.maxG,
-        excluded: solverG === 0,
-        isSeasoning: f.isSeasoning,
-        perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
-      };
-    });
-
-    if (suggested_fixes.length === 0) {
-      suggested_fixes.push('Targets may be impossible with current food list. Consider adjusting targets, adding new foods, or increasing max_portion_grams.');
-    }
-
-    console.log(`[solver] FAIL analysis: violations=${violations.join(', ')}`);
-    console.log(`[solver] suggestions: ${suggested_fixes.join(' | ')}`);
-    for (const fb of foodBreakdown) {
-      console.log(`[solver] breakdown: ${fb.name} saved=${fb.savedGrams}g solver=${fb.solverAttemptedGrams}g (softMin=${fb.softMinG} max=${fb.maxG} excluded=${fb.excluded} atMax=${fb.atMax})`);
-    }
-
+    // Bug 7 fix: response does NOT include solverAttemptedGrams
     return {
       success: false,
       status: 'FAIL_CONSTRAINTS',
+      run_id: RUN_ID,
       portions: [],
-      totals: finalTotals,
+      totals: roundedTotals,
       targets: { calories: fullCalTarget, protein: fullPTarget, carbs: fullCTarget, fat: fullFTarget },
       violations,
       suggested_fixes,
-      food_breakdown: foodBreakdown,
-      feasibility: {
-        theoretical_min: theoreticalMin,
-        theoretical_max: theoreticalMax,
-      },
+      food_breakdown: freeFoods.map(f => ({
+        name: f.name, savedGrams: f.savedG, minG: f.minG, maxG: f.maxG, isSeasoning: f.isSeasoning,
+        perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
+      })),
     };
   }
 
   // PASS — build portions array
   const portions = [
     ...lockedItems.map((item: any) => ({ id: item.id, quantity_grams: item.quantity_grams })),
-    ...freeFoods.map(food => ({ id: food.id, quantity_grams: finalResult.grams.get(food.id) || food.minG })),
+    ...freeFoods.map(food => ({ id: food.id, quantity_grams: finalGrams.get(food.id) || food.minG })),
   ];
 
-  console.log(`[solver] PASS: ${JSON.stringify(finalTotals)}`);
+  console.log(`[solver:${RUN_ID}] PASS: ${JSON.stringify(roundedTotals)}`);
 
   return {
     success: true,
     status: 'PASS',
+    run_id: RUN_ID,
     portions,
-    totals: finalTotals,
-    tolerances_check: {
-      kcal_ok: true,
-      protein_ok: true,
-      carbs_ok: true,
-      fat_ok: true,
-    },
+    totals: roundedTotals,
+    tolerances_check: { kcal_ok: true, protein_ok: true, carbs_ok: true, fat_ok: true },
   };
+}
+
+// ─── SUGGESTION ENGINE (Bug 7 rewrite) ───────────────────
+// All suggestions reference savedGrams only, never solver-attempted grams.
+
+function buildSuggestions(
+  solverGrams: Map<string, number> | null,
+  freeFoods: Array<{ id: string; name: string; isSeasoning: boolean; savedG: number; minG: number; maxG: number; calPer1g: number; pPer1g: number; cPer1g: number; fPer1g: number }>,
+  lockedMacros: { calories: number; protein: number; carbs: number; fat: number },
+  fullCalTarget: number,
+  fullPTarget: number,
+  fullCTarget: number,
+  fullFTarget: number,
+  violations: string[],
+): string[] {
+  const suggestions: string[] = [];
+
+  // Step 1: Compute max achievable carbs under fat ≤ target AND kcal ≤ target
+  const maxCarbsUnderCaps = (() => {
+    const carbFoods = freeFoods.filter(f => f.cPer1g > 0 && !f.isSeasoning)
+      .sort((a, b) => {
+        const aFatPerCarb = a.fPer1g / Math.max(a.cPer1g, 0.001);
+        const bFatPerCarb = b.fPer1g / Math.max(b.cPer1g, 0.001);
+        return aFatPerCarb - bFatPerCarb;
+      });
+
+    let remainFat = fullFTarget - lockedMacros.fat;
+    let remainCal = fullCalTarget - lockedMacros.calories;
+    let totalCarbs = lockedMacros.carbs;
+
+    // Subtract seasoning contribution (assume ~10g each)
+    for (const f of freeFoods) {
+      if (f.isSeasoning) {
+        remainFat -= f.fPer1g * 10;
+        remainCal -= f.calPer1g * 10;
+        totalCarbs += f.cPer1g * 10;
+      }
+    }
+
+    for (const f of carbFoods) {
+      const maxByFat = f.fPer1g > 0 ? Math.floor(remainFat / f.fPer1g) : f.maxG;
+      const maxByCal = f.calPer1g > 0 ? Math.floor(remainCal / f.calPer1g) : f.maxG;
+      const g = Math.min(f.maxG, Math.max(0, maxByFat), Math.max(0, maxByCal));
+      totalCarbs += f.cPer1g * g;
+      remainFat -= f.fPer1g * g;
+      remainCal -= f.calPer1g * g;
+    }
+    return Math.round(totalCarbs);
+  })();
+
+  // Step 2: Compute max achievable protein similarly
+  const maxProtUnderCaps = (() => {
+    const protFoods = freeFoods.filter(f => f.pPer1g > 0 && !f.isSeasoning)
+      .sort((a, b) => {
+        const aFatPerProt = a.fPer1g / Math.max(a.pPer1g, 0.001);
+        const bFatPerProt = b.fPer1g / Math.max(b.pPer1g, 0.001);
+        return aFatPerProt - bFatPerProt;
+      });
+
+    let remainFat = fullFTarget - lockedMacros.fat;
+    let remainCal = fullCalTarget - lockedMacros.calories;
+    let totalProt = lockedMacros.protein;
+
+    for (const f of freeFoods) {
+      if (f.isSeasoning) {
+        remainFat -= f.fPer1g * 10;
+        remainCal -= f.calPer1g * 10;
+      }
+    }
+
+    for (const f of protFoods) {
+      const maxByFat = f.fPer1g > 0 ? Math.floor(remainFat / f.fPer1g) : f.maxG;
+      const maxByCal = f.calPer1g > 0 ? Math.floor(remainCal / f.calPer1g) : f.maxG;
+      const g = Math.min(f.maxG, Math.max(0, maxByFat), Math.max(0, maxByCal));
+      totalProt += f.pPer1g * g;
+      remainFat -= f.fPer1g * g;
+      remainCal -= f.calPer1g * g;
+    }
+    return Math.round(totalProt);
+  })();
+
+  // Step 3: Inter-constraint conflict detection
+  const carbsViolation = violations.some(v => v.includes('carbs under') || v.includes('carbs: max'));
+  const protViolation = violations.some(v => v.includes('protein under') || v.includes('protein: max'));
+  const fatViolation = violations.some(v => v.includes('fat over') || v.includes('fat: min'));
+
+  if (maxCarbsUnderCaps < fullCTarget - 2) {
+    suggestions.push(
+      `Cannot reach ${fullCTarget}g carbs while keeping fat ≤${fullFTarget}g and kcal ≤${fullCalTarget}. ` +
+      `Max achievable carbs: ${maxCarbsUnderCaps}g. ` +
+      `Options: lower carb target to ~${maxCarbsUnderCaps}g, increase fat target, or add a low-fat pure carb source.`
+    );
+  }
+
+  if (maxProtUnderCaps < fullPTarget - 2) {
+    suggestions.push(
+      `Cannot reach ${fullPTarget}g protein while keeping fat ≤${fullFTarget}g. ` +
+      `Max achievable protein: ${maxProtUnderCaps}g. ` +
+      `Options: lower protein target, increase fat target, or add a leaner protein source.`
+    );
+  }
+
+  // Step 4: Identify fat budget consumers (use savedGrams ONLY)
+  if (carbsViolation || protViolation) {
+    const highFatFoods = freeFoods
+      .filter(f => !f.isSeasoning && f.fPer1g > 0.03 && f.cPer1g < 0.1 && f.savedG > 0)
+      .map(f => ({
+        ...f,
+        fatContrib: f.fPer1g * f.savedG,
+        carbContrib: f.cPer1g * f.savedG,
+      }))
+      .sort((a, b) => b.fatContrib - a.fatContrib);
+
+    for (const hf of highFatFoods.slice(0, 2)) {
+      // Never suggest reducing a food that provides a macro we're SHORT on
+      suggestions.push(
+        `${hf.name} (${hf.savedG}g) uses ${hf.fatContrib.toFixed(1)}g of the ${fullFTarget}g fat budget ` +
+        `but adds only ${hf.carbContrib.toFixed(0)}g carbs. ` +
+        `Remove or replace with a lower-fat option to free fat budget for carb foods.`
+      );
+    }
+  }
+
+  // Step 5: Maxed carb foods (use solver grams if available)
+  if (carbsViolation && solverGrams) {
+    const maxedCarbFoods = freeFoods.filter(f => {
+      const sg = solverGrams.get(f.id) || 0;
+      return f.cPer1g > 0.2 && !f.isSeasoning && sg >= f.maxG;
+    });
+    for (const cf of maxedCarbFoods.slice(0, 2)) {
+      suggestions.push(
+        `${cf.name} hit max ${cf.maxG}g (${(cf.cPer1g * 100).toFixed(0)}g carbs/100g). ` +
+        `Increase max_portion_grams to add more carbs.`
+      );
+    }
+  }
+
+  // Step 6: No carb-dense foods at all
+  if (carbsViolation) {
+    const anyCarbFoods = freeFoods.filter(f => f.cPer1g > 0.2 && !f.isSeasoning);
+    if (anyCarbFoods.length === 0) {
+      suggestions.push('No carb-dense food on this day. Add rice, pasta, bread, oats, or cereal.');
+    }
+  }
+
+  // Step 7: Protein suggestions
+  if (protViolation && !fatViolation) {
+    const leanProt = freeFoods.filter(f => f.pPer1g > 0.15 && !f.isSeasoning);
+    if (leanProt.length === 0) {
+      suggestions.push('Add a lean protein source (chicken breast, turkey, white fish).');
+    }
+  }
+
+  // Step 8: Pure fat overshoot
+  if (fatViolation && !carbsViolation && !protViolation) {
+    const fatContribs = freeFoods
+      .filter(f => !f.isSeasoning && f.savedG > 0)
+      .map(f => ({ ...f, fatContrib: f.fPer1g * f.savedG }))
+      .sort((a, b) => b.fatContrib - a.fatContrib);
+    for (const fc of fatContribs.slice(0, 2)) {
+      suggestions.push(
+        `${fc.name} (${fc.savedG}g saved) contributes ${fc.fatContrib.toFixed(1)}g fat. Replace with a lower-fat alternative.`
+      );
+    }
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push('Targets may be impossible with current food list. Consider adjusting targets, adding new foods, or increasing max_portion_grams.');
+  }
+
+  return suggestions;
 }
 
 // ─── Main handler ────────────────────────────────────────

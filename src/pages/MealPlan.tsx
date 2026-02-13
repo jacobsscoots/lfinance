@@ -1,7 +1,7 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { WeeklyMealPlanner } from "@/components/mealplan/WeeklyMealPlanner";
 
-const BUILD_SHA = "mp-20260212a";
+const BUILD_SHA = "mp-20260213a";
 
 export default function MealPlan() {
   return (
