@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { format, parse } from "date-fns";
 import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,32 +60,29 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const isToday = format(new Date(), "yyyy-MM-dd") === plan.meal_date;
   const items = plan.items || [];
   const isTargetMode = settings?.mode === "target_based";
-  // Fix: Only disable copy for the actual LAST day in the week array
   const isLastDayOfWeek = weekDates 
     ? plan.meal_date === weekDates[weekDates.length - 1] 
     : date.getDay() === 1;
-  // First day detection for "Copy to Previous"
   const isFirstDayOfWeek = weekDates 
     ? plan.meal_date === weekDates[0] 
     : date.getDay() === 0;
   const hasItems = items.length > 0;
   
-  // Use unified getDailyTargets for single source of truth
   const targets: MacroTotals = getDailyTargets(date, settings, weeklyOverride, previousWeekOverride);
   
-  // Check if there are uncalculated items — ONLY for genuinely fresh items
-  // (all editable items are 0g AND no AI fail has occurred)
+  // Bug 6 fix: Only show uncalculated banner when NO AI fail is active
+  // and items genuinely have 0g (fresh, never-calculated items)
   const hasUncalculatedItems = !aiFailInfo && items.some(item => 
     item.quantity_grams === 0 && item.product?.product_type === "editable"
   );
 
-  // Clear AI fail banner when items change (user modified the day)
-  useEffect(() => {
-    if (aiFailInfo) setAiFailInfo(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length]);
+  // Bug 6 fix: REMOVED the useEffect that cleared aiFailInfo on items.length change.
+  // Instead, aiFailInfo is cleared explicitly in these user-initiated actions:
+  // - handleGenerate()
+  // - handleAiPlan() (already done)
+  // - handleAddItem() (via MealItemMultiSelectDialog onSuccess)
+  // - handleClearDay()
 
-  // If this is a blackout day, show holiday card
   if (isBlackout) {
     return (
       <Card className={cn(
@@ -133,6 +130,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const handleAddItem = (mealType: MealType) => {
     setSelectedMealType(mealType);
     setAddItemOpen(true);
+    setAiFailInfo(null); // Bug 6 fix: clear fail on user action
   };
 
   const handleSetStatus = (mealType: MealType, status: MealStatus) => {
@@ -176,11 +174,13 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   };
 
   const handleClearDay = () => {
+    setAiFailInfo(null); // Bug 6 fix: clear fail on user action
     clearDay.mutate(plan.id);
   };
 
   const handleGenerate = () => {
     if (!settings) return;
+    setAiFailInfo(null); // Bug 6 fix: clear fail on user action
     
     const portioningSettings = {
       minGrams: settings.min_grams_per_item || DEFAULT_PORTIONING_SETTINGS.minGrams,
@@ -228,7 +228,6 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {/* Per-Day Generate Button */}
               {isTargetMode && hasItems && (
                 <>
                   <Button
@@ -312,16 +311,24 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
             </div>
           </CardTitle>
           
-          {/* Macro Summary */}
+          {/* Banner priority: FAIL (red) > Uncalculated (amber) > Normal macros */}
           <div className="mt-2">
           {aiFailInfo?.failed ? (
-              <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 text-center space-y-1">
+              <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 space-y-1.5">
                 <div className="flex items-center justify-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
+                  <AlertTriangle className="h-3 w-3 flex-shrink-0" />
                   <span className="font-medium">AI Plan failed — no changes saved</span>
                 </div>
                 {aiFailInfo.message && (
                   <div className="text-[10px] text-destructive/80">{aiFailInfo.message}</div>
+                )}
+                {/* Bug 7 fix: show suggestions inline, not just as toasts */}
+                {aiFailInfo.suggestions && aiFailInfo.suggestions.length > 0 && (
+                  <ul className="text-[10px] text-destructive/70 space-y-0.5 list-disc pl-3">
+                    {aiFailInfo.suggestions.slice(0, 3).map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
             ) : hasUncalculatedItems && isTargetMode ? (
@@ -452,7 +459,10 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 className="text-destructive"
-                                onClick={() => removeItem.mutate(item.id)}
+                                onClick={() => {
+                                  setAiFailInfo(null); // Bug 6 fix: clear fail on item removal
+                                  removeItem.mutate(item.id);
+                                }}
                               >
                                 Remove
                               </DropdownMenuItem>
