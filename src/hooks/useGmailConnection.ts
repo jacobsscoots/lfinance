@@ -139,7 +139,14 @@ export function useGmailConnection() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["gmail-receipts"] });
       queryClient.invalidateQueries({ queryKey: ["gmail-connection"] });
-      toast.success(`Synced ${data?.receiptsFound || 0} receipts`);
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      const found = data?.receiptsFound || 0;
+      const matched = data?.receiptsMatched || 0;
+      if (found === 0) {
+        toast.info("All receipts are already synced — nothing new to process");
+      } else {
+        toast.success(`Found ${found} receipts, matched ${matched} to transactions`);
+      }
     },
     onError: (error) => {
       toast.error(`Sync failed: ${error.message}`);
