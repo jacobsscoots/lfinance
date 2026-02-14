@@ -162,6 +162,27 @@ export function useNutritionSettings() {
         .single();
       
       if (error) throw error;
+
+      // Sync macros to any active weekly_nutrition_targets rows so the
+      // meal planner immediately reflects the new manual values.
+      // We update protein/carbs/fat but leave per-day calories untouched
+      // (those may be set by zigzag and should be preserved).
+      if (
+        formData.protein_target_grams != null ||
+        formData.carbs_target_grams != null ||
+        formData.fat_target_grams != null
+      ) {
+        const updatePayload: Record<string, unknown> = {};
+        if (formData.protein_target_grams != null) updatePayload.protein_target_grams = formData.protein_target_grams;
+        if (formData.carbs_target_grams != null) updatePayload.carbs_target_grams = formData.carbs_target_grams;
+        if (formData.fat_target_grams != null) updatePayload.fat_target_grams = formData.fat_target_grams;
+
+        await supabase
+          .from("weekly_nutrition_targets")
+          .update(updatePayload)
+          .eq("user_id", user.id);
+      }
+
       return data;
     },
     onSuccess: () => {
