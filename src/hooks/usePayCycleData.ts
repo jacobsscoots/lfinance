@@ -166,11 +166,11 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
       if (!user) return [];
       const { data, error } = await supabase
         .from("birthday_events")
-        .select("person_name, event_month, event_day, budget")
+        .select("person_name, event_month, event_day, budget, card_sent, money_scheduled")
         .eq("user_id", user.id)
         .eq("is_active", true);
       if (error) throw error;
-      return data as Array<{ person_name: string; event_month: number; event_day: number | null; budget: number }>;
+      return data as Array<{ person_name: string; event_month: number; event_day: number | null; budget: number; card_sent: boolean | null; money_scheduled: boolean | null }>;
     },
     enabled: !!user,
   });
