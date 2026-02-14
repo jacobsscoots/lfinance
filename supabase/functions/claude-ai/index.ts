@@ -503,15 +503,17 @@ async function handleMealPlanner(
     return err;
   }
 
-  // ─── MULTI-START COORDINATE DESCENT (v4) ────────────────
-  // Fixes oscillation: tabu set, fast stagnation detection,
-  // multi-step probes, and greedy acceptance.
+  // ─── MULTI-START COORDINATE DESCENT (v5) ────────────────
+  // Full exploration: 20k iterations, 2k stale limit, no early exit on perfect,
+  // collects top candidates for funnel selection.
+
+  type Candidate = { grams: Map<string, number>; totals: { calories: number; protein: number; carbs: number; fat: number }; error: number };
 
   function hashPortions(g: Map<string, number>): string {
     return freeFoods.map(f => g.get(f.id) || 0).join(',');
   }
 
-  function solveFromStart(startGrams: Map<string, number>): { grams: Map<string, number>; totals: any; error: number; iterations: number } {
+  function solveFromStart(startGrams: Map<string, number>): { best: Candidate; candidates: Candidate[]; iterations: number } {
     const grams = new Map(startGrams);
     const nonSeasoningFoods = freeFoods.filter(f => !f.isSeasoning);
     let bestError = Infinity;
@@ -519,13 +521,36 @@ async function handleMealPlanner(
     let bestTotals = computeTotals(grams);
     let staleCount = 0;
 
+    // Collect top candidates (keep sorted, cap at 2000)
+    const candidates: Candidate[] = [];
+    const MAX_CANDIDATES = 2000;
+    let worstCandidateError = Infinity;
+
+    function maybeAddCandidate(g: Map<string, number>, t: { calories: number; protein: number; carbs: number; fat: number }, e: number) {
+      if (candidates.length < MAX_CANDIDATES) {
+        candidates.push({ grams: new Map(g), totals: { ...t }, error: e });
+        if (candidates.length === MAX_CANDIDATES) {
+          candidates.sort((a, b) => a.error - b.error);
+          worstCandidateError = candidates[candidates.length - 1].error;
+        }
+      } else if (e < worstCandidateError) {
+        // Replace worst candidate
+        candidates[candidates.length - 1] = { grams: new Map(g), totals: { ...t }, error: e };
+        candidates.sort((a, b) => a.error - b.error);
+        worstCandidateError = candidates[candidates.length - 1].error;
+      }
+    }
+
     // Tabu set to prevent revisiting recent states
     const tabu = new Set<string>();
-    const MAX_TABU = 200;
+    const MAX_TABU = 400;
 
-    for (let iter = 0; iter < 10000; iter++) {
+    for (let iter = 0; iter < 20000; iter++) {
       const totals = computeTotals(grams);
       const err = computeError(totals);
+
+      // Always collect — no early exit on perfect
+      maybeAddCandidate(grams, totals, err);
 
       if (err < bestError) {
         bestError = err;
@@ -536,17 +561,13 @@ async function handleMealPlanner(
         staleCount++;
       }
 
-      if (meetsAll(totals)) {
-        return { grams: new Map(grams), totals, error: 0, iterations: iter };
-      }
-
-      // Stagnation exit: if no improvement in 1000 iterations, stop
-      if (staleCount > 1000) {
+      // Stagnation exit: if no improvement in 2000 iterations, stop
+      if (staleCount > 2000) {
         break;
       }
 
-      // Perturbation escape every 100 stale iterations
-      if (staleCount > 100 && staleCount % 100 === 0) {
+      // Perturbation escape every 200 stale iterations
+      if (staleCount > 200 && staleCount % 200 === 0) {
         const shuffled = [...nonSeasoningFoods].sort(() => Math.random() - 0.5);
         const numPerturb = Math.min(3, shuffled.length);
         for (let pi = 0; pi < numPerturb; pi++) {
@@ -558,7 +579,7 @@ async function handleMealPlanner(
         continue;
       }
 
-      // Try MULTIPLE step sizes simultaneously: 1g, 2g, 5g, 10g
+      // Try MULTIPLE step sizes simultaneously
       const stepSizes = err < 50 ? [1, 2] : err < 200 ? [1, 2, 5] : [1, 5, 10, 20];
 
       let bestFoodIdx = -1;
@@ -618,7 +639,46 @@ async function handleMealPlanner(
       grams.set(chosenFood.id, bestNewG);
     }
 
-    return { grams: bestGrams, totals: bestTotals, error: bestError, iterations: 10000 };
+    return { best: { grams: bestGrams, totals: bestTotals, error: bestError }, candidates, iterations: 20000 };
+  }
+
+  // ─── FUNNEL SELECTION ──────────────────────────────────
+  // Stage 1: Top 2000 by lowest error (collected during solve)
+  // Stage 2: Top 50 with macros in overshoot band (+2 to +5g)
+  // Stage 3: Pick lowest calorie overshoot from those 50
+
+  function funnelSelect(allCandidates: Candidate[]): Candidate {
+    // Stage 1: already sorted by error, take top 2000
+    allCandidates.sort((a, b) => a.error - b.error);
+    const top2000 = allCandidates.slice(0, 2000);
+
+    // Stage 2: filter to those meeting macro overshoot bands (+2 to +5g)
+    const macroFiltered = top2000.filter(c => {
+      const t = c.totals;
+      return (
+        t.protein >= fullPTarget + OVERSHOOT_MIN && t.protein <= fullPTarget + 5 &&
+        t.carbs >= fullCTarget + OVERSHOOT_MIN && t.carbs <= fullCTarget + 5 &&
+        t.fat >= fullFTarget + OVERSHOOT_MIN && t.fat <= fullFTarget + 5
+      );
+    });
+
+    // If no candidates meet strict macro bands, relax to top 50 by error
+    const stage2 = macroFiltered.length > 0 ? macroFiltered.slice(0, 50) : top2000.slice(0, 50);
+
+    // Stage 3: pick lowest calorie overshoot (closest to target without going under)
+    stage2.sort((a, b) => {
+      const aOver = a.totals.calories - fullCalTarget;
+      const bOver = b.totals.calories - fullCalTarget;
+      // Prefer in-band (0 to +50), then closest to 0
+      const aInBand = aOver >= 0 && aOver <= 50;
+      const bInBand = bOver >= 0 && bOver <= 50;
+      if (aInBand && !bInBand) return -1;
+      if (!aInBand && bInBand) return 1;
+      if (aInBand && bInBand) return aOver - bOver; // both in band, pick lower overshoot
+      return Math.abs(aOver) - Math.abs(bOver); // both out of band, pick closer
+    });
+
+    return stage2[0];
   }
 
   // ─── GENERATE STARTING POINTS ──────────────────────────
@@ -678,6 +738,20 @@ async function handleMealPlanner(
       protHeavy.set(sortedByProt[i].id, sortedByProt[i].maxG);
     }
     starts.push(protHeavy);
+
+    // Start 6 & 7: random starts for diversity
+    for (let r = 0; r < 2; r++) {
+      const rand = new Map<string, number>();
+      for (const food of freeFoods) {
+        if (food.isSeasoning) {
+          rand.set(food.id, Math.min(5 + Math.round(Math.random() * 10), food.maxG));
+        } else {
+          const range = food.maxG - food.minG;
+          rand.set(food.id, food.minG + Math.round(Math.random() * range));
+        }
+      }
+      starts.push(rand);
+    }
 
     return starts;
   }
@@ -781,16 +855,18 @@ Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions o
   const starts = generateStarts();
   starts.push(aiStartGrams);
 
-  let bestResult = { grams: new Map<string, number>(), totals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, error: Infinity, iterations: 0 };
+  const allCandidates: Candidate[] = [];
 
   for (let si = 0; si < starts.length; si++) {
     const result = solveFromStart(starts[si]);
-    console.log(`[solver:${RUN_ID}] start ${si}: error=${result.error.toFixed(1)} iters=${result.iterations} totals=${JSON.stringify({ cal: Math.round(result.totals.calories), p: Math.round(result.totals.protein * 10) / 10, c: Math.round(result.totals.carbs * 10) / 10, f: Math.round(result.totals.fat * 10) / 10 })}`);
-    if (result.error < bestResult.error) {
-      bestResult = result;
-    }
-    if (result.error === 0) break;
+    console.log(`[solver:${RUN_ID}] start ${si}: bestError=${result.best.error.toFixed(1)} candidates=${result.candidates.length} totals=${JSON.stringify({ cal: Math.round(result.best.totals.calories), p: Math.round(result.best.totals.protein * 10) / 10, c: Math.round(result.best.totals.carbs * 10) / 10, f: Math.round(result.best.totals.fat * 10) / 10 })}`);
+    allCandidates.push(...result.candidates);
   }
+
+  // ─── FUNNEL SELECTION: 20k → 2000 → 50 → 1 ────────────
+  console.log(`[solver:${RUN_ID}] Total candidates collected: ${allCandidates.length}`);
+  const bestResult = funnelSelect(allCandidates);
+  console.log(`[solver:${RUN_ID}] Funnel winner: error=${bestResult.error.toFixed(1)} totals=${JSON.stringify({ cal: Math.round(bestResult.totals.calories), p: Math.round(bestResult.totals.protein * 10) / 10, c: Math.round(bestResult.totals.carbs * 10) / 10, f: Math.round(bestResult.totals.fat * 10) / 10 })}`);
 
   // ─── ROUNDING (Bug 3 fix: fine-tune after rounding) ────
 
@@ -809,9 +885,9 @@ Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions o
   let finalOk = meetsAll(finalTotals);
 
   if (!finalOk) {
-    // Fine-tune from 5g-rounded state with 1g steps (200 extra iterations)
+    // Fine-tune from 5g-rounded state
     const fineResult = solveFromStart(finalGrams);
-    finalGrams = roundGrams(fineResult.grams, 5);
+    finalGrams = roundGrams(fineResult.best.grams, 5);
     finalTotals = computeTotals(finalGrams);
     finalOk = meetsAll(finalTotals);
   }
@@ -825,7 +901,7 @@ Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions o
     if (!finalOk) {
       // One more fine-tune pass
       const fineResult2 = solveFromStart(finalGrams);
-      finalGrams = fineResult2.grams;
+      finalGrams = fineResult2.best.grams;
       finalTotals = computeTotals(finalGrams);
       finalOk = meetsAll(finalTotals);
     }
