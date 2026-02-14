@@ -154,8 +154,8 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
 
   return (
     <>
-      <div className="group flex items-center justify-between p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+       <div className="group flex items-center gap-2 p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow overflow-hidden">
+        <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
           <div
             className={cn(
               "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
@@ -170,7 +170,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
               <ArrowUpRight className="h-5 w-5 text-destructive" />
             )}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center gap-2">
               <p className="font-medium text-sm truncate">{transaction.description}</p>
               {hasReceipt && (
@@ -197,7 +197,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
                     >
                       <Badge variant="secondary" className="text-xs py-0 gap-1 bg-success/10 text-success border-success/30 cursor-pointer hover:bg-success/20 transition-colors">
                         <Mail className="h-3 w-3" />
-                        View receipt
+                        <span className="hidden sm:inline">View receipt</span>
                       </Badge>
                     </button>
                   </TooltipTrigger>
@@ -208,7 +208,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
               )}
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-              {transaction.merchant && <span>{transaction.merchant}</span>}
+              {transaction.merchant && <span className="truncate max-w-[120px] sm:max-w-none">{transaction.merchant}</span>}
               {appleTag && (
                 <Badge variant="secondary" className="text-xs py-0 gap-1 bg-muted">
                   <Apple className="h-3 w-3" />
@@ -260,7 +260,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span
             className={cn(
               "font-semibold whitespace-nowrap",
