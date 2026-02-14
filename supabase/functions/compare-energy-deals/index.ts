@@ -38,6 +38,15 @@ interface TariffComparison {
   source: string;
   features?: Record<string, any>;
   websiteUrl?: string;
+  requiresEquipment?: string[];
+}
+
+interface EnergyProfile {
+  has_heat_pump: boolean;
+  has_electric_boiler: boolean;
+  has_ev: boolean;
+  has_solar: boolean;
+  ownership_type: string | null;
 }
 
 // Provider website URLs
@@ -70,19 +79,77 @@ const PROVIDER_URLS: Record<string, string> = {
   'Lebara': 'https://www.lebara.co.uk/sim-only',
 };
 
+// Tariff eligibility requirements
+const TARIFF_REQUIREMENTS: Record<string, { requires: string[]; description: string }> = {
+  'Cosy Octopus': {
+    requires: ['heat_pump_or_electric_boiler'],
+    description: 'Requires a heat pump or electric boiler',
+  },
+  'Octopus Go': {
+    requires: ['ev'],
+    description: 'Designed for EV owners',
+  },
+  'Intelligent Octopus Go': {
+    requires: ['ev'],
+    description: 'Requires a compatible EV or charger',
+  },
+  'Octopus Flux': {
+    requires: ['solar'],
+    description: 'Requires solar panels with battery storage',
+  },
+};
+
+function isEligibleForTariff(planName: string, profile: EnergyProfile | null): { eligible: boolean; reason?: string } {
+  if (!profile) return { eligible: true }; // Can't filter without profile
+
+  for (const [tariffPattern, req] of Object.entries(TARIFF_REQUIREMENTS)) {
+    if (!planName.toLowerCase().includes(tariffPattern.toLowerCase())) continue;
+
+    for (const requirement of req.requires) {
+      switch (requirement) {
+        case 'heat_pump_or_electric_boiler':
+          if (!profile.has_heat_pump && !profile.has_electric_boiler) {
+            return { eligible: false, reason: req.description };
+          }
+          break;
+        case 'ev':
+          if (!profile.has_ev) {
+            return { eligible: false, reason: req.description };
+          }
+          break;
+        case 'solar':
+          if (!profile.has_solar) {
+            return { eligible: false, reason: req.description };
+          }
+          break;
+      }
+    }
+  }
+
+  return { eligible: true };
+}
+
 // Market data for different service types (updated Feb 2026)
 const BROADBAND_PLANS = [
   { provider: 'BT', planName: 'Fibre Essential', speed: 36, monthlyCost: 28.99, contract: 24, source: 'market_estimate' },
   { provider: 'BT', planName: 'Full Fibre 100', speed: 100, monthlyCost: 32.99, contract: 24, source: 'market_estimate' },
+  { provider: 'BT', planName: 'Full Fibre 300', speed: 300, monthlyCost: 39.99, contract: 24, source: 'market_estimate' },
+  { provider: 'BT', planName: 'Full Fibre 500', speed: 500, monthlyCost: 44.99, contract: 24, source: 'market_estimate' },
   { provider: 'Sky', planName: 'Superfast', speed: 59, monthlyCost: 27.00, contract: 18, source: 'market_estimate' },
   { provider: 'Sky', planName: 'Ultrafast', speed: 145, monthlyCost: 33.00, contract: 18, source: 'market_estimate' },
+  { provider: 'Sky', planName: 'Gigafast', speed: 900, monthlyCost: 48.00, contract: 18, source: 'market_estimate' },
   { provider: 'Virgin Media', planName: 'M125', speed: 132, monthlyCost: 28.00, contract: 18, source: 'market_estimate' },
   { provider: 'Virgin Media', planName: 'M250', speed: 264, monthlyCost: 33.00, contract: 18, source: 'market_estimate' },
+  { provider: 'Virgin Media', planName: 'M500', speed: 516, monthlyCost: 38.00, contract: 18, source: 'market_estimate' },
+  { provider: 'Virgin Media', planName: 'Gig1', speed: 1130, monthlyCost: 46.00, contract: 18, source: 'market_estimate' },
   { provider: 'Vodafone', planName: 'Superfast 1', speed: 38, monthlyCost: 25.00, contract: 24, source: 'market_estimate' },
   { provider: 'Vodafone', planName: 'Pro Xtra', speed: 900, monthlyCost: 42.00, contract: 24, source: 'market_estimate' },
   { provider: 'Plusnet', planName: 'Unlimited Fibre', speed: 36, monthlyCost: 24.99, contract: 24, source: 'market_estimate' },
+  { provider: 'Plusnet', planName: 'Full Fibre 300', speed: 300, monthlyCost: 32.99, contract: 24, source: 'market_estimate' },
   { provider: 'TalkTalk', planName: 'Fibre 35', speed: 38, monthlyCost: 24.95, contract: 18, source: 'market_estimate' },
+  { provider: 'TalkTalk', planName: 'Fibre 500', speed: 500, monthlyCost: 36.00, contract: 18, source: 'market_estimate' },
   { provider: 'NOW Broadband', planName: 'Super Fibre', speed: 63, monthlyCost: 24.00, contract: 0, source: 'market_estimate' },
+  { provider: 'NOW Broadband', planName: 'Fab Fibre', speed: 36, monthlyCost: 18.00, contract: 0, source: 'market_estimate' },
   { provider: 'Shell Energy', planName: 'Superfast Fibre', speed: 38, monthlyCost: 24.99, contract: 18, source: 'market_estimate' },
 ];
 
@@ -122,7 +189,8 @@ async function scanEnergyDeals(
   annualConsumptionKwh: number,
   currentTariff: { unitRate: number; standingCharge: number } | undefined,
   savingsThreshold: number,
-  riskPreference: string
+  riskPreference: string,
+  energyProfile: EnergyProfile | null,
 ): Promise<TariffComparison[]> {
   const dailyKwh = annualConsumptionKwh / 365;
   const comparisons: TariffComparison[] = [];
@@ -137,7 +205,16 @@ async function scanEnergyDeals(
     if (productsResponse.ok) {
       const products = await productsResponse.json();
       
-      for (const product of products.results?.slice(0, 3) || []) {
+      for (const product of products.results?.slice(0, 5) || []) {
+        const displayName = product.display_name || product.code;
+
+        // Check eligibility based on energy profile
+        const eligibility = isEligibleForTariff(displayName, energyProfile);
+        if (!eligibility.eligible) {
+          console.log(`Skipping ${displayName}: ${eligibility.reason}`);
+          continue;
+        }
+
         try {
           const ratesResponse = await fetch(
             `${OCTOPUS_API_BASE}/products/${product.code}/electricity-tariffs/E-1R-${product.code}-C/standard-unit-rates/`,
@@ -162,7 +239,7 @@ async function scanEnergyDeals(
 
             comparisons.push({
               provider: 'Octopus Energy',
-              planName: product.display_name || product.code,
+              planName: displayName,
               monthlyCost: Math.round(monthlyCost * 100) / 100,
               annualCost: Math.round(annualCost * 100) / 100,
               savings: 0, // calculated later
@@ -182,8 +259,14 @@ async function scanEnergyDeals(
     console.log('Octopus API error, using fallback rates:', e);
   }
 
-  // Add market estimate rates
+  // Add market estimate rates (also filter for eligibility)
   for (const rate of ENERGY_RATES) {
+    const eligibility = isEligibleForTariff(rate.planName, energyProfile);
+    if (!eligibility.eligible) {
+      console.log(`Skipping ${rate.planName}: ${eligibility.reason}`);
+      continue;
+    }
+
     const dailyCost = (dailyKwh * rate.unitRate / 100) + (rate.standingCharge / 100);
     const monthlyCost = dailyCost * 30;
     const annualCost = dailyCost * 365;
@@ -246,8 +329,12 @@ function scanBroadbandDeals(
 
   return BROADBAND_PLANS
     .filter(plan => {
-      // Filter out plans slower than current speed if specified
-      if (currentSpeedMbps && plan.speed < currentSpeedMbps) return false;
+      // CRITICAL: Only show plans with same or better speed
+      if (currentSpeedMbps && currentSpeedMbps > 0) {
+        // Allow plans within 80% of current speed (minor speed differences are acceptable)
+        const minAcceptableSpeed = currentSpeedMbps * 0.8;
+        if (plan.speed < minAcceptableSpeed) return false;
+      }
       return true;
     })
     .map(plan => {
@@ -364,7 +451,7 @@ serve(async (req) => {
       preferredContractMonths,
     } = parseResult.data;
 
-    console.log(`Scanning ${serviceType} deals for user ${user.id}, serviceId: ${serviceId}, postcode: ${postcode}`);
+    console.log(`Scanning ${serviceType} deals for user ${user.id}, serviceId: ${serviceId}, postcode: ${postcode}, speed: ${currentSpeedMbps}`);
 
     // Get user settings
     const { data: settings } = await supabase
@@ -388,6 +475,21 @@ serve(async (req) => {
         }, { onConflict: 'user_id' });
     }
 
+    // Fetch energy profile for eligibility filtering
+    let energyProfile: EnergyProfile | null = null;
+    if (serviceType === 'energy') {
+      const { data: profileData } = await supabase
+        .from('energy_profiles')
+        .select('has_heat_pump, has_electric_boiler, has_ev, has_solar, ownership_type')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (profileData) {
+        energyProfile = profileData as EnergyProfile;
+        console.log(`Energy profile: heat_pump=${energyProfile.has_heat_pump}, electric_boiler=${energyProfile.has_electric_boiler}, ev=${energyProfile.has_ev}, solar=${energyProfile.has_solar}`);
+      }
+    }
+
     let comparisons: TariffComparison[] = [];
 
     switch (serviceType) {
@@ -398,7 +500,8 @@ serve(async (req) => {
           annualConsumptionKwh,
           currentTariff,
           savingsThreshold,
-          riskPreference
+          riskPreference,
+          energyProfile,
         );
         break;
       case 'broadband':
