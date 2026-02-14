@@ -37,7 +37,7 @@ const productSchema = z.object({
   // Pricing
   price: z.coerce.number().min(0),
   offer_price: z.coerce.number().min(0).optional().nullable(),
-  offer_label: z.string().max(50).optional().nullable(),
+  offer_label: z.string().max(200).optional().nullable(),
   pack_size_grams: z.coerce.number().min(0).nullable().optional(),
   retailer: z.string().optional().nullable(),
   // Serving basis
