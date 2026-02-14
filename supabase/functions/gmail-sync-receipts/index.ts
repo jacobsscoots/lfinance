@@ -279,12 +279,13 @@ serve(async (req) => {
     }
 
     // --- Auto-matching ---
-    console.log(`[match] Looking for pending receipts for user ${user.id}`);
+    // Include receipts that are 'pending' OR 'matched' but missing a matched_transaction_id (stale matches)
+    console.log(`[match] Looking for pending/unlinked receipts for user ${user.id}`);
     const { data: pendingReceipts, error: pendingError } = await supabase
       .from('gmail_receipts')
       .select('*')
       .eq('user_id', user.id)
-      .eq('match_status', 'pending');
+      .or('match_status.eq.pending,and(match_status.eq.matched,matched_transaction_id.is.null)');
 
     console.log(`[match] Found ${pendingReceipts?.length ?? 0} pending receipts, error: ${pendingError?.message ?? 'none'}`);
     if (pendingReceipts && pendingReceipts.length > 0) {
