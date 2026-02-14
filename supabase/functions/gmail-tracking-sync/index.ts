@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
 
         // Build search query for shipping emails
         const afterDate = new Date();
-        afterDate.setDate(afterDate.getDate() - 14); // Look back 14 days
+        afterDate.setDate(afterDate.getDate() - 30); // Look back 30 days
         const afterStr = afterDate.toISOString().split("T")[0].replace(/-/g, "/");
 
         const subjectTerms = SHIPPING_KEYWORDS.map((k) => `subject:${k}`).join(" OR ");
