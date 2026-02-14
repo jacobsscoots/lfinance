@@ -190,7 +190,8 @@ export function buildDailySpendingData(
  */
 export function generateAlerts(
   metrics: PayCycleMetrics,
-  upcomingBills: Array<{ name: string; amount: number; dueDate: Date }>
+  upcomingBills: Array<{ name: string; amount: number; dueDate: Date }>,
+  birthdayEvents?: Array<{ person_name: string; event_month: number; event_day: number | null; budget: number }>,
 ): Alert[] {
   const alerts: Alert[] = [];
   
@@ -282,6 +283,40 @@ export function generateAlerts(
       message: `£${bill.amount.toFixed(2)} payment coming up.`,
     });
   });
+  
+  // Upcoming birthday / occasion alerts (within 7 days)
+  if (birthdayEvents?.length) {
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentDay = today.getDate();
+
+    for (const ev of birthdayEvents) {
+      const m = ev.event_month;
+      const d = ev.event_day ?? 1;
+
+      // Calculate days until this event (wrapping around year boundary)
+      let targetDate = new Date(today.getFullYear(), m - 1, d);
+      if (targetDate < today && differenceInDays(today, targetDate) > 0) {
+        targetDate = new Date(today.getFullYear() + 1, m - 1, d);
+      }
+      const daysUntil = differenceInDays(targetDate, today);
+
+      if (daysUntil >= 0 && daysUntil <= 7) {
+        const when = daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`;
+        const budgetNote = ev.budget > 0 ? ` (£${ev.budget} budgeted)` : "";
+        alerts.push({
+          id: `birthday-${ev.person_name}`,
+          type: daysUntil <= 2 ? "warning" : "info",
+          title: `🎂 ${ev.person_name}'s birthday ${when}`,
+          message: `${d} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m - 1]}${budgetNote}`,
+          action: daysUntil <= 2 ? {
+            label: "Check gifts",
+            description: "Make sure card and gift are ready",
+          } : undefined,
+        });
+      }
+    }
+  }
   
   return alerts;
 }
