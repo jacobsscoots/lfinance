@@ -163,6 +163,11 @@
   }
 }
 
+/* Remove mobile tap highlight that causes purple flash on interactive elements */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Themed scrollbar for the entire app */
 * {
   scrollbar-width: thin;
