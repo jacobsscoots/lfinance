@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useMemo, useCallback } from "react";
 
 export interface CellOverride {
   id: string;
@@ -33,24 +34,26 @@ export function useYearlyCellOverrides(year: number) {
     enabled: !!user,
   });
 
-  // Build a lookup map: `${rowKey}:${month}` -> amount
-  const overrideMap = new Map<string, number>();
-  cellOverrides.forEach(o => {
-    overrideMap.set(`${o.row_key}:${o.month}`, o.amount);
-  });
+  // Build a stable lookup map
+  const overrideMap = useMemo(() => {
+    const m = new Map<string, number>();
+    cellOverrides.forEach(o => {
+      m.set(`${o.row_key}:${o.month}`, o.amount);
+    });
+    return m;
+  }, [cellOverrides]);
 
-  const getOverride = (rowKey: string, month: number): number | undefined => {
+  const getOverride = useCallback((rowKey: string, month: number): number | undefined => {
     return overrideMap.get(`${rowKey}:${month}`);
-  };
+  }, [overrideMap]);
 
-  const hasOverride = (rowKey: string, month: number): boolean => {
+  const hasOverride = useCallback((rowKey: string, month: number): boolean => {
     return overrideMap.has(`${rowKey}:${month}`);
-  };
+  }, [overrideMap]);
 
   const upsertOverride = useMutation({
     mutationFn: async (data: { month: number; rowKey: string; amount: number }) => {
       if (!user) throw new Error("Not authenticated");
-      // Check if override exists
       const existing = cellOverrides.find(
         o => o.month === data.month && o.row_key === data.rowKey
       );
@@ -73,7 +76,36 @@ export function useYearlyCellOverrides(year: number) {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    // Optimistic update so totals recalculate immediately
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<CellOverride[]>(queryKey);
+      queryClient.setQueryData<CellOverride[]>(queryKey, (old = []) => {
+        const idx = old.findIndex(o => o.month === data.month && o.row_key === data.rowKey);
+        if (idx >= 0) {
+          const updated = [...old];
+          updated[idx] = { ...updated[idx], amount: data.amount };
+          return updated;
+        }
+        return [...old, {
+          id: `temp-${Date.now()}`,
+          user_id: "",
+          year,
+          month: data.month,
+          row_key: data.rowKey,
+          amount: data.amount,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }];
+      });
+      return { previous };
+    },
+    onError: (_err, _data, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
     },
   });
@@ -90,7 +122,20 @@ export function useYearlyCellOverrides(year: number) {
         .eq("row_key", data.rowKey);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<CellOverride[]>(queryKey);
+      queryClient.setQueryData<CellOverride[]>(queryKey, (old = []) =>
+        old.filter(o => !(o.month === data.month && o.row_key === data.rowKey))
+      );
+      return { previous };
+    },
+    onError: (_err, _data, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
     },
   });
