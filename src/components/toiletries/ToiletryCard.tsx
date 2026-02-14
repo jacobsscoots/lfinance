@@ -1,4 +1,5 @@
 import { MoreVertical, RefreshCw, Pencil, Trash2 } from "lucide-react";
+import { ToiletryImage } from "./ToiletryImage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export function ToiletryCard({ item, forecast, onEdit, onDelete, onRestock }: To
           {/* Thumbnail */}
           {item.image_url && (
             <div className="h-12 w-12 rounded-lg overflow-hidden border border-border shrink-0">
-              <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+              <ToiletryImage imageUrl={item.image_url} alt={item.name} />
             </div>
           )}
           <div className="flex-1 min-w-0">
