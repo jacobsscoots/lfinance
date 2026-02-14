@@ -24,11 +24,14 @@ export function useNetWorthData(): { data: NetWorthBreakdown; isLoading: boolean
 
   const data = useMemo<NetWorthBreakdown>(() => {
     // Bank accounts
-    const bankAccounts = (visibleAccounts ?? []).map((a) => ({
-      name: a.display_name || a.name,
-      balance: Number(a.balance),
-      type: a.account_type || "current",
-    }));
+    // Bank accounts — exclude credit accounts (they appear under liabilities via debts)
+    const bankAccounts = (visibleAccounts ?? [])
+      .filter((a) => a.account_type !== "credit")
+      .map((a) => ({
+        name: a.display_name || a.name,
+        balance: Number(a.balance),
+        type: a.account_type || "current",
+      }));
     const bankTotal = bankAccounts.reduce((s, a) => s + a.balance, 0);
 
     // Investments — use latest valuation per account
