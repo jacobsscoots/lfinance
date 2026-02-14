@@ -34,6 +34,7 @@ interface DetailedYearlyTableProps {
   hasOverride?: (rowKey: string, month: number) => boolean;
   onCellEdit?: (rowKey: string, month: number, amount: number) => void;
   onCellReset?: (rowKey: string, month: number) => void;
+  onMonthHeaderClick?: (month: number) => void;
 }
 
 function fmt(n: number) {
@@ -163,6 +164,7 @@ export function DetailedYearlyTable({
   hasOverride: hasOverrideFn,
   onCellEdit,
   onCellReset,
+  onMonthHeaderClick,
 }: DetailedYearlyTableProps) {
   const activeBills = useMemo(() => bills.filter(b => b.is_active), [bills]);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
@@ -344,7 +346,12 @@ export function DetailedYearlyTable({
             <tr className="border-b border-border">
               <th className={cn(labelClass, "bg-card")}>Category</th>
               {months.map((m) => (
-                <th key={m.month} className={cn(headerClass, m.isPast && "text-muted-foreground")}>
+                <th
+                  key={m.month}
+                  className={cn(headerClass, m.isPast && "text-muted-foreground", onMonthHeaderClick && "cursor-pointer hover:text-primary transition-colors")}
+                  onClick={() => onMonthHeaderClick?.(m.month)}
+                  title="Click for account breakdown"
+                >
                   {MONTH_FULL[m.month].substring(0, 3)}
                   {m.isPast ? (
                     <span className="block text-[9px] text-muted-foreground">Actual</span>
