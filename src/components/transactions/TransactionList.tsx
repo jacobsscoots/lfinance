@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
       if (!user) return [];
       const { data } = await supabase
         .from("gmail_receipts")
-        .select("matched_transaction_id, merchant_name, amount, match_confidence")
+        .select("matched_transaction_id, merchant_name, amount, match_confidence, subject, from_email, received_at, order_reference")
         .eq("user_id", user.id)
         .eq("match_status", "matched")
         .not("matched_transaction_id", "is", null);
@@ -114,11 +115,12 @@ interface TransactionRowProps {
   transaction: Transaction;
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
-  gmailReceipt: { merchant_name: string | null; amount: number | null; match_confidence: string | null } | null;
+  gmailReceipt: { merchant_name: string | null; amount: number | null; match_confidence: string | null; subject: string | null; from_email: string | null; received_at: string | null; order_reference: string | null } | null;
 }
 
 function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: TransactionRowProps) {
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+  const [gmailReceiptOpen, setGmailReceiptOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   
@@ -189,13 +191,18 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
               {hasGmailReceipt && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="secondary" className="text-xs py-0 gap-1 bg-success/10 text-success border-success/30">
-                      <Mail className="h-3 w-3" />
-                      Gmail receipt
-                    </Badge>
+                    <button
+                      onClick={() => setGmailReceiptOpen(true)}
+                      className="shrink-0"
+                    >
+                      <Badge variant="secondary" className="text-xs py-0 gap-1 bg-success/10 text-success border-success/30 cursor-pointer hover:bg-success/20 transition-colors">
+                        <Mail className="h-3 w-3" />
+                        View receipt
+                      </Badge>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Matched from Gmail ({gmailReceipt.match_confidence} confidence)</p>
+                    <p>Click to view Gmail receipt details ({gmailReceipt.match_confidence} confidence)</p>
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -320,6 +327,71 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
         onOpenChange={setLinkDialogOpen}
         transaction={transaction}
       />
+
+      {hasGmailReceipt && gmailReceipt && (
+        <Dialog open={gmailReceiptOpen} onOpenChange={setGmailReceiptOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader className="pr-8">
+              <DialogTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-success" />
+                Gmail Receipt
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-start">
+                  <span className="text-muted-foreground">Merchant</span>
+                  <span className="font-medium text-right">{gmailReceipt.merchant_name || "Unknown"}</span>
+                </div>
+                {gmailReceipt.amount != null && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span className="font-medium">£{gmailReceipt.amount.toFixed(2)}</span>
+                  </div>
+                )}
+                {gmailReceipt.subject && (
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="text-muted-foreground shrink-0">Subject</span>
+                    <span className="font-medium text-right truncate">{gmailReceipt.subject}</span>
+                  </div>
+                )}
+                {gmailReceipt.from_email && (
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="text-muted-foreground shrink-0">From</span>
+                    <span className="font-medium text-right truncate text-xs">{gmailReceipt.from_email}</span>
+                  </div>
+                )}
+                {gmailReceipt.order_reference && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-muted-foreground">Order ref</span>
+                    <span className="font-mono text-xs">{gmailReceipt.order_reference}</span>
+                  </div>
+                )}
+                {gmailReceipt.received_at && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-muted-foreground">Received</span>
+                    <span className="font-medium">{format(new Date(gmailReceipt.received_at), "d MMM yyyy, HH:mm")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-start">
+                  <span className="text-muted-foreground">Confidence</span>
+                  <Badge 
+                    variant="outline" 
+                    className={cn(
+                      "text-xs",
+                      gmailReceipt.match_confidence === "high" && "border-success/50 text-success",
+                      gmailReceipt.match_confidence === "medium" && "border-warning/50 text-warning",
+                      gmailReceipt.match_confidence === "low" && "border-destructive/50 text-destructive",
+                    )}
+                  >
+                    {gmailReceipt.match_confidence}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
