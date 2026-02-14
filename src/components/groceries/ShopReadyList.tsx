@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { useProducts } from "@/hooks/useProducts";
 import { generateShopReadyList, ShopReadyList } from "@/lib/groceryListCalculations";
-import { DiscountType, getDefaultRetailerDiscount } from "@/lib/discounts";
+import { DiscountType } from "@/lib/discounts";
 import { RetailerSection } from "./RetailerSection";
 
 export function ShopReadyListView() {

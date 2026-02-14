@@ -2,7 +2,6 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Store, Tag, Percent } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RetailerGroup, ShopReadyItem } from "@/lib/groceryListCalculations";
 import { DiscountType, getRetailerDiscountOptions, getDefaultRetailerDiscount } from "@/lib/discounts";
 
@@ -23,11 +22,19 @@ const RETAILER_COLORS: Record<string, string> = {
   Unassigned: "bg-muted text-muted-foreground border-border",
 };
 
+const DISCOUNT_LABELS: Record<string, string> = {
+  tesco_benefits: "Benefits on Tap (4%)",
+  easysaver: "EasySaver Card (7%)",
+  rewardgateway: "RewardGateway (10%)",
+  clubcard: "Clubcard Prices",
+  none: "",
+  other: "",
+};
+
 export function RetailerSection({ group, onDiscountChange }: RetailerSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
-  const discountOptions = getRetailerDiscountOptions(group.retailer);
-  const hasDiscountOptions = discountOptions.length > 1;
   const colorClass = RETAILER_COLORS[group.retailer] ?? "bg-primary/10 text-primary border-primary/20";
+  const discountLabel = DISCOUNT_LABELS[group.discountType] ?? "";
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="rounded-xl border shadow-sm overflow-hidden">
@@ -42,10 +49,10 @@ export function RetailerSection({ group, onDiscountChange }: RetailerSectionProp
               <Badge variant="secondary" className="text-xs">
                 {group.items.length} {group.items.length === 1 ? "item" : "items"}
               </Badge>
-              {group.discountType !== "none" && (
+              {discountLabel && (
                 <Badge variant="outline" className="text-xs text-primary border-primary/30">
                   <Percent className="h-3 w-3 mr-1" />
-                  {discountOptions.find(o => o.value === group.discountType)?.label ?? group.discountType}
+                  {discountLabel}
                 </Badge>
               )}
             </div>
@@ -66,29 +73,6 @@ export function RetailerSection({ group, onDiscountChange }: RetailerSectionProp
       
       <CollapsibleContent>
         <div className="border-t">
-          {/* Discount selector - only show if retailer has options */}
-          {hasDiscountOptions && (
-            <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b">
-              <span className="text-sm text-muted-foreground flex items-center gap-2">
-                <Tag className="h-3.5 w-3.5" />
-                Loyalty discount
-              </span>
-              <Select
-                value={group.discountType}
-                onValueChange={(value) => onDiscountChange(group.retailer, value as DiscountType)}
-              >
-                <SelectTrigger className="w-52 h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {discountOptions.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
           {/* Items list */}
           <div className="p-3 space-y-1.5">
             {group.items.map((item) => (
@@ -115,7 +99,7 @@ function RetailerItemRow({ item }: { item: ShopReadyItem }) {
             </Badge>
           )}
           {item.multiBuyOffer && (
-            <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 shrink-0">
+            <Badge variant="outline" className="text-xs shrink-0" style={{ color: "hsl(var(--chart-4))", borderColor: "hsl(var(--chart-4) / 0.3)" }}>
               {item.multiBuyOffer.offerLabel}
             </Badge>
           )}

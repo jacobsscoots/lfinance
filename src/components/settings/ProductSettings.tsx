@@ -601,16 +601,64 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
               {/* Pricing & Retailer */}
               <div className="space-y-4">
                 <h4 className="font-medium text-sm">Pricing</h4>
+                <FormField
+                  control={form.control}
+                  name="retailer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Retailer</FormLabel>
+                      <Select
+                        onValueChange={(value) =>
+                          field.onChange(value === "__none__" ? "" : value)
+                        }
+                        value={field.value || "__none__"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select retailer..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__none__">None</SelectItem>
+                          <SelectItem value="Tesco">Tesco</SelectItem>
+                          <SelectItem value="Sainsbury's">Sainsbury's</SelectItem>
+                          <SelectItem value="ASDA">ASDA</SelectItem>
+                          <SelectItem value="Morrisons">Morrisons</SelectItem>
+                          <SelectItem value="Aldi">Aldi</SelectItem>
+                          <SelectItem value="Lidl">Lidl</SelectItem>
+                          <SelectItem value="Iceland">Iceland</SelectItem>
+                          <SelectItem value="MyProtein">MyProtein</SelectItem>
+                          <SelectItem value="Amazon">Amazon</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {field.value === "Tesco" 
+                          ? "Benefits on Tap (4%) applied automatically at basket level"
+                          : field.value === "Iceland"
+                          ? "EasySaver Card (7%) applied automatically at basket level"
+                          : field.value === "MyProtein"
+                          ? "RewardGateway (10%) applied automatically at basket level"
+                          : "Used for grouping in grocery shop list"}
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="price"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price (£)</FormLabel>
+                        <FormLabel>
+                          {form.watch("retailer") === "Tesco" ? "Regular Price (£)" : "Price (£)"}
+                        </FormLabel>
                         <FormControl>
                           <Input type="number" step="0.01" {...field} />
                         </FormControl>
+                        {form.watch("retailer") === "Tesco" && (
+                          <FormDescription>Full shelf price before any offers</FormDescription>
+                        )}
                       </FormItem>
                     )}
                   />
@@ -639,16 +687,23 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                     name="offer_price"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Offer Price (£)</FormLabel>
+                        <FormLabel>
+                          {form.watch("retailer") === "Tesco" ? "Clubcard Price (£)" : "Offer Price (£)"}
+                        </FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
                             step="0.01" 
-                            placeholder="Optional"
+                            placeholder={form.watch("retailer") === "Tesco" ? "e.g. 1.50" : "Optional"}
                             {...field} 
                             value={field.value ?? ""} 
                           />
                         </FormControl>
+                        <FormDescription>
+                          {form.watch("retailer") === "Tesco"
+                            ? "If set, this price is used instead of regular price"
+                            : "Reduced price if on offer"}
+                        </FormDescription>
                       </FormItem>
                     )}
                   />
@@ -657,55 +712,21 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                     name="offer_label"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Offer Label</FormLabel>
+                        <FormLabel>Offer / Multi-buy</FormLabel>
                         <FormControl>
                           <Input 
-                            placeholder="e.g. Clubcard Price" 
+                            placeholder="e.g. 4 for 3, Buy 2 Get 1 Free" 
                             {...field} 
                             value={field.value || ""} 
                           />
                         </FormControl>
+                        <FormDescription>
+                          Multi-buy offers are auto-detected (e.g. "4 for 3")
+                        </FormDescription>
                       </FormItem>
                     )}
                   />
                 </div>
-                <FormField
-                  control={form.control}
-                  name="retailer"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Default Retailer</FormLabel>
-                      <Select
-                        onValueChange={(value) =>
-                          field.onChange(value === "__none__" ? "" : value)
-                        }
-                        value={field.value || "__none__"}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select retailer..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__none__">None</SelectItem>
-                          <SelectItem value="Tesco">Tesco</SelectItem>
-                          <SelectItem value="Sainsbury's">Sainsbury's</SelectItem>
-                          <SelectItem value="ASDA">ASDA</SelectItem>
-                          <SelectItem value="Morrisons">Morrisons</SelectItem>
-                          <SelectItem value="Aldi">Aldi</SelectItem>
-                          <SelectItem value="Lidl">Lidl</SelectItem>
-                          <SelectItem value="Iceland">Iceland</SelectItem>
-                          <SelectItem value="MyProtein">MyProtein</SelectItem>
-                          <SelectItem value="Amazon">Amazon</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Used for grouping in grocery shop list
-                      </FormDescription>
-                    </FormItem>
-                  )}
-                />
               </div>
 
               <Separator />
