@@ -106,51 +106,51 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="services" className="space-y-4">
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-            <TabsList className="inline-flex w-auto h-auto">
-              <TabsTrigger value="services" className="flex items-center gap-2 whitespace-nowrap">
-                <Activity className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Services</span>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
+            <TabsList className="inline-flex w-auto h-auto gap-0.5 sm:gap-1">
+              <TabsTrigger value="services" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Services</span>
               </TabsTrigger>
-              <TabsTrigger value="nutrition" className="flex items-center gap-2 whitespace-nowrap">
-                <Target className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Nutrition</span>
+              <TabsTrigger value="nutrition" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Nutrition</span>
               </TabsTrigger>
-              <TabsTrigger value="weekly" className="flex items-center gap-2 whitespace-nowrap">
-                <Calendar className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Weekly Plan</span>
+              <TabsTrigger value="weekly" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Weekly Plan</span>
               </TabsTrigger>
-              <TabsTrigger value="products" className="flex items-center gap-2 whitespace-nowrap">
-                <Package className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Products</span>
+              <TabsTrigger value="products" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Products</span>
               </TabsTrigger>
-              <TabsTrigger value="categories" className="flex items-center gap-2 whitespace-nowrap">
-                <Tag className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Categories</span>
+              <TabsTrigger value="categories" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Categories</span>
               </TabsTrigger>
-              <TabsTrigger value="payday" className="flex items-center gap-2 whitespace-nowrap">
-                <CalendarDays className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Payday</span>
+              <TabsTrigger value="payday" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Payday</span>
               </TabsTrigger>
-              <TabsTrigger value="payslips" className="flex items-center gap-2 whitespace-nowrap">
-                <FileText className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Payslips</span>
+              <TabsTrigger value="payslips" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Payslips</span>
               </TabsTrigger>
-              <TabsTrigger value="gmail" className="flex items-center gap-2 whitespace-nowrap">
-                <Mail className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Gmail</span>
+              <TabsTrigger value="gmail" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Gmail</span>
               </TabsTrigger>
-              <TabsTrigger value="shipping" className="flex items-center gap-2 whitespace-nowrap">
-                <Truck className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Shipping</span>
+              <TabsTrigger value="shipping" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Shipping</span>
               </TabsTrigger>
-              <TabsTrigger value="import" className="flex items-center gap-2 whitespace-nowrap">
-                <Upload className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Import</span>
+              <TabsTrigger value="import" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Import</span>
               </TabsTrigger>
-              <TabsTrigger value="account" className="flex items-center gap-2 whitespace-nowrap">
-                <User className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Account</span>
+              <TabsTrigger value="account" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Account</span>
               </TabsTrigger>
             </TabsList>
           </div>
