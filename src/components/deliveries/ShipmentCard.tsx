@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { Package, Copy, ChevronDown, ChevronUp, MapPin, Clock, Truck, CheckCircle2, AlertTriangle, Circle, Mail } from "lucide-react";
+import { Package, Copy, ChevronDown, ChevronUp, MapPin, Clock, Truck, CheckCircle2, AlertTriangle, Circle, Mail, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,23 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import { type Shipment, type ShipmentEvent, getStatusLabel, getStatusColor } from "@/hooks/useShipments";
 import { cn } from "@/lib/utils";
+
+const CARRIER_TRACKING_URLS: Record<string, (tn: string) => string> = {
+  "royal-mail": (tn) => `https://www.royalmail.com/track-your-item#/tracking-results/${tn}`,
+  "evri": (tn) => `https://www.evri.com/track/parcel/${tn}`,
+  "dpd": (tn) => `https://track.dpd.co.uk/parcels/${tn}`,
+  "dhl": (tn) => `https://www.dhl.co.uk/en/express/tracking.html?AWB=${tn}`,
+  "yodel": (tn) => `https://www.yodel.co.uk/tracking/${tn}`,
+  "parcelforce": (tn) => `https://www.parcelforce.com/track-trace?trackNumber=${tn}`,
+  "ups": (tn) => `https://www.ups.com/track?tracknum=${tn}`,
+  "fedex": (tn) => `https://www.fedex.com/fedextrack/?trknbr=${tn}`,
+};
+
+function getTrackingUrl(shipment: Shipment): string | null {
+  if (!shipment.carrier_code) return null;
+  const builder = CARRIER_TRACKING_URLS[shipment.carrier_code];
+  return builder ? builder(shipment.tracking_number) : null;
+}
 
 const statusIcons: Record<string, React.ReactNode> = {
   pending: <Circle className="h-4 w-4" />,
@@ -38,6 +55,7 @@ export function ShipmentCard({ shipment, events, onDelete }: ShipmentCardProps) 
   };
 
   const lastUpdate = shipment.last_event_at || shipment.last_synced_at || shipment.updated_at;
+  const trackingUrl = getTrackingUrl(shipment);
 
   return (
     <Card className="overflow-hidden">
@@ -47,7 +65,14 @@ export function ShipmentCard({ shipment, events, onDelete }: ShipmentCardProps) 
             <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm truncate">{shipment.tracking_number}</span>
+                {trackingUrl ? (
+                  <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="font-mono text-sm truncate text-primary hover:underline flex items-center gap-1">
+                    {shipment.tracking_number}
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                ) : (
+                  <span className="font-mono text-sm truncate">{shipment.tracking_number}</span>
+                )}
                 <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={copyTracking}>
                   <Copy className="h-3 w-3" />
                 </Button>
