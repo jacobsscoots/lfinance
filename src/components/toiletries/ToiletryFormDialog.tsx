@@ -1,9 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Upload } from "lucide-react";
+import { Upload, Camera, X } from "lucide-react";
 import { differenceInDays } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { RETAILER_OPTIONS } from "@/hooks/useRetailerProfiles";
 import {
   ResponsiveDialog,
@@ -91,6 +94,50 @@ export function ToiletryFormDialog({
 }: ToiletryFormDialogProps) {
   const isEditing = !!initialData;
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (initialData?.image_url) {
+      setImagePreview(initialData.image_url);
+    } else {
+      setImagePreview(null);
+    }
+    setImageFile(null);
+  }, [initialData, open]);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 5MB", variant: "destructive" });
+      return;
+    }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const uploadImage = async (): Promise<string | null> => {
+    if (!imageFile || !user?.id) return imagePreview; // keep existing URL if no new file
+    setUploadingImage(true);
+    try {
+      const ext = imageFile.name.split(".").pop() || "jpg";
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from("toiletry-images").upload(path, imageFile);
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from("toiletry-images").getPublicUrl(path);
+      return publicUrl;
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
   
   const form = useForm<ToiletryFormValues>({
     resolver: zodResolver(toiletryFormSchema),
@@ -161,7 +208,7 @@ export function ToiletryFormDialog({
     return days > 0 ? days : null;
   }, [openedAt, finishedAt]);
 
-  const handleSubmit = (values: ToiletryFormValues) => {
+  const handleSubmit = async (values: ToiletryFormValues) => {
     // Calculate usage_rate_per_day from dates for backward compat
     let usage_rate_per_day = 1;
     if (values.opened_at) {
@@ -179,12 +226,15 @@ export function ToiletryFormDialog({
         ? Math.max(0, values.total_size - (usage_rate_per_day * differenceInDays(new Date(), new Date(values.opened_at))))
         : values.total_size;
 
+    const image_url = await uploadImage();
+
     onSubmit({
       ...values,
       category: "other",
       usage_rate_per_day,
       current_remaining,
       retailer: values.retailer === "none" ? null : values.retailer,
+      image_url,
     });
     onOpenChange(false);
   };
@@ -224,6 +274,45 @@ export function ToiletryFormDialog({
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              {/* Photo */}
+              <div>
+                <label className="text-sm font-medium">Photo</label>
+                <div className="mt-1 flex items-center gap-3">
+                  {imagePreview ? (
+                    <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-border">
+                      <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => { setImagePreview(null); setImageFile(null); }}
+                        className="absolute top-0 right-0 bg-destructive text-destructive-foreground rounded-bl p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-16 w-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                    >
+                      <Camera className="h-5 w-5" />
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelect}
+                  />
+                  {imagePreview && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                      Change
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               {/* Name */}
               <FormField
                 control={form.control}
@@ -513,8 +602,8 @@ export function ToiletryFormDialog({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading}>
-                  {isEditing ? "Update" : "Add"} Item
+                <Button type="submit" disabled={isLoading || uploadingImage}>
+                  {uploadingImage ? "Uploading…" : isEditing ? "Update" : "Add"} Item
                 </Button>
               </ResponsiveDialogFooter>
             </form>

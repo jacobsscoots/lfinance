@@ -38,6 +38,12 @@ export function ToiletryCard({ item, forecast, onEdit, onDelete, onRestock }: To
     <Card className="relative">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
+          {/* Thumbnail */}
+          {item.image_url && (
+            <div className="h-12 w-12 rounded-lg overflow-hidden border border-border shrink-0">
+              <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-medium text-sm truncate">{item.name}</h3>
