@@ -29,6 +29,7 @@ import {
   SolverStrategyLog,
   RoundingRule,
   MealType,
+  MACRO_OVERSHOOT_MIN,
 } from './portioningTypes';
 import { 
   normalizeSeasoningPortions, 
@@ -149,7 +150,10 @@ export function clampToConstraints(grams: number, item: SolverItem): number {
 
 /**
  * Check if totals are within tolerance of targets
- * Spec: target <= achieved <= target + tolerance
+ * 
+ * Overshoot buffer: macros must be at least MACRO_OVERSHOOT_MIN above target.
+ * Calories: target to target + tolerance.max (minimise overshoot).
+ * Macros: target + MACRO_OVERSHOOT_MIN to target + tolerance.max
  */
 export function isWithinTolerance(
   achieved: MacroTotals,
@@ -158,26 +162,26 @@ export function isWithinTolerance(
 ): boolean {
   const rounded = roundMacros(achieved);
   
-  // Calories: target <= achieved <= target + tolerance.max
+  // Calories: [target, target + max] — no undershoot, minimise overshoot
   if (rounded.calories < targets.calories - tolerances.calories.min ||
       rounded.calories > targets.calories + tolerances.calories.max) {
     return false;
   }
   
-  // Protein
-  if (rounded.protein < targets.protein - tolerances.protein.min ||
+  // Macros: [target + OVERSHOOT_MIN, target + max]
+  const overshoot = MACRO_OVERSHOOT_MIN;
+  
+  if (rounded.protein < targets.protein + overshoot ||
       rounded.protein > targets.protein + tolerances.protein.max) {
     return false;
   }
   
-  // Carbs
-  if (rounded.carbs < targets.carbs - tolerances.carbs.min ||
+  if (rounded.carbs < targets.carbs + overshoot ||
       rounded.carbs > targets.carbs + tolerances.carbs.max) {
     return false;
   }
   
-  // Fat
-  if (rounded.fat < targets.fat - tolerances.fat.min ||
+  if (rounded.fat < targets.fat + overshoot ||
       rounded.fat > targets.fat + tolerances.fat.max) {
     return false;
   }
@@ -201,16 +205,13 @@ export function calculateDelta(achieved: MacroTotals, targets: SolverTargets): M
 /**
  * Score a plan - lower is better
  *
- * ASYMMETRIC scoring matching the tolerance model:
- *   P/C: penalize under-target heavily (hard floor), mild penalty for over
- *   Fat: small allowance for 1g under, mild penalty for over
- *   Calories: symmetric
+ * OVERSHOOT BUFFER scoring:
+ *   Macros: must be +2g to +5g above target. Penalise heavily if below +2g.
+ *   Calories: minimise overshoot above target. Penalise undershoot.
  *
- * Among plans that are all within tolerance, this tiebreaker prefers:
- *   - Protein/carbs slightly above target rather than exactly at it
- *     (ensures the hard floor is safely met)
- *   - Fat close to target (neither over nor under)
- *   - Calories close to target
+ * Among valid plans, prefer:
+ *   - Macros close to +2g (minimum overshoot that meets the buffer)
+ *   - Calories as close to target as possible
  *   - Natural-looking portions (round numbers, mid-range)
  */
 export function scorePlan(
@@ -220,28 +221,34 @@ export function scorePlan(
   items: SolverItem[]
 ): number {
   const delta = calculateDelta(totals, targets);
+  const overshoot = MACRO_OVERSHOOT_MIN;
 
   let score = 0;
 
-  // Calories: symmetric
-  score += Math.abs(delta.calories) * 1;
-
-  // Protein: heavily penalize under, mild penalty for over
-  if (delta.protein < 0) {
-    score += (-delta.protein) * 20; // Under target = bad
+  // Calories: penalise any deviation, but undershoot is worse
+  if (delta.calories < 0) {
+    score += (-delta.calories) * 3; // Under target = bad
   } else {
-    score += delta.protein * 3; // Over target by small amount = mild
+    score += delta.calories * 1; // Over target = mild (minimise)
   }
 
-  // Carbs: heavily penalize under, mild penalty for over
-  if (delta.carbs < 0) {
-    score += (-delta.carbs) * 20;
-  } else {
-    score += delta.carbs * 3;
-  }
+  // Macro scoring helper: must be in [+overshoot, +5]
+  const macroScore = (d: number): number => {
+    if (d < overshoot) {
+      // Below minimum overshoot — heavily penalise
+      return (overshoot - d) * 30;
+    } else if (d > 5) {
+      // Above max overshoot — penalise excess
+      return (d - 5) * 15;
+    } else {
+      // In sweet spot [+2, +5] — prefer closer to +2
+      return (d - overshoot) * 1;
+    }
+  };
 
-  // Fat: moderate penalty both directions (1g under allowed)
-  score += Math.abs(delta.fat) * 8;
+  score += macroScore(delta.protein);
+  score += macroScore(delta.carbs);
+  score += macroScore(delta.fat);
 
   // Portion naturalness - prefer round numbers and middle-of-range portions
   for (const item of items) {
@@ -318,70 +325,53 @@ export function scaleSeasonings(items: SolverItem[], portions: Map<string, numbe
 // ============================================================================
 
 /**
- * Calculate net error for optimization — ASYMMETRIC macros, SYMMETRIC calories
+ * Calculate net error for optimization — OVERSHOOT BUFFER model
  *
- * Macro direction matters:
- *   - Under target: penalized according to min tolerance (P/C have min=0,
- *     meaning ANY undershoot is a hard violation; fat has min=1, allowing 1g)
- *   - Over target: penalized according to max tolerance (all macros allow +2g)
- * Calories are symmetric (±50 kcal).
+ * Macros must land in [target + OVERSHOOT_MIN, target + tolerance.max]
+ * Calories must land in [target, target + tolerance.max]
  *
- * The penalty structure guides the solver to land at-or-above target for P/C,
- * within the small band [target-1, target+2] for fat, and within ±50 for cal.
+ * The penalty structure guides the solver to overshoot macros by +2g to +5g
+ * while minimising calorie surplus.
  */
 function calculateNetError(delta: MacroTotals, tolerances: ToleranceConfig): number {
   let error = 0;
+  const overshoot = MACRO_OVERSHOOT_MIN;
 
-  // --- Calories: symmetric ---
-  error += Math.abs(delta.calories) * 1;
-  const calAbs = Math.abs(delta.calories);
-  if (delta.calories < 0 && calAbs > tolerances.calories.min) {
-    error += (calAbs - tolerances.calories.min) * 5;
-  } else if (delta.calories > 0 && calAbs > tolerances.calories.max) {
-    error += (calAbs - tolerances.calories.max) * 5;
+  // --- Calories: [0, +max] — penalise undershoot heavily, overshoot mildly ---
+  if (delta.calories < 0) {
+    error += (-delta.calories) * 3;
+    error += (-delta.calories) * 5; // extra violation weight
+  } else if (delta.calories > tolerances.calories.max) {
+    error += delta.calories * 1;
+    error += (delta.calories - tolerances.calories.max) * 5;
+  } else {
+    error += delta.calories * 0.5; // minimise overshoot within band
   }
 
-  // --- Helper for asymmetric macro penalty ---
-  // under = delta < 0: violation boundary is -min (e.g., protein min=0 means no undershoot)
-  // over  = delta > 0: violation boundary is +max (e.g., protein max=2 means up to +2g ok)
-  const macroPenalty = (
-    d: number,
-    tol: { min: number; max: number },
-    baseWeight: number,
-    violationWeight: number
-  ): number => {
+  // --- Macro penalty: must be in [+overshoot, +max] ---
+  const macroPenalty = (d: number, tol: { min: number; max: number }): number => {
     let p = 0;
-    if (d < 0) {
-      // Under target
-      const under = -d; // positive magnitude
-      if (under > tol.min) {
-        // Hard violation — heavily penalize beyond allowed undershoot
-        p += under * baseWeight;
-        p += (under - tol.min) * violationWeight;
-      } else {
-        // Within allowed undershoot (e.g., fat allows 1g)
-        p += under * baseWeight * 0.5;
+    if (d < overshoot) {
+      // Below minimum overshoot — hard violation
+      const deficit = overshoot - d;
+      p += deficit * 15;
+      if (d < 0) {
+        // Actually under target — even worse
+        p += (-d) * 20;
       }
+    } else if (d > tol.max) {
+      // Over max overshoot — penalise excess
+      p += (d - tol.max) * 10;
     } else {
-      // Over target
-      if (d > tol.max) {
-        // Over tolerance — penalize excess
-        p += d * baseWeight;
-        p += (d - tol.max) * violationWeight;
-      } else {
-        // Within allowed overshoot — mild preference toward target
-        p += d * baseWeight * 0.3;
-      }
+      // In sweet spot — mild preference toward +2g (minimum overshoot)
+      p += (d - overshoot) * 0.5;
     }
     return p;
   };
 
-  // Protein: min=0 (no undershoot), max=2 (+2g ok)
-  error += macroPenalty(delta.protein, tolerances.protein, 10, 30);
-  // Carbs: min=0 (no undershoot), max=2 (+2g ok)
-  error += macroPenalty(delta.carbs, tolerances.carbs, 8, 20);
-  // Fat: min=1 (1g undershoot ok), max=2 (+2g ok)
-  error += macroPenalty(delta.fat, tolerances.fat, 10, 30);
+  error += macroPenalty(delta.protein, tolerances.protein);
+  error += macroPenalty(delta.carbs, tolerances.carbs);
+  error += macroPenalty(delta.fat, tolerances.fat);
 
   return error;
 }
@@ -617,8 +607,11 @@ function checkFeasibility(
   
   const blockers: Blocker[] = [];
   
-  // Check each macro - target must be reachable within [min, max + tolerance]
-  // Calories
+  // Check each macro - target must be reachable within overshoot bands
+  // Macros need to reach at least target + OVERSHOOT_MIN
+  const overshoot = MACRO_OVERSHOOT_MIN;
+  
+  // Calories: [target, target + max]
   if (maxTotals.calories < targets.calories) {
     blockers.push({
       itemName: 'All items',
@@ -636,13 +629,13 @@ function checkFeasibility(
     });
   }
   
-  // Protein
-  if (maxTotals.protein < targets.protein) {
+  // Protein: must reach target + overshoot
+  if (maxTotals.protein < targets.protein + overshoot) {
     blockers.push({
       itemName: 'All items',
       constraint: 'max_achievable_protein',
       value: maxTotals.protein,
-      detail: `Max achievable: ${maxTotals.protein}g protein, target: ${targets.protein}g`,
+      detail: `Max achievable: ${maxTotals.protein}g protein, need: ${targets.protein + overshoot}g (target + ${overshoot}g buffer)`,
     });
   }
   if (minTotals.protein > targets.protein + tolerances.protein.max) {
@@ -650,17 +643,17 @@ function checkFeasibility(
       itemName: 'All items',
       constraint: 'min_achievable_protein',
       value: minTotals.protein,
-      detail: `Min achievable: ${minTotals.protein}g protein, target: ${targets.protein}g`,
+      detail: `Min achievable: ${minTotals.protein}g protein, max allowed: ${targets.protein + tolerances.protein.max}g`,
     });
   }
   
   // Carbs
-  if (maxTotals.carbs < targets.carbs) {
+  if (maxTotals.carbs < targets.carbs + overshoot) {
     blockers.push({
       itemName: 'All items',
       constraint: 'max_achievable_carbs',
       value: maxTotals.carbs,
-      detail: `Max achievable: ${maxTotals.carbs}g carbs, target: ${targets.carbs}g`,
+      detail: `Max achievable: ${maxTotals.carbs}g carbs, need: ${targets.carbs + overshoot}g (target + ${overshoot}g buffer)`,
     });
   }
   if (minTotals.carbs > targets.carbs + tolerances.carbs.max) {
@@ -668,17 +661,17 @@ function checkFeasibility(
       itemName: 'All items',
       constraint: 'min_achievable_carbs',
       value: minTotals.carbs,
-      detail: `Min achievable: ${minTotals.carbs}g carbs, target: ${targets.carbs}g`,
+      detail: `Min achievable: ${minTotals.carbs}g carbs, max allowed: ${targets.carbs + tolerances.carbs.max}g`,
     });
   }
   
   // Fat
-  if (maxTotals.fat < targets.fat) {
+  if (maxTotals.fat < targets.fat + overshoot) {
     blockers.push({
       itemName: 'All items',
       constraint: 'max_achievable_fat',
       value: maxTotals.fat,
-      detail: `Max achievable: ${maxTotals.fat}g fat, target: ${targets.fat}g`,
+      detail: `Max achievable: ${maxTotals.fat}g fat, need: ${targets.fat + overshoot}g (target + ${overshoot}g buffer)`,
     });
   }
   if (minTotals.fat > targets.fat + tolerances.fat.max) {
@@ -686,7 +679,7 @@ function checkFeasibility(
       itemName: 'All items',
       constraint: 'min_achievable_fat',
       value: minTotals.fat,
-      detail: `Min achievable: ${minTotals.fat}g fat, target: ${targets.fat}g`,
+      detail: `Min achievable: ${minTotals.fat}g fat, max allowed: ${targets.fat + tolerances.fat.max}g`,
     });
   }
   
