@@ -31,7 +31,7 @@ export function useBackgroundSync() {
         }),
         // 2. Gmail receipt sync
         supabase.functions.invoke("gmail-sync-receipts", {
-          body: {},
+          body: { action: "sync" },
         }),
         // 3. Gmail tracking sync
         supabase.functions.invoke("gmail-tracking-sync", {
