@@ -162,7 +162,7 @@ export function InvestmentPerformanceChart({
   };
 
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-2">
         <CardTitle className="text-base font-medium">Performance</CardTitle>
         <div className="flex gap-1 overflow-x-auto pb-1 -mb-1">
@@ -180,7 +180,7 @@ export function InvestmentPerformanceChart({
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[300px]">
+        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[300px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />

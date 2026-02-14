@@ -129,9 +129,20 @@ export default function Investments() {
           if (tx.type === 'withdrawal') return sum - units;
           return sum;
         }, 0);
-        const cv = totalUnits * lp.price;
-        totalValue += cv;
-        if (lp.dailyChange) totalDailyChange += totalUnits * lp.dailyChange.amount;
+        
+        if (totalUnits > 0) {
+          const cv = totalUnits * lp.price;
+          totalValue += cv;
+          if (lp.dailyChange) totalDailyChange += totalUnits * lp.dailyChange.amount;
+        } else {
+          // No units — use estimated value with live daily % change
+          const today = new Date();
+          const startDate = new Date(inv.start_date);
+          const dailyValues = calculateDailyValues(formattedTx, [], startDate, today, inv.expected_annual_return);
+          const estimatedValue = dailyValues.length > 0 ? dailyValues[dailyValues.length - 1].value : contributed;
+          totalValue += estimatedValue;
+          if (lp.dailyChange) totalDailyChange += estimatedValue * (lp.dailyChange.percentage / 100);
+        }
       } else {
         const today = new Date();
         const startDate = new Date(inv.start_date);
@@ -247,7 +258,8 @@ export default function Investments() {
         if (tx.type === 'withdrawal') return sum - units;
         return sum;
       }, 0);
-      return totalUnits * lp.price;
+      if (totalUnits > 0) return totalUnits * lp.price;
+      // Fall through to estimated calculation when no units
     }
 
     const formattedTx = investmentTransactions.map(tx => ({
@@ -443,7 +455,7 @@ export default function Investments() {
           <div className="space-y-6 pt-6 border-t">
             <h2 className="text-lg font-semibold">{selectedInvestment.name} Details</h2>
             
-            <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid lg:grid-cols-2 gap-6 min-w-0 overflow-hidden">
               <InvestmentPerformanceChart
                 transactions={investmentTransactions}
                 valuations={valuations}
