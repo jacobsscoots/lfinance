@@ -32,9 +32,27 @@ export default function Birthdays() {
   const [selectedEventId, setSelectedEventId] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
+  // Sort events by next upcoming date
+  const sortedEvents = [...events].sort((a, b) => {
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentDay = today.getDate();
+
+    const getNextOccurrence = (e: BirthdayEvent) => {
+      const m = e.event_month;
+      const d = e.event_day ?? 1;
+      // Days until this event from today (wrapping around year)
+      let daysUntil = (m - currentMonth) * 30 + (d - currentDay);
+      if (daysUntil < 0) daysUntil += 365;
+      return daysUntil;
+    };
+
+    return getNextOccurrence(a) - getNextOccurrence(b);
+  });
+
   const filtered = activeTab === "all"
-    ? events
-    : events.filter(e => e.occasion === activeTab);
+    ? sortedEvents
+    : sortedEvents.filter(e => e.occasion === activeTab);
 
   const birthdayCount = events.filter(e => e.occasion === "birthday").length;
   const christmasCount = events.filter(e => e.occasion === "christmas").length;

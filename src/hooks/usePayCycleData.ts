@@ -159,7 +159,21 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     enabled: !!user && !accountsLoading && allAccounts.length > 0,
   });
   
-  // Fetch bills
+  // Fetch birthday events for alerts
+  const birthdayQuery = useQuery({
+    queryKey: ["pay-cycle-birthdays", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("birthday_events")
+        .select("person_name, event_month, event_day, budget")
+        .eq("user_id", user.id)
+        .eq("is_active", true);
+      if (error) throw error;
+      return data as Array<{ person_name: string; event_month: number; event_day: number | null; budget: number }>;
+    },
+    enabled: !!user,
+  });
   const billsQuery = useQuery({
     queryKey: ["pay-cycle-bills", user?.id, format(cycle.start, "yyyy-MM-dd")],
     queryFn: async () => {
@@ -326,7 +340,7 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     amount: Number(b.amount),
     dueDate: b.dueDate,
   }));
-  const alerts = generateAlerts(metrics, alertBills);
+  const alerts = generateAlerts(metrics, alertBills, birthdayQuery.data ?? []);
   
   // Build account list with changes
   const accounts: AccountWithChange[] = allAccounts.map(account => {
