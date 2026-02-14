@@ -87,20 +87,31 @@ export interface ToleranceConfig {
   fat: { min: number; max: number };      // e.g., { min: 0, max: 2 }
 }
 
-// Default tolerances per spec — ASYMMETRIC macros, SYMMETRIC calories
+// Default tolerances — OVERSHOOT BUFFER for real-world food loss
 //
-// Protein/Carbs: must be AT or ABOVE target (min=0), up to +2g over (max=2).
-// Fat: 1g undershoot allowed (min=1) because fat is derived from
-// (cal - P×4 - C×4) / 9 — pushing P/C up to their strict floors
-// steals calorie budget from fat. Without this flexibility the solver
-// often produces "Can't solve" on valid meal plans.
-// Calories: ±50 kcal symmetric.
+// Macros (P/C/F): Must overshoot target by +2g to +5g. The solver
+// should NEVER land at or below target — always exceed by at least 2g.
+// This accounts for food residue left in packaging, on utensils, etc.
+//
+// Calories: Aim to minimise overshoot (0 to +50 kcal). The solver
+// prioritises hitting macro overshoot minimums first, then finds the
+// lowest calorie solution within the +50 kcal band.
+//
+// min = how far BELOW the overshoot floor is allowed (0 = not at all)
+// max = how far ABOVE target the ceiling sits
+// So for protein: achieved must be in [target+2, target+5]
+//   → min=0 means no undershoot below target+2 (the shifted target)
+//   → max=5 means up to target+5
+// The solver shifts targets up by +2g internally before checking.
 export const DEFAULT_TOLERANCES: ToleranceConfig = {
-  calories: { min: 50, max: 50 },
-  protein: { min: 0, max: 2 },
-  carbs: { min: 0, max: 2 },
-  fat: { min: 1, max: 2 },
+  calories: { min: 0, max: 50 },
+  protein: { min: 0, max: 5 },
+  carbs: { min: 0, max: 5 },
+  fat: { min: 0, max: 5 },
 };
+
+// Macro overshoot minimums — solver shifts targets up by this amount
+export const MACRO_OVERSHOOT_MIN = 2; // grams
 
 // Solver targets
 export interface SolverTargets {
