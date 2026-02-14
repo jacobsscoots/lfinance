@@ -475,6 +475,7 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
         markdown: responseData?.markdown as string | undefined,
         html: responseData?.html as string | undefined,
         rawHtml: responseData?.rawHtml as string | undefined,
+        screenshot: responseData?.screenshot as string | undefined,
       };
     };
 
@@ -495,7 +496,7 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
         },
       };
 
-      // Attempt 1: Fast first try - reduced wait time
+      // Attempt 1: Fast first try
       let firecrawlResult = await scrapeFirecrawl({
         ...commonBody,
         waitFor: 3000,
@@ -504,7 +505,7 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
         location: { country: "GB", languages: ["en-GB", "en"] },
       });
 
-      // Attempt 2: Desktop fallback if mobile failed (avoids proxy tunnel failures)
+      // Attempt 2: Desktop fallback if mobile failed
       if (!firecrawlResult) {
         console.log("Firecrawl primary scrape failed; retrying desktop...");
         firecrawlResult = await scrapeFirecrawl({
@@ -515,6 +516,8 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
         });
       }
 
+      let contentOk = false;
+
       if (firecrawlResult) {
         markdown = firecrawlResult.markdown;
         html = firecrawlResult.html;
@@ -524,59 +527,98 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
         const preview = contentCandidate.substring(0, 500);
         console.log("Firecrawl content preview:", preview);
 
-        if (contentCandidate) {
+        if (contentCandidate && !isLikelyBlocked(contentCandidate.substring(0, 5000))) {
           console.log("Successfully fetched via Firecrawl");
+          contentOk = true;
+        } else if (contentCandidate) {
+          console.log("Detected blocked page content (primary)");
+        }
+      }
 
-          // Detect if the content is actually a block/challenge page
-          const detectionSample = contentCandidate.substring(0, 5000);
-          if (isLikelyBlocked(detectionSample)) {
-            console.log("Detected blocked page content (primary)");
+      // Attempt 3: Retry with alternate settings if blocked or failed
+      if (!contentOk) {
+        console.log("Retrying Firecrawl with alternate settings...");
+        const retry = await scrapeFirecrawl({
+          url: formattedUrl,
+          formats: ["markdown", "html"],
+          onlyMainContent: false,
+          headers: commonBody.headers,
+          waitFor: 6000,
+          timeout: 35000,
+          mobile: false,
+          location: { country: "GB", languages: ["en-GB", "en"] },
+        });
 
-            // Retry once with alternate settings (desktop + longer wait + more formats)
-            console.log("Retrying Firecrawl with alternate settings...");
-            const retry = await scrapeFirecrawl({
-              url: formattedUrl,
-              formats: ["markdown", "html"],  // Try HTML too on retry
-              onlyMainContent: false,
-              headers: commonBody.headers,
-              waitFor: 6000,
-              timeout: 35000,
-              mobile: false,
-              location: { country: "GB", languages: ["en-GB", "en"] },
-            });
-
-            if (retry) {
-              markdown = retry.markdown;
-              html = retry.html;
-              rawHtml = retry.rawHtml;
-
-              const retryCandidate = markdown && markdown.length > 200 ? markdown : html || rawHtml || "";
-              const retryPreview = retryCandidate.substring(0, 500);
-              console.log("Firecrawl retry preview:", retryPreview);
-
-              if (retryCandidate && !isLikelyBlocked(retryCandidate.substring(0, 5000))) {
-                console.log("Retry succeeded (not blocked)");
-              } else {
-                console.log("Detected blocked page content (retry)");
-                throw new Error(
-                  "This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product."
-                );
-              }
-            } else {
-              throw new Error(
-                "This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product."
-              );
-            }
+        if (retry) {
+          const retryCandidate = (retry.markdown && retry.markdown.length > 200) ? retry.markdown : retry.html || retry.rawHtml || "";
+          if (retryCandidate && !isLikelyBlocked(retryCandidate.substring(0, 5000))) {
+            console.log("Retry succeeded (not blocked)");
+            markdown = retry.markdown;
+            html = retry.html;
+            rawHtml = retry.rawHtml;
+            contentOk = true;
+          } else {
+            console.log("Detected blocked page content (retry)");
           }
         }
       }
-    } catch (e) {
-      // Re-throw if it's our block detection error
-      if (e instanceof Error && e.message.includes("anti-bot protection")) {
-        throw e;
+
+      // Attempt 4: Screenshot-based extraction as last resort
+      if (!contentOk) {
+        console.log("Trying screenshot-based extraction as fallback...");
+        const screenshotResult = await scrapeFirecrawl({
+          url: formattedUrl,
+          formats: ["screenshot", "markdown"],
+          onlyMainContent: false,
+          waitFor: 8000,
+          timeout: 40000,
+          mobile: false,
+          location: { country: "GB", languages: ["en-GB", "en"] },
+        });
+
+        if (screenshotResult) {
+          const screenshotData = screenshotResult as any;
+          // Check if we got a screenshot we can use with AI vision
+          const screenshotUrl = screenshotData?.screenshot;
+          const screenshotMarkdown = screenshotResult.markdown;
+
+          // If markdown came through this time, use it
+          if (screenshotMarkdown && screenshotMarkdown.length > 200 && !isLikelyBlocked(screenshotMarkdown.substring(0, 5000))) {
+            console.log("Screenshot attempt yielded usable markdown");
+            markdown = screenshotMarkdown;
+            contentOk = true;
+          } else if (screenshotUrl && typeof screenshotUrl === "string" && screenshotUrl.startsWith("http")) {
+            // Use the screenshot image with AI vision to extract data
+            console.log("Got screenshot, using AI vision to extract product data...");
+            try {
+              const visionResult = await extractFromImage(screenshotUrl, apiKey, productType);
+              if (visionResult && (visionResult.energy_kcal || visionResult.protein || (visionResult as any).price)) {
+                console.log("Screenshot AI vision extraction succeeded");
+                visionResult.source_url = url;
+                const detectedRetailer = detectRetailerFromUrl(url);
+                if (detectedRetailer) {
+                  visionResult.retailer = detectedRetailer;
+                  visionResult.confidence.retailer = "high";
+                }
+                return visionResult;
+              }
+            } catch (visionErr) {
+              console.error("Vision extraction from screenshot failed:", visionErr);
+            }
+          }
+        }
+
+        // If all Firecrawl attempts failed, don't hard-throw — fall through to direct fetch
+        if (!contentOk) {
+          console.log("All Firecrawl attempts exhausted, falling through to direct fetch...");
+          markdown = undefined;
+          html = undefined;
+          rawHtml = undefined;
+        }
       }
+    } catch (e) {
       console.error("Firecrawl fetch failed:", e);
-      // Fall through to direct fetch
+      // Always fall through to direct fetch — never hard-throw from Firecrawl block
     }
   }
 
@@ -587,14 +629,6 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
       return "";
     }
   })();
-
-  // For highly-protected sites (e.g. Tesco), direct fetch is almost always blocked.
-  // If Firecrawl couldn't fetch content, return the user-actionable guidance instead of a generic fetch error.
-  if (FIRECRAWL_API_KEY && hostname === "tesco.com" && !html && !markdown && !rawHtml) {
-    throw new Error(
-      "This website's anti-bot protection blocked the request. Please try using 'Upload Photo' or 'Paste Text' instead - these methods work reliably for any product."
-    );
-  }
 
   // Fallback to direct fetch if Firecrawl didn't work
   if (!html && !markdown && !rawHtml) {
