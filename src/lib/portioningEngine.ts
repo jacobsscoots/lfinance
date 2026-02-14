@@ -206,11 +206,11 @@ export function calculateDelta(achieved: MacroTotals, targets: SolverTargets): M
  * Score a plan - lower is better
  *
  * OVERSHOOT BUFFER scoring:
- *   Macros: must be +2g to +5g above target. Penalise heavily if below +2g.
+ *   Macros: must be +0g to +3g above target. Penalise heavily if below 0g.
  *   Calories: minimise overshoot above target. Penalise undershoot.
  *
  * Among valid plans, prefer:
- *   - Macros close to +2g (minimum overshoot that meets the buffer)
+ *   - Macros close to +0g (minimum overshoot that meets the buffer)
  *   - Calories as close to target as possible
  *   - Natural-looking portions (round numbers, mid-range)
  */
@@ -222,6 +222,7 @@ export function scorePlan(
 ): number {
   const delta = calculateDelta(totals, targets);
   const overshoot = MACRO_OVERSHOOT_MIN;
+  const maxOvershoot = 3;
 
   let score = 0;
 
@@ -232,16 +233,16 @@ export function scorePlan(
     score += delta.calories * 1; // Over target = mild (minimise)
   }
 
-  // Macro scoring helper: must be in [+overshoot, +5]
+  // Macro scoring helper: must be in [+overshoot, +maxOvershoot]
   const macroScore = (d: number): number => {
     if (d < overshoot) {
       // Below minimum overshoot — heavily penalise
       return (overshoot - d) * 30;
-    } else if (d > 5) {
+    } else if (d > maxOvershoot) {
       // Above max overshoot — penalise excess
-      return (d - 5) * 15;
+      return (d - maxOvershoot) * 15;
     } else {
-      // In sweet spot [+2, +5] — prefer closer to +2
+      // In sweet spot [+0, +3] — prefer closer to +0
       return (d - overshoot) * 1;
     }
   };
@@ -282,9 +283,13 @@ export function scorePlan(
  * Enhanced to handle seasonings without explicit pairing by using a default fallback.
  */
 export function scaleSeasonings(items: SolverItem[], portions: Map<string, number>): void {
-  // Find all proteins in the meal for fallback pairing
-  const proteinItems = items.filter(i => i.category === 'protein');
-  const totalProteinGrams = proteinItems.reduce(
+  // Find protein sources by BOTH category AND actual protein density (>10g per 100g)
+  // This ensures scaling works even if food_type isn't set to 'protein'
+  const proteinSources = items.filter(i => 
+    i.category === 'protein' || 
+    (i.category !== 'seasoning' && i.nutritionPer100g.protein > 10)
+  );
+  const totalProteinSourceGrams = proteinSources.reduce(
     (sum, p) => sum + (portions.get(p.id) ?? p.currentGrams), 
     0
   );
@@ -303,9 +308,9 @@ export function scaleSeasonings(items: SolverItem[], portions: Map<string, numbe
       }
     }
     
-    // If has rate but no paired ID, use total protein as basis
-    if (item.seasoningRatePer100g && !item.pairedProteinId && totalProteinGrams > 0) {
-      const seasoningGrams = Math.round(totalProteinGrams * item.seasoningRatePer100g / 100);
+    // If has rate but no paired ID, use total protein-source grams as basis
+    if (item.seasoningRatePer100g && !item.pairedProteinId && totalProteinSourceGrams > 0) {
+      const seasoningGrams = Math.round(totalProteinSourceGrams * item.seasoningRatePer100g / 100);
       const clamped = clampToConstraints(seasoningGrams, item);
       portions.set(item.id, clamped);
       continue;
@@ -330,7 +335,7 @@ export function scaleSeasonings(items: SolverItem[], portions: Map<string, numbe
  * Macros must land in [target + OVERSHOOT_MIN, target + tolerance.max]
  * Calories must land in [target, target + tolerance.max]
  *
- * The penalty structure guides the solver to overshoot macros by +2g to +5g
+ * The penalty structure guides the solver to overshoot macros by +0g to +3g
  * while minimising calorie surplus.
  */
 function calculateNetError(delta: MacroTotals, tolerances: ToleranceConfig): number {
@@ -363,7 +368,7 @@ function calculateNetError(delta: MacroTotals, tolerances: ToleranceConfig): num
       // Over max overshoot — penalise excess
       p += (d - tol.max) * 10;
     } else {
-      // In sweet spot — mild preference toward +2g (minimum overshoot)
+      // In sweet spot — mild preference toward +0g (minimum overshoot)
       p += (d - overshoot) * 0.5;
     }
     return p;
@@ -936,43 +941,63 @@ function runGradientSolve(
   // Macro weights matching calculateNetError
   const W = { cal: 1, pro: 10, carb: 8, fat: 10 };
 
-  let bestCandidate: CandidatePlan | null = null;
+  // Collect ALL valid candidates for funnel selection (no early exit on perfect)
+  const allCandidates: CandidatePlan[] = [];
+  const MAX_CANDIDATES = 2000;
+  let worstCandidateScore = Infinity;
+
+  function maybeAddCandidate(p: Map<string, number>, t: MacroTotals, s: number) {
+    if (allCandidates.length < MAX_CANDIDATES) {
+      allCandidates.push({ portions: new Map(p), totals: roundMacros(t), score: s });
+      if (allCandidates.length === MAX_CANDIDATES) {
+        allCandidates.sort((a, b) => a.score - b.score);
+        worstCandidateScore = allCandidates[allCandidates.length - 1].score;
+      }
+    } else if (s < worstCandidateScore) {
+      allCandidates[allCandidates.length - 1] = { portions: new Map(p), totals: roundMacros(t), score: s };
+      allCandidates.sort((a, b) => a.score - b.score);
+      worstCandidateScore = allCandidates[allCandidates.length - 1].score;
+    }
+  }
+
   let iterationsRun = 0;
   let lastError = Infinity;
   let stagnation = 0;
-  let validSinceImproved = 0; // Track how many iterations since last improvement within tolerance
+  const STAGNATION_LIMIT = 2000;
 
   for (let iter = 0; iter < maxIterations; iter++, iterationsRun++) {
     const totals = sumMacros(items, portions, seasoningsCountMacros);
     const delta = calculateDelta(totals, targets);
     const currentError = calculateNetError(delta, tolerances);
 
-    // Check for valid solution — DON'T break immediately. Keep iterating
-    // to find better solutions within tolerance. Only stop after 15
-    // consecutive in-tolerance iterations with no improvement.
+    // Always collect valid solutions — no early exit on perfect
     if (isWithinTolerance(totals, targets, tolerances)) {
       const score = scorePlan(portions, totals, targets, items);
-      if (!bestCandidate || score < bestCandidate.score) {
-        bestCandidate = { portions: new Map(portions), totals: roundMacros(totals), score };
-        validSinceImproved = 0;
-      } else {
-        validSinceImproved++;
-      }
-      if (validSinceImproved >= 15) break; // Fully converged within tolerance
-    } else {
-      validSinceImproved = 0;
+      maybeAddCandidate(portions, totals, score);
     }
 
-    if (currentError < 0.1) break;
-
-    // Stagnation check — increase patience for tighter convergence
+    // Stagnation check with 2000 iteration patience
     if (Math.abs(currentError - lastError) < 0.01) {
       stagnation++;
-      if (stagnation > 60) break;
+      if (stagnation > STAGNATION_LIMIT) break;
     } else {
       stagnation = 0;
     }
     lastError = currentError;
+
+    // Perturbation escape every 200 stale iterations
+    if (stagnation > 200 && stagnation % 200 === 0) {
+      const shuffled = [...adjustableItems].sort(() => Math.random() - 0.5);
+      const numPerturb = Math.min(3, shuffled.length);
+      for (let pi = 0; pi < numPerturb; pi++) {
+        const f = shuffled[pi];
+        const cur = portions.get(f.id) || 0;
+        const pertDelta = (Math.random() > 0.5 ? 1 : -1) * Math.round(Math.random() * 20 + 5);
+        portions.set(f.id, clampToConstraints(cur + pertDelta, f));
+      }
+      scaleSeasonings(items, portions);
+      continue;
+    }
 
     // What we still need (positive = under target)
     const need = {
@@ -1074,8 +1099,40 @@ function runGradientSolve(
     scaleSeasonings(items, portions);
   }
 
-  // Return best candidate if found
-  if (bestCandidate) {
+  // ─── FUNNEL SELECTION ──────────────────────────────────
+  // Stage 1: Top 2000 by score (already collected)
+  // Stage 2: Top 50 meeting macro overshoot bands (+0 to +3g)
+  // Stage 3: Pick lowest calorie overshoot
+  if (allCandidates.length > 0) {
+    allCandidates.sort((a, b) => a.score - b.score);
+
+    // Stage 2: filter to those meeting macro bands
+    const overshoot = MACRO_OVERSHOOT_MIN;
+    const maxOver = tolerances.protein.max; // +3g
+    const macroFiltered = allCandidates.filter(c => {
+      const t = c.totals;
+      return (
+        t.protein >= targets.protein + overshoot && t.protein <= targets.protein + maxOver &&
+        t.carbs >= targets.carbs + overshoot && t.carbs <= targets.carbs + maxOver &&
+        t.fat >= targets.fat + overshoot && t.fat <= targets.fat + maxOver
+      );
+    });
+
+    const stage2 = macroFiltered.length > 0 ? macroFiltered.slice(0, 50) : allCandidates.slice(0, 50);
+
+    // Stage 3: lowest calorie overshoot
+    stage2.sort((a, b) => {
+      const aOver = a.totals.calories - targets.calories;
+      const bOver = b.totals.calories - targets.calories;
+      const aInBand = aOver >= 0 && aOver <= tolerances.calories.max;
+      const bInBand = bOver >= 0 && bOver <= tolerances.calories.max;
+      if (aInBand && !bInBand) return -1;
+      if (!aInBand && bInBand) return 1;
+      if (aInBand && bInBand) return aOver - bOver;
+      return Math.abs(aOver) - Math.abs(bOver);
+    });
+
+    const winner = stage2[0];
     const itemsWithMeta = items.map(item => ({
       id: item.id,
       category: item.category,
@@ -1084,7 +1141,7 @@ function runGradientSolve(
       foodType: item.category === 'seasoning' ? 'seasoning' : undefined,
     }));
     const { portions: normPortions, capped } = normalizeSeasoningPortions(
-      bestCandidate.portions, itemsWithMeta, DEFAULT_SEASONING_MAX_GRAMS
+      winner.portions, itemsWithMeta, DEFAULT_SEASONING_MAX_GRAMS
     );
     const warnings: string[] = [];
     if (capped.length > 0) {
@@ -1093,8 +1150,8 @@ function runGradientSolve(
     return {
       success: true,
       portions: normPortions,
-      totals: bestCandidate.totals,
-      score: bestCandidate.score,
+      totals: winner.totals,
+      score: winner.score,
       iterationsRun,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
@@ -1117,7 +1174,7 @@ function runGradientSolve(
   return {
     success: false,
     failure: {
-      reason: stagnation > 30 ? 'stagnation' : 'max_iterations_exceeded',
+      reason: stagnation > STAGNATION_LIMIT ? 'stagnation' : 'max_iterations_exceeded',
       blockers: collectBlockers(items, normPortions, targets, tolerances),
       closestTotals: roundMacros(finalTotals),
       targetDelta: finalDelta,
@@ -1397,16 +1454,29 @@ export function solve(
 
   // ============================================================
   // PHASE 1: Gradient solver with multiple starting points
-  // Give macro_balance (best init) 50% of iterations, then split
-  // the rest across fewer fallback strategies.
+  // 20k iterations per start, includes 2 random starts for diversity.
   // ============================================================
-  const initStrategies: InitStrategy[] = ['midpoint', 'current'];
 
-  // Build initialization portfolios: macro_balance first (best), then fallbacks
+  // Build initialization portfolios: macro_balance first (best), then fallbacks + random
+  const randomStart1 = new Map<string, number>();
+  const randomStart2 = new Map<string, number>();
+  for (const item of items) {
+    if (item.editableMode === 'LOCKED' || item.category === 'seasoning') {
+      randomStart1.set(item.id, item.currentGrams);
+      randomStart2.set(item.id, item.currentGrams);
+    } else {
+      const range = (item.maxPortionGrams > 0 ? item.maxPortionGrams : 500) - item.minPortionGrams;
+      randomStart1.set(item.id, clampToConstraints(item.minPortionGrams + Math.round(Math.random() * range), item));
+      randomStart2.set(item.id, clampToConstraints(item.minPortionGrams + Math.round(Math.random() * range), item));
+    }
+  }
+
   const initPortfolios: Array<{ name: string; portions: Map<string, number>; iterShare: number }> = [
-    { name: 'macro_balance', portions: macroBalanceInit(items, targets, seasoningsCountMacros), iterShare: 0.50 },
-    { name: 'midpoint', portions: initializePortionsWithStrategy(items, 'midpoint'), iterShare: 0.25 },
-    { name: 'current', portions: initializePortionsWithStrategy(items, 'current'), iterShare: 0.25 },
+    { name: 'macro_balance', portions: macroBalanceInit(items, targets, seasoningsCountMacros), iterShare: 0.30 },
+    { name: 'midpoint', portions: initializePortionsWithStrategy(items, 'midpoint'), iterShare: 0.20 },
+    { name: 'current', portions: initializePortionsWithStrategy(items, 'current'), iterShare: 0.20 },
+    { name: 'random1', portions: randomStart1, iterShare: 0.15 },
+    { name: 'random2', portions: randomStart2, iterShare: 0.15 },
   ];
 
   // Greedy fallback gets whatever is left
