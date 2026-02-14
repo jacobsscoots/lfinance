@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { useProducts } from "@/hooks/useProducts";
 import { generateShopReadyList, ShopReadyList } from "@/lib/groceryListCalculations";
-import { DiscountType } from "@/lib/discounts";
+import { DiscountType, getDefaultRetailerDiscount } from "@/lib/discounts";
 import { RetailerSection } from "./RetailerSection";
 
 export function ShopReadyListView() {
@@ -94,16 +94,16 @@ export function ShopReadyListView() {
           <CardContent className="pt-0">
             <div className="flex items-center justify-between py-3 border-t">
               <div className="text-sm text-muted-foreground">
-                {shopList.totals.itemCount} items to purchase
+                {shopList.totals.itemCount} items across {shopList.byRetailer.length} {shopList.byRetailer.length === 1 ? "retailer" : "retailers"}
               </div>
               <div className="text-right">
                 {shopList.totals.totalDiscount > 0 && (
-                  <div className="text-sm text-primary">
-                    Saving £{shopList.totals.totalDiscount.toFixed(2)}
+                  <div className="text-sm font-medium text-primary">
+                    Saving £{shopList.totals.totalDiscount.toFixed(2)} with loyalty discounts
                   </div>
                 )}
-                <div className="text-lg font-semibold">
-                  Total: £{shopList.totals.finalCost.toFixed(2)}
+                <div className="text-xl font-bold">
+                  £{shopList.totals.finalCost.toFixed(2)}
                 </div>
               </div>
             </div>
