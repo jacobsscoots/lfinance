@@ -65,6 +65,7 @@ const toiletryFormSchema = z.object({
   offer_price: z.coerce.number().min(0).optional().nullable(),
   offer_label: z.string().max(100).optional().nullable(),
   pack_size: z.coerce.number().int().min(1, "Must be at least 1"),
+  empty_weight_grams: z.coerce.number().min(0).optional().nullable(),
   opened_at: z.string().optional().nullable(),
   finished_at: z.string().optional().nullable(),
   retailer: z.string().optional().nullable(),
@@ -103,6 +104,7 @@ export function ToiletryFormDialog({
       offer_price: null,
       offer_label: "",
       pack_size: 1,
+      empty_weight_grams: null,
       opened_at: null,
       finished_at: null,
       retailer: null,
@@ -122,6 +124,7 @@ export function ToiletryFormDialog({
         offer_price: (initialData as any).offer_price || null,
         offer_label: (initialData as any).offer_label || "",
         pack_size: initialData.pack_size,
+        empty_weight_grams: (initialData as any).empty_weight_grams ?? null,
         opened_at: initialData.opened_at || null,
         finished_at: initialData.finished_at || null,
         retailer: initialData.retailer || null,
@@ -138,6 +141,7 @@ export function ToiletryFormDialog({
         offer_price: null,
         offer_label: "",
         pack_size: 1,
+        empty_weight_grams: null,
         opened_at: null,
         finished_at: null,
         retailer: null,
@@ -382,6 +386,28 @@ export function ToiletryFormDialog({
                     <FormLabel>Pack Size (units)</FormLabel>
                     <FormControl>
                       <Input type="number" step="1" min="1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Empty Packaging Weight */}
+              <FormField
+                control={form.control}
+                name="empty_weight_grams"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Empty Packaging Weight (g)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="1"
+                        min="0"
+                        placeholder="Weight of empty container"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
