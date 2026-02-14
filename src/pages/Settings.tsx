@@ -106,52 +106,54 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="services" className="space-y-4">
-          <TabsList className="w-full flex overflow-x-auto h-auto flex-wrap sm:flex-nowrap">
-            <TabsTrigger value="services" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Activity className="h-4 w-4" />
-              <span className="hidden sm:inline">Services</span>
-            </TabsTrigger>
-            <TabsTrigger value="nutrition" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Target className="h-4 w-4" />
-              <span className="hidden sm:inline">Nutrition</span>
-            </TabsTrigger>
-            <TabsTrigger value="weekly" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">Weekly Plan</span>
-            </TabsTrigger>
-            <TabsTrigger value="products" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Package className="h-4 w-4" />
-              <span className="hidden sm:inline">Products</span>
-            </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Tag className="h-4 w-4" />
-              <span className="hidden sm:inline">Categories</span>
-            </TabsTrigger>
-            <TabsTrigger value="payday" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <CalendarDays className="h-4 w-4" />
-              <span className="hidden sm:inline">Payday</span>
-            </TabsTrigger>
-            <TabsTrigger value="payslips" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Payslips</span>
-            </TabsTrigger>
-            <TabsTrigger value="gmail" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Mail className="h-4 w-4" />
-              <span className="hidden sm:inline">Gmail</span>
-            </TabsTrigger>
-            <TabsTrigger value="shipping" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Truck className="h-4 w-4" />
-              <span className="hidden sm:inline">Shipping</span>
-            </TabsTrigger>
-            <TabsTrigger value="import" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Import</span>
-            </TabsTrigger>
-            <TabsTrigger value="account" className="flex items-center gap-2 flex-1 sm:flex-none">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Account</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex w-auto h-auto">
+              <TabsTrigger value="services" className="flex items-center gap-2 whitespace-nowrap">
+                <Activity className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Services</span>
+              </TabsTrigger>
+              <TabsTrigger value="nutrition" className="flex items-center gap-2 whitespace-nowrap">
+                <Target className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Nutrition</span>
+              </TabsTrigger>
+              <TabsTrigger value="weekly" className="flex items-center gap-2 whitespace-nowrap">
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Weekly Plan</span>
+              </TabsTrigger>
+              <TabsTrigger value="products" className="flex items-center gap-2 whitespace-nowrap">
+                <Package className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Products</span>
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="flex items-center gap-2 whitespace-nowrap">
+                <Tag className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Categories</span>
+              </TabsTrigger>
+              <TabsTrigger value="payday" className="flex items-center gap-2 whitespace-nowrap">
+                <CalendarDays className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Payday</span>
+              </TabsTrigger>
+              <TabsTrigger value="payslips" className="flex items-center gap-2 whitespace-nowrap">
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Payslips</span>
+              </TabsTrigger>
+              <TabsTrigger value="gmail" className="flex items-center gap-2 whitespace-nowrap">
+                <Mail className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Gmail</span>
+              </TabsTrigger>
+              <TabsTrigger value="shipping" className="flex items-center gap-2 whitespace-nowrap">
+                <Truck className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Shipping</span>
+              </TabsTrigger>
+              <TabsTrigger value="import" className="flex items-center gap-2 whitespace-nowrap">
+                <Upload className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Import</span>
+              </TabsTrigger>
+              <TabsTrigger value="account" className="flex items-center gap-2 whitespace-nowrap">
+                <User className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Account</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="services">
             <ServiceStatusSettings />
