@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 interface InvestmentCardProps {
   investment: InvestmentAccount;
   transactions: InvestmentTransaction[];
+  valuations?: { valuation_date: string; value: number; source: string }[];
   livePrice?: { price: number; dailyChange?: { amount: number; percentage: number } | null } | null;
   onClick?: () => void;
   onEdit?: () => void;
@@ -44,6 +45,7 @@ interface InvestmentCardProps {
 export function InvestmentCard({
   investment,
   transactions,
+  valuations = [],
   livePrice,
   onClick,
   onEdit,
@@ -91,7 +93,8 @@ export function InvestmentCard({
       // No units tracked (e.g. ChipX) — use estimated value with live daily % change
       const today = new Date();
       const startDate = new Date(investment.start_date);
-      const dailyValues = calculateDailyValues(formattedTransactions, [], startDate, today, investment.expected_annual_return);
+      const formattedValuations = valuations.map(v => ({ valuation_date: v.valuation_date, value: v.value, source: v.source as 'manual' | 'estimated' | 'live' }));
+      const dailyValues = calculateDailyValues(formattedTransactions, formattedValuations, startDate, today, investment.expected_annual_return);
       const estimatedValue = dailyValues.length > 0 ? dailyValues[dailyValues.length - 1].value : totalContributions;
       const totalReturn = estimatedValue - totalContributions;
       const returnPercentage = calculateReturn(estimatedValue, totalContributions);
@@ -114,9 +117,10 @@ export function InvestmentCard({
     // Fallback to estimated compound growth
     const today = new Date();
     const startDate = new Date(investment.start_date);
+    const formattedValuations = valuations.map(v => ({ valuation_date: v.valuation_date, value: v.value, source: v.source as 'manual' | 'estimated' | 'live' }));
     const dailyValues = calculateDailyValues(
       formattedTransactions,
-      [],
+      formattedValuations,
       startDate,
       today,
       investment.expected_annual_return

@@ -19,7 +19,11 @@ const PERIOD_OPTIONS = [
   { value: "24", label: "2 Years" },
   { value: "36", label: "3 Years" },
   { value: "60", label: "5 Years" },
+  { value: "84", label: "7 Years" },
   { value: "120", label: "10 Years" },
+  { value: "180", label: "15 Years" },
+  { value: "240", label: "20 Years" },
+  { value: "300", label: "25 Years" },
 ];
 
 interface ProjectionCardProps {
