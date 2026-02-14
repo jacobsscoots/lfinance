@@ -2544,8 +2544,10 @@ export type Database = {
           meal_eligibility: string[] | null
           min_portion_grams: number | null
           name: string
+          offer_end_date: string | null
           offer_label: string | null
           offer_price: number | null
+          offer_start_date: string | null
           pack_size_grams: number | null
           packaging_weight_grams: number | null
           portion_step_grams: number
@@ -2593,8 +2595,10 @@ export type Database = {
           meal_eligibility?: string[] | null
           min_portion_grams?: number | null
           name: string
+          offer_end_date?: string | null
           offer_label?: string | null
           offer_price?: number | null
+          offer_start_date?: string | null
           pack_size_grams?: number | null
           packaging_weight_grams?: number | null
           portion_step_grams?: number
@@ -2642,8 +2646,10 @@ export type Database = {
           meal_eligibility?: string[] | null
           min_portion_grams?: number | null
           name?: string
+          offer_end_date?: string | null
           offer_label?: string | null
           offer_price?: number | null
+          offer_start_date?: string | null
           pack_size_grams?: number | null
           packaging_weight_grams?: number | null
           portion_step_grams?: number

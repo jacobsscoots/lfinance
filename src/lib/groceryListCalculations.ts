@@ -168,8 +168,14 @@ export function generateShopReadyList(
     // Get retailer (default from product or 'Unassigned')
     const retailer = product.retailer || "Unassigned";
     
-    // Parse multi-buy offer from offer_label
-    const multiBuyOffer = parseMultiBuyOffer(product.offer_label);
+    // Check if offer is still active (within date range)
+    const today = new Date().toISOString().slice(0, 10);
+    const offerActive = 
+      (!product.offer_start_date || product.offer_start_date <= today) &&
+      (!product.offer_end_date || product.offer_end_date >= today);
+
+    // Parse multi-buy offer from offer_label (only if offer is active)
+    const multiBuyOffer = offerActive ? parseMultiBuyOffer(product.offer_label) : null;
     
     // Create shop ready item
     const shopItem: ShopReadyItem = {
@@ -200,8 +206,8 @@ export function generateShopReadyList(
       shopItem.purchasePacks = 1;
     }
     
-    // Calculate gross cost - use offer_price if available (e.g. Clubcard price)
-    const effectivePrice = product.offer_price && product.offer_price > 0 
+    // Calculate gross cost - use offer_price if available and offer is active
+    const effectivePrice = offerActive && product.offer_price && product.offer_price > 0 
       ? product.offer_price 
       : product.price;
     shopItem.grossCost = shopItem.purchasePacks * effectivePrice;

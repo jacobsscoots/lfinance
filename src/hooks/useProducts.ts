@@ -31,6 +31,8 @@ export interface Product {
   price: number;
   offer_price: number | null;
   offer_label: string | null;
+  offer_start_date: string | null;
+  offer_end_date: string | null;
   pack_size_grams: number | null;
   // Serving basis
   serving_basis: ServingBasis;
@@ -90,6 +92,8 @@ export interface ProductFormData {
   price: number;
   offer_price?: number | null;
   offer_label?: string | null;
+  offer_start_date?: string | null;
+  offer_end_date?: string | null;
   pack_size_grams?: number | null;
   // Grocery tracking
   retailer?: string | null;
