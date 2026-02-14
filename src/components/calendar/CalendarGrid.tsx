@@ -69,8 +69,8 @@ function CalendarCell({ day, isSelected, onClick, isMobile }: CalendarCellProps)
     <div
       onClick={onClick}
       className={cn(
-        "p-1.5 sm:p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/30",
-        isMobile ? "min-h-[70px]" : "min-h-[100px]",
+        "p-1 sm:p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/30 overflow-hidden",
+        isMobile ? "min-h-[68px]" : "min-h-[100px]",
         !day.isCurrentMonth && "bg-muted/20 text-muted-foreground",
         isSelected && "bg-primary/10 ring-2 ring-primary ring-inset",
         today && "bg-primary/5"
@@ -143,12 +143,12 @@ function BillPill({ bill, compact = false }: BillPillProps) {
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "rounded truncate flex items-center gap-0.5 sm:gap-1",
-            compact ? "text-[10px] px-1 py-0.5" : "text-xs px-1.5 py-0.5",
+            "rounded truncate flex items-center gap-0.5 sm:gap-1 max-w-full",
+            compact ? "text-[9px] px-0.5 py-0.5" : "text-xs px-1.5 py-0.5",
             getStatusStyle()
           )}
           style={{
-            borderLeft: bill.categoryColor ? `3px solid ${bill.categoryColor}` : undefined,
+            borderLeft: bill.categoryColor ? `2px solid ${bill.categoryColor}` : undefined,
           }}
         >
           {getStatusIcon()}

@@ -150,9 +150,9 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
     });
   }, [months]);
 
-  const cellClass = "px-2 py-1.5 text-right text-xs whitespace-nowrap";
-  const labelClass = "px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-card z-10";
-  const headerClass = "px-2 py-2 text-center text-xs font-semibold whitespace-nowrap";
+  const cellClass = "px-1.5 sm:px-2 py-1.5 text-right text-[11px] sm:text-xs whitespace-nowrap min-w-[60px] sm:min-w-[70px]";
+  const labelClass = "px-1.5 sm:px-2 py-1.5 text-[11px] sm:text-xs font-medium whitespace-nowrap sticky left-0 bg-card z-10 min-w-[90px] sm:min-w-[120px]";
+  const headerClass = "px-1.5 sm:px-2 py-2 text-center text-[11px] sm:text-xs font-semibold whitespace-nowrap";
 
   // Check if any months have inflation applied
   const hasInflation = year >= 2026;
@@ -170,7 +170,7 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
         </div>
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
-        <table className="w-full border-collapse min-w-[900px]">
+        <table className="w-full border-collapse min-w-[800px]">
           <thead>
             <tr className="border-b border-border">
               <th className={cn(labelClass, "bg-card")}>Category</th>
