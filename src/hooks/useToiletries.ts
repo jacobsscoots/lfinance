@@ -144,6 +144,16 @@ export function useToiletries() {
         last_weighed_at: new Date().toISOString(),
       };
 
+      // Clear finished_at if item was finished — reactivates it
+      const { data: existing } = await supabase
+        .from("toiletry_items")
+        .select("finished_at")
+        .eq("id", id)
+        .single();
+      if (existing?.finished_at && readingType !== "empty") {
+        updates.finished_at = null;
+      }
+
       if (readingType === "full") {
         updates.full_weight_grams = weight;
         updates.opened_at = new Date().toISOString().split('T')[0];
