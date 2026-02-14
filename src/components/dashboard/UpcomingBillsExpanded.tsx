@@ -15,7 +15,7 @@ import {
   CircleDollarSign,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/dashboardCalculations";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
@@ -43,7 +43,7 @@ interface UpcomingBillsExpandedProps {
 }
 
 function BillItem({ bill }: { bill: Bill }) {
-  const daysUntil = differenceInDays(bill.dueDate, new Date());
+  const daysUntil = differenceInDays(startOfDay(bill.dueDate), startOfDay(new Date()));
   const isUrgent = daysUntil <= 2;
   
   return (

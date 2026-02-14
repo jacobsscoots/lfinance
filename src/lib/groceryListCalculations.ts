@@ -169,7 +169,8 @@ export function generateShopReadyList(
     const retailer = product.retailer || "Unassigned";
     
     // Check if offer is still active (within date range)
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const offerActive = 
       (!product.offer_start_date || product.offer_start_date <= today) &&
       (!product.offer_end_date || product.offer_end_date >= today);
