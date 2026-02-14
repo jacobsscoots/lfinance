@@ -54,12 +54,13 @@ export function BirthdayEventCard({
 
   return (
     <Card className={cn(overBudget && "border-destructive/50")}>
-      <CardContent className="py-3 px-4">
-        <div className="flex items-center gap-3">
+      <CardContent className="py-3 px-3 sm:px-4">
+        {/* Top row: expand + icon + name/date */}
+        <div className="flex items-center gap-2 sm:gap-3">
           <button onClick={() => setExpanded(!expanded)} className="shrink-0">
             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
-          <div className={cn("h-9 w-9 rounded-full flex items-center justify-center shrink-0",
+          <div className={cn("h-8 w-8 sm:h-9 sm:w-9 rounded-full flex items-center justify-center shrink-0",
             event.occasion === "christmas" ? "bg-emerald-500/10" : "bg-primary/10"
           )}>
             <Icon className={cn("h-4 w-4",
@@ -67,27 +68,27 @@ export function BirthdayEventCard({
             )} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">
+            <p className="font-medium truncate text-sm">
               {event.title ? `${event.title} ` : ""}{event.person_name}
             </p>
             <p className="text-xs text-muted-foreground">{dateLabel}</p>
           </div>
 
-          {/* Status tick boxes */}
-          <div className="flex items-center gap-3 shrink-0">
-            <label className="flex items-center gap-1 text-xs cursor-pointer" title="Money Scheduled">
+          {/* Status tick boxes - hide labels on mobile */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <label className="flex items-center gap-0.5 sm:gap-1 text-xs cursor-pointer" title="Money Scheduled">
               <Checkbox
                 checked={!!event.money_scheduled}
                 onCheckedChange={() => onToggleMoneyScheduled?.(event)}
               />
-              <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
+              <Banknote className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
             </label>
-            <label className="flex items-center gap-1 text-xs cursor-pointer" title="Card Sent">
+            <label className="flex items-center gap-0.5 sm:gap-1 text-xs cursor-pointer" title="Card Sent">
               <Checkbox
                 checked={!!event.card_sent}
                 onCheckedChange={() => onToggleCardSent?.(event)}
               />
-              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+              <Mail className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
             </label>
           </div>
 
@@ -99,10 +100,10 @@ export function BirthdayEventCard({
               <p className="text-xs text-muted-foreground">/ £{budget.toFixed(2)}</p>
             )}
           </div>
-          <Badge variant="secondary" className="text-xs shrink-0">
+          <Badge variant="secondary" className="text-xs shrink-0 hidden sm:inline-flex">
             {purchasedCount}/{yearExpenses.length}
           </Badge>
-          <div className="flex gap-1 shrink-0">
+          <div className="flex gap-0.5 sm:gap-1 shrink-0">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(event)}>
               <Pencil className="h-3 w-3" />
             </Button>
