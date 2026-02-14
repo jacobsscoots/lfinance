@@ -52,12 +52,26 @@ function parseDay(val: any): number | null {
   return null;
 }
 
+function excelSerialToDate(serial: number): Date {
+  // Excel epoch is 1900-01-01, with the 1900 leap year bug
+  const epoch = new Date(1899, 11, 30);
+  return new Date(epoch.getTime() + serial * 86400000);
+}
+
 function parseDateValue(val: any): { month: number | null; day: number | null } {
   if (!val) return { month: null, day: null };
 
   // Date object (ExcelJS returns Date objects for date cells)
   if (val instanceof Date) {
     return { month: val.getMonth() + 1, day: val.getDate() };
+  }
+
+  // Excel serial number (e.g. 45966 = a date in 2025)
+  if (typeof val === "number" && val > 1 && val < 100000) {
+    const d = excelSerialToDate(val);
+    if (!isNaN(d.getTime())) {
+      return { month: d.getMonth() + 1, day: d.getDate() };
+    }
   }
 
   const str = String(val).trim();
