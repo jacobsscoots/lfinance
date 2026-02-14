@@ -503,9 +503,13 @@ async function handleMealPlanner(
     return err;
   }
 
-  // ─── MULTI-START COORDINATE DESCENT (Bug 3 rewrite) ────
-  // Adaptive step sizes: 10g → 5g → 1g based on error magnitude
-  // Perturbation escape after 500 stale iterations
+  // ─── MULTI-START COORDINATE DESCENT (v4) ────────────────
+  // Fixes oscillation: tabu set, fast stagnation detection,
+  // multi-step probes, and greedy acceptance.
+
+  function hashPortions(g: Map<string, number>): string {
+    return freeFoods.map(f => g.get(f.id) || 0).join(',');
+  }
 
   function solveFromStart(startGrams: Map<string, number>): { grams: Map<string, number>; totals: any; error: number; iterations: number } {
     const grams = new Map(startGrams);
@@ -514,6 +518,10 @@ async function handleMealPlanner(
     let bestGrams = new Map(grams);
     let bestTotals = computeTotals(grams);
     let staleCount = 0;
+
+    // Tabu set to prevent revisiting recent states
+    const tabu = new Set<string>();
+    const MAX_TABU = 200;
 
     for (let iter = 0; iter < 5000; iter++) {
       const totals = computeTotals(grams);
@@ -532,68 +540,82 @@ async function handleMealPlanner(
         return { grams: new Map(grams), totals, error: 0, iterations: iter };
       }
 
-      // Adaptive step size (Bug 3 fix: no acceleration heuristic)
-      let stepSize: number;
-      if (err < 50) stepSize = 1;
-      else if (err < 500) stepSize = 5;
-      else stepSize = 10;
+      // Fast stagnation exit: if no improvement in 100 iterations, stop
+      if (staleCount > 100) {
+        break;
+      }
 
-      // Perturbation escape (Bug 3 fix: increased from 200 to 500)
-      if (staleCount > 500) {
-        // Randomly perturb 2-3 foods by ±10g
+      // Perturbation escape at 40 stale iterations (much earlier than before)
+      if (staleCount > 40 && staleCount % 40 === 0) {
         const shuffled = [...nonSeasoningFoods].sort(() => Math.random() - 0.5);
         const numPerturb = Math.min(3, shuffled.length);
         for (let pi = 0; pi < numPerturb; pi++) {
           const f = shuffled[pi];
           const cur = grams.get(f.id) || 0;
-          const delta = (Math.random() > 0.5 ? 1 : -1) * Math.round(Math.random() * 10 + 5);
+          const delta = (Math.random() > 0.5 ? 1 : -1) * Math.round(Math.random() * 20 + 5);
           grams.set(f.id, Math.max(f.minG, Math.min(f.maxG, cur + delta)));
         }
-        staleCount = 0;
         continue;
       }
 
-      // Evaluate all ±stepSize moves for all free non-seasoning foods
-      // Pick the move that minimises computeError
+      // Try MULTIPLE step sizes simultaneously: 1g, 2g, 5g, 10g
+      const stepSizes = err < 50 ? [1, 2] : err < 200 ? [1, 2, 5] : [1, 5, 10, 20];
+
       let bestFoodIdx = -1;
-      let bestDirection = 0;
+      let bestNewG = 0;
       let bestStepError = Infinity;
 
       for (let fi = 0; fi < nonSeasoningFoods.length; fi++) {
         const food = nonSeasoningFoods[fi];
         const currentG = grams.get(food.id) || 0;
 
-        // Try +stepSize
-        if (currentG + stepSize <= food.maxG) {
-          grams.set(food.id, currentG + stepSize);
-          const testErr = computeError(computeTotals(grams));
-          if (testErr < bestStepError) {
-            bestStepError = testErr;
-            bestFoodIdx = fi;
-            bestDirection = stepSize;
+        for (const step of stepSizes) {
+          // Try +step
+          const upG = Math.min(food.maxG, currentG + step);
+          if (upG !== currentG) {
+            grams.set(food.id, upG);
+            const h = hashPortions(grams);
+            if (!tabu.has(h)) {
+              const testErr = computeError(computeTotals(grams));
+              if (testErr < bestStepError) {
+                bestStepError = testErr;
+                bestFoodIdx = fi;
+                bestNewG = upG;
+              }
+            }
+            grams.set(food.id, currentG);
           }
-          grams.set(food.id, currentG); // restore
-        }
 
-        // Try -stepSize
-        if (currentG - stepSize >= food.minG) {
-          grams.set(food.id, currentG - stepSize);
-          const testErr = computeError(computeTotals(grams));
-          if (testErr < bestStepError) {
-            bestStepError = testErr;
-            bestFoodIdx = fi;
-            bestDirection = -stepSize;
+          // Try -step
+          const downG = Math.max(food.minG, currentG - step);
+          if (downG !== currentG) {
+            grams.set(food.id, downG);
+            const h = hashPortions(grams);
+            if (!tabu.has(h)) {
+              const testErr = computeError(computeTotals(grams));
+              if (testErr < bestStepError) {
+                bestStepError = testErr;
+                bestFoodIdx = fi;
+                bestNewG = downG;
+              }
+            }
+            grams.set(food.id, currentG);
           }
-          grams.set(food.id, currentG); // restore
         }
       }
 
-      if (bestFoodIdx === -1) break; // no moves possible
+      if (bestFoodIdx === -1) break; // no non-tabu moves possible
 
-      // Apply the best move
+      // Apply the best move and add current state to tabu
+      const currentHash = hashPortions(grams);
+      if (tabu.size >= MAX_TABU) {
+        const first = tabu.values().next().value;
+        if (first) tabu.delete(first);
+      }
+      tabu.add(currentHash);
+
       const chosenFood = nonSeasoningFoods[bestFoodIdx];
-      const currentG = grams.get(chosenFood.id) || 0;
-      grams.set(chosenFood.id, Math.max(chosenFood.minG, Math.min(chosenFood.maxG, currentG + bestDirection)));
+      grams.set(chosenFood.id, bestNewG);
     }
 
     return { grams: bestGrams, totals: bestTotals, error: bestError, iterations: 5000 };
