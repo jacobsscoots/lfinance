@@ -100,14 +100,14 @@ export function BankConnectionCard() {
               {connections.map((connection) => (
                 <div
                   key={connection.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 border rounded-lg"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                       <Building2 className="h-5 w-5 text-primary" />
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">
                         {(() => {
                           const linkedAccounts = allAccounts.filter(a => a.connection_id === connection.id);
                           if (linkedAccounts.length > 0) {
@@ -121,14 +121,14 @@ export function BankConnectionCard() {
                         const linkedAccounts = allAccounts.filter(a => a.connection_id === connection.id);
                         if (linkedAccounts.length > 0) {
                           return (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-muted-foreground truncate">
                               {linkedAccounts.map(a => a.display_name || a.name).join(", ")}
                             </p>
                           );
                         }
                         return null;
                       })()}
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
                         <Badge
                           variant={connection.status === "connected" ? "default" : "secondary"}
                         >
@@ -142,7 +142,7 @@ export function BankConnectionCard() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                     <Button
                       variant="outline"
                       size="icon"
