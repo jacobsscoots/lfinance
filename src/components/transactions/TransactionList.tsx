@@ -390,6 +390,34 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
                   </Badge>
                 </span>
               </div>
+
+              <div className="pt-2 border-t flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={async () => {
+                    const { error } = await supabase
+                      .from("gmail_receipts")
+                      .update({
+                        match_status: "dismissed",
+                        matched_transaction_id: null,
+                        matched_at: null,
+                      })
+                      .eq("matched_transaction_id", transaction.id);
+                    if (!error) {
+                      toast.success("Receipt unlinked");
+                      queryClient.invalidateQueries({ queryKey: ["gmail-receipt-matches"] });
+                      setGmailReceiptOpen(false);
+                    } else {
+                      toast.error("Failed to unlink receipt");
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Wrong match — unlink
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
