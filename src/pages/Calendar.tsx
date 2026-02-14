@@ -75,16 +75,19 @@ export default function Calendar() {
 
   // Action handlers that create occurrence IDs from bill ID and date
   const handleMarkPaid = (billId: string, dueDate: Date) => {
+    if (billId.startsWith("toiletry-")) return;
     const occurrenceId = `${billId}-${format(dueDate, "yyyy-MM-dd")}`;
     markPaid.mutate({ occurrenceId });
   };
 
   const handleSkip = (billId: string, dueDate: Date) => {
+    if (billId.startsWith("toiletry-")) return;
     const occurrenceId = `${billId}-${format(dueDate, "yyyy-MM-dd")}`;
     skipOccurrence.mutate(occurrenceId);
   };
 
   const handleReset = (billId: string, dueDate: Date) => {
+    if (billId.startsWith("toiletry-")) return;
     const occurrenceId = `${billId}-${format(dueDate, "yyyy-MM-dd")}`;
     resetOccurrence.mutate(occurrenceId);
   };
