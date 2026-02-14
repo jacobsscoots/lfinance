@@ -64,7 +64,7 @@ export function LogWeightDialog({
     resolver: zodResolver(weightLogSchema),
     defaultValues: {
       weight: 0,
-      readingType: hasFullWeight ? "regular" : "full",
+      readingType: "regular",
     },
   });
 
@@ -200,22 +200,17 @@ export function LogWeightDialog({
                         <RadioGroupItem 
                           value="regular" 
                           id="regular"
-                          disabled={!hasFullWeight}
                         />
                         <div className="grid gap-1 leading-none">
                           <label
                             htmlFor="regular"
-                            className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${
-                              !hasFullWeight ? "text-muted-foreground" : ""
-                            }`}
+                            className="text-sm font-medium leading-none"
                           >
                             Regular weighing
                           </label>
-                          {hasFullWeight && (
-                            <p className="text-xs text-muted-foreground">
-                              Track usage over time
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground">
+                            Track current weight on scale
+                          </p>
                         </div>
                       </div>
 
@@ -223,22 +218,17 @@ export function LogWeightDialog({
                         <RadioGroupItem 
                           value="empty" 
                           id="empty"
-                          disabled={!hasFullWeight}
                         />
                         <div className="grid gap-1 leading-none">
                           <label
                             htmlFor="empty"
-                            className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${
-                              !hasFullWeight ? "text-muted-foreground" : ""
-                            }`}
+                            className="text-sm font-medium leading-none"
                           >
                             Empty (packaging weight)
                           </label>
-                          {hasFullWeight && (
-                            <p className="text-xs text-muted-foreground">
-                              Marks item as finished
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground">
+                            Record packaging weight &amp; mark finished
+                          </p>
                         </div>
                       </div>
                     </RadioGroup>

@@ -145,21 +145,9 @@ export function validateWeightLog(
     };
   }
   
-  // Empty weight requires full weight to be set first
-  if (readingType === "empty" && existingFullWeight === null) {
-    return {
-      valid: false,
-      error: "Please log the full weight first before marking as empty.",
-    };
-  }
+  // Empty weight — always allowed (records packaging weight and marks finished)
   
-  // Regular reading requires full weight to be set first
-  if (readingType === "regular" && existingFullWeight === null) {
-    return {
-      valid: false,
-      error: "Please log the full weight when opening the item first.",
-    };
-  }
+  // Regular reading is always allowed (no full weight prerequisite)
   
   return { valid: true };
 }

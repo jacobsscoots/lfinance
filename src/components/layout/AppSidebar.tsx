@@ -9,7 +9,6 @@ import {
   Settings,
   TrendingUp,
   LogOut,
-  Sparkles,
   PieChart,
   Percent,
   Wallet2,
@@ -60,7 +59,6 @@ const navGroups = [
       { name: "Birthdays", href: "/birthdays", icon: Gift },
       { name: "Groceries", href: "/groceries", icon: ShoppingCart },
       { name: "Meal Plan", href: "/meal-plan", icon: UtensilsCrossed },
-      { name: "Toiletries", href: "/toiletries", icon: Sparkles },
     ],
   },
 ];
