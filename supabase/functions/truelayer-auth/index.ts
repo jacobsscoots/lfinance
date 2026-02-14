@@ -136,6 +136,31 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
+      // Clean up any existing stale pending connections for this user
+      // This prevents duplicate "Bank Account / pending" rows from repeated attempts
+      const { data: stalePending } = await serviceSupabase
+        .from('bank_connections')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'pending');
+
+      if (stalePending && stalePending.length > 0) {
+        const staleIds = stalePending.map(c => c.id);
+        console.log(`[auth-url] Cleaning up ${staleIds.length} stale pending connection(s)`);
+        
+        // Delete linked bank_accounts that reference these stale connections
+        await serviceSupabase
+          .from('bank_accounts')
+          .delete()
+          .in('connection_id', staleIds);
+
+        // Delete the stale pending connections themselves
+        await serviceSupabase
+          .from('bank_connections')
+          .delete()
+          .in('id', staleIds);
+      }
+
       const { data: connection, error: connError } = await serviceSupabase
         .from('bank_connections')
         .insert({
