@@ -92,20 +92,22 @@ export default function Deliveries() {
 
         {/* Main tabs */}
         <Tabs defaultValue="active">
-          <TabsList>
-            <TabsTrigger value="active" className="gap-1">
-              Active ({active.length})
-            </TabsTrigger>
-            <TabsTrigger value="delivered" className="gap-1">
-              Delivered ({delivered.length})
-            </TabsTrigger>
-            <TabsTrigger value="all" className="gap-1">
-              All ({shipments.length})
-            </TabsTrigger>
-            <TabsTrigger value="email-log" className="gap-1">
-              <Mail className="h-3 w-3" /> Email Log
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex w-auto">
+              <TabsTrigger value="active" className="gap-1 text-xs sm:text-sm whitespace-nowrap">
+                Active ({active.length})
+              </TabsTrigger>
+              <TabsTrigger value="delivered" className="gap-1 text-xs sm:text-sm whitespace-nowrap">
+                Delivered ({delivered.length})
+              </TabsTrigger>
+              <TabsTrigger value="all" className="gap-1 text-xs sm:text-sm whitespace-nowrap">
+                All ({shipments.length})
+              </TabsTrigger>
+              <TabsTrigger value="email-log" className="gap-1 text-xs sm:text-sm whitespace-nowrap">
+                <Mail className="h-3 w-3" /> Email Log
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="active" className="mt-4">
             <ShipmentList shipments={active} events={events} onDelete={(id) => deleteShipment.mutate(id)} isLoading={isLoading} emptyMessage="No active deliveries" />

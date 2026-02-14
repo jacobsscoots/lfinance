@@ -67,19 +67,19 @@ export function ShopReadyListView() {
       {/* Week selector */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
               Shop List
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setWeekOffset(w => w - 1)}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekOffset(w => w - 1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="text-sm font-medium min-w-[180px] text-center">
+              <div className="text-sm font-medium min-w-[150px] sm:min-w-[180px] text-center">
                 {format(weekStart, "d MMM")} - {format(weekEnd, "d MMM yyyy")}
               </div>
-              <Button variant="outline" size="icon" onClick={() => setWeekOffset(w => w + 1)}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekOffset(w => w + 1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               {weekOffset !== 0 && (
