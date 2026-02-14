@@ -307,7 +307,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
   return (
     <>
       <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-        <ResponsiveDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <ResponsiveDialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <ResponsiveDialogHeader>
             <div className="flex items-center justify-between gap-4">
               <ResponsiveDialogTitle>{isEditing ? "Edit Product" : "Add Product"}</ResponsiveDialogTitle>
@@ -734,17 +734,16 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                       </FormItem>
                     )}
                   />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex gap-4">
                     <FormField
                       control={form.control}
                       name="offer_start_date"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="flex-1">
                           <FormLabel>Offer Start</FormLabel>
                           <FormControl>
                             <Input 
                               type="date" 
-                              className="min-w-0 w-full"
                               {...field} 
                               value={field.value || ""} 
                             />
@@ -756,12 +755,11 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                       control={form.control}
                       name="offer_end_date"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="flex-1">
                           <FormLabel>Offer End</FormLabel>
                           <FormControl>
                             <Input 
                               type="date" 
-                              className="min-w-0 w-full"
                               {...field} 
                               value={field.value || ""} 
                             />
