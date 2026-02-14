@@ -13,8 +13,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       <MobileNav />
       
       {/* Main Content */}
-      <main className="lg:pl-64">
-        <div className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <main className="lg:pl-64 min-w-0">
+        <div className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8 min-w-0 overflow-x-hidden">
           {children}
         </div>
       </main>
