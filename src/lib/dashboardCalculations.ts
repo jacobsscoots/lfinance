@@ -1,4 +1,4 @@
-import { differenceInDays, format, isBefore, isAfter, isSameDay, addDays } from "date-fns";
+import { differenceInDays, format, isBefore, isAfter, isSameDay, addDays, startOfDay } from "date-fns";
 import type { PayCycle } from "./payCycle";
 
 // ==================== Types ====================
@@ -149,7 +149,7 @@ export function buildDailySpendingData(
   
   const result: DailySpending[] = [];
   let cumulativeActual = 0;
-  const today = new Date();
+  const today = startOfDay(new Date());
   
   // Group transactions by date
   const spendingByDate = new Map<string, number>();
@@ -269,13 +269,14 @@ export function generateAlerts(
   }
   
   // Large upcoming bills (next 3 days, > £100)
-  const threeDaysFromNow = addDays(new Date(), 3);
+  const todayStart = startOfDay(new Date());
+  const threeDaysFromNow = addDays(todayStart, 3);
   const largeBillsSoon = upcomingBills.filter(
     b => b.amount >= 100 && isBefore(b.dueDate, threeDaysFromNow)
   );
   
   largeBillsSoon.forEach(bill => {
-    const daysUntil = differenceInDays(bill.dueDate, new Date());
+    const daysUntil = differenceInDays(startOfDay(bill.dueDate), todayStart);
     alerts.push({
       id: `bill-${bill.name}`,
       type: "info",
@@ -286,9 +287,9 @@ export function generateAlerts(
   
   // Upcoming birthday / occasion alerts (within 7 days)
   if (birthdayEvents?.length) {
-    const today = new Date();
-    const currentMonth = today.getMonth() + 1;
-    const currentDay = today.getDate();
+    const todayBday = startOfDay(new Date());
+    const currentMonth = todayBday.getMonth() + 1;
+    const currentDay = todayBday.getDate();
 
     for (const ev of birthdayEvents) {
       // Skip events where both card and money are done
@@ -297,11 +298,11 @@ export function generateAlerts(
       const d = ev.event_day ?? 1;
 
       // Calculate days until this event (wrapping around year boundary)
-      let targetDate = new Date(today.getFullYear(), m - 1, d);
-      if (targetDate < today && differenceInDays(today, targetDate) > 0) {
-        targetDate = new Date(today.getFullYear() + 1, m - 1, d);
+      let targetDate = new Date(todayBday.getFullYear(), m - 1, d);
+      if (targetDate < todayBday && differenceInDays(todayBday, targetDate) > 0) {
+        targetDate = new Date(todayBday.getFullYear() + 1, m - 1, d);
       }
-      const daysUntil = differenceInDays(targetDate, today);
+      const daysUntil = differenceInDays(startOfDay(targetDate), todayBday);
 
       if (daysUntil >= 0 && daysUntil <= 7) {
         const when = daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`;
