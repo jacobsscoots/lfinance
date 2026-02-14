@@ -34,6 +34,7 @@ export function ShopReadyListView() {
           multiBuyDiscount: 0,
           loyaltyDiscount: 0,
           totalDiscount: 0, 
+          deliveryCharges: 0,
           finalCost: 0, 
           itemCount: 0 
         },
@@ -100,6 +101,11 @@ export function ShopReadyListView() {
                 {shopList.totals.totalDiscount > 0 && (
                   <div className="text-sm font-medium text-primary">
                     Saving £{shopList.totals.totalDiscount.toFixed(2)} with loyalty discounts
+                  </div>
+                )}
+                {shopList.totals.deliveryCharges > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    Includes £{shopList.totals.deliveryCharges.toFixed(2)} delivery
                   </div>
                 )}
                 <div className="text-xl font-bold">

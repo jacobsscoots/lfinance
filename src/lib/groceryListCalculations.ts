@@ -37,6 +37,7 @@ export interface RetailerGroup {
   subtotalAfterMultiBuy: number;
   discountType: DiscountType;
   loyaltyDiscountAmount: number;
+  deliveryCharge: number;
   finalTotal: number;
   // Legacy field for backwards compatibility
   discountAmount: number;
@@ -50,9 +51,31 @@ export interface ShopReadyList {
     multiBuyDiscount: number;
     loyaltyDiscount: number;
     totalDiscount: number;
+    deliveryCharges: number;
     finalCost: number;
     itemCount: number;
   };
+}
+
+// ============= Delivery Charges =============
+
+interface DeliveryRule {
+  charge: number;
+  freeAbove: number | null; // null = never free
+}
+
+const RETAILER_DELIVERY: Record<string, DeliveryRule> = {
+  MyProtein: { charge: 4.49, freeAbove: 50 },
+};
+
+/**
+ * Calculate delivery charge for a retailer based on order subtotal.
+ */
+function calculateDeliveryCharge(retailer: string, subtotal: number): number {
+  const rule = RETAILER_DELIVERY[retailer];
+  if (!rule) return 0;
+  if (rule.freeAbove !== null && subtotal >= rule.freeAbove) return 0;
+  return rule.charge;
 }
 
 // ============= Core Logic =============
@@ -200,6 +223,7 @@ export function generateShopReadyList(
   let totalGrossCost = 0;
   let totalMultiBuyDiscount = 0;
   let totalLoyaltyDiscount = 0;
+  let totalDeliveryCharges = 0;
   let totalFinalCost = 0;
   let totalItemCount = 0;
   
@@ -218,6 +242,9 @@ export function generateShopReadyList(
     // Apply basket-level loyalty discount on subtotal AFTER multi-buy
     const loyaltyResult = calculateBasketDiscount(subtotalAfterMultiBuy, discountType);
     
+    // Calculate delivery charge
+    const deliveryCharge = calculateDeliveryCharge(retailer, loyaltyResult.finalPrice);
+    
     const group: RetailerGroup = {
       retailer,
       items,
@@ -226,7 +253,8 @@ export function generateShopReadyList(
       subtotalAfterMultiBuy,
       discountType,
       loyaltyDiscountAmount: loyaltyResult.discountAmount,
-      finalTotal: loyaltyResult.finalPrice,
+      deliveryCharge,
+      finalTotal: loyaltyResult.finalPrice + deliveryCharge,
       // Legacy field for backwards compatibility
       discountAmount: multiBuyDiscount + loyaltyResult.discountAmount,
     };
@@ -236,7 +264,8 @@ export function generateShopReadyList(
     totalGrossCost += subtotal;
     totalMultiBuyDiscount += multiBuyDiscount;
     totalLoyaltyDiscount += loyaltyResult.discountAmount;
-    totalFinalCost += loyaltyResult.finalPrice;
+    totalDeliveryCharges += deliveryCharge;
+    totalFinalCost += loyaltyResult.finalPrice + deliveryCharge;
     totalItemCount += items.length;
   }
   
@@ -255,6 +284,7 @@ export function generateShopReadyList(
       multiBuyDiscount: totalMultiBuyDiscount,
       loyaltyDiscount: totalLoyaltyDiscount,
       totalDiscount: totalMultiBuyDiscount + totalLoyaltyDiscount,
+      deliveryCharges: totalDeliveryCharges,
       finalCost: totalFinalCost,
       itemCount: totalItemCount,
     },

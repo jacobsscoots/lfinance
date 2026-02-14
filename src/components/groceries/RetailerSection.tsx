@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Store, Tag, Percent } from "lucide-react";
+import { ChevronDown, ChevronUp, Store, Tag, Percent, Truck } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { RetailerGroup, ShopReadyItem } from "@/lib/groceryListCalculations";
@@ -73,6 +73,25 @@ export function RetailerSection({ group, onDiscountChange }: RetailerSectionProp
       
       <CollapsibleContent>
         <div className="border-t">
+          {/* Delivery charge */}
+          {group.deliveryCharge > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b">
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <Truck className="h-3.5 w-3.5" />
+                Standard Delivery
+              </span>
+              <span className="text-sm font-medium">£{group.deliveryCharge.toFixed(2)}</span>
+            </div>
+          )}
+          {group.deliveryCharge === 0 && group.retailer === "MyProtein" && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-primary/5 border-b">
+              <span className="text-sm text-primary flex items-center gap-2">
+                <Truck className="h-3.5 w-3.5" />
+                Free delivery (over £50)
+              </span>
+            </div>
+          )}
+
           {/* Items list */}
           <div className="p-3 space-y-1.5">
             {group.items.map((item) => (
