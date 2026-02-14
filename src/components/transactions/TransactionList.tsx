@@ -338,43 +338,45 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between items-start">
-                  <span className="text-muted-foreground">Merchant</span>
-                  <span className="font-medium text-right">{gmailReceipt.merchant_name || "Unknown"}</span>
-                </div>
-                {gmailReceipt.amount != null && (
-                  <div className="flex justify-between items-start">
-                    <span className="text-muted-foreground">Amount</span>
-                    <span className="font-medium">£{gmailReceipt.amount.toFixed(2)}</span>
-                  </div>
-                )}
+              <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
+                <span className="text-muted-foreground">Merchant</span>
+                <span className="font-medium">{gmailReceipt.merchant_name || transaction.merchant || transaction.description}</span>
+
+                <span className="text-muted-foreground">Amount</span>
+                <span className="font-medium">
+                  £{(gmailReceipt.amount ?? Number(transaction.amount)).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+
                 {gmailReceipt.subject && (
-                  <div className="flex justify-between items-start gap-4">
-                    <span className="text-muted-foreground shrink-0">Subject</span>
-                    <span className="font-medium text-right truncate">{gmailReceipt.subject}</span>
-                  </div>
+                  <>
+                    <span className="text-muted-foreground">Subject</span>
+                    <span className="font-medium break-words">{gmailReceipt.subject}</span>
+                  </>
                 )}
+
                 {gmailReceipt.from_email && (
-                  <div className="flex justify-between items-start gap-4">
-                    <span className="text-muted-foreground shrink-0">From</span>
-                    <span className="font-medium text-right truncate text-xs">{gmailReceipt.from_email}</span>
-                  </div>
+                  <>
+                    <span className="text-muted-foreground">From</span>
+                    <span className="font-medium text-xs break-all">{gmailReceipt.from_email}</span>
+                  </>
                 )}
+
                 {gmailReceipt.order_reference && (
-                  <div className="flex justify-between items-start">
+                  <>
                     <span className="text-muted-foreground">Order ref</span>
-                    <span className="font-mono text-xs">{gmailReceipt.order_reference}</span>
-                  </div>
+                    <span className="font-mono text-xs break-all">{gmailReceipt.order_reference}</span>
+                  </>
                 )}
+
                 {gmailReceipt.received_at && (
-                  <div className="flex justify-between items-start">
+                  <>
                     <span className="text-muted-foreground">Received</span>
                     <span className="font-medium">{format(new Date(gmailReceipt.received_at), "d MMM yyyy, HH:mm")}</span>
-                  </div>
+                  </>
                 )}
-                <div className="flex justify-between items-start">
-                  <span className="text-muted-foreground">Confidence</span>
+
+                <span className="text-muted-foreground">Confidence</span>
+                <span>
                   <Badge 
                     variant="outline" 
                     className={cn(
@@ -386,7 +388,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
                   >
                     {gmailReceipt.match_confidence}
                   </Badge>
-                </div>
+                </span>
               </div>
             </div>
           </DialogContent>
