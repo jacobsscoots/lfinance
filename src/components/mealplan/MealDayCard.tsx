@@ -51,7 +51,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [copyToDateOpen, setCopyToDateOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
-  const [aiFailInfo, setAiFailInfo] = useState<{ failed: boolean; message?: string; suggestions?: string[] } | null>(null);
+  const [aiFailInfo, setAiFailInfo] = useState<{ failed: boolean; bestEffort?: boolean; message?: string; suggestions?: string[] } | null>(null);
   
   const { updateMealStatus, removeItem, updateItem, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay, aiPlanDay } = useMealPlanItems(weekStart);
   
@@ -205,6 +205,14 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
               message: result.violations?.join(", ") || "Targets not achievable",
               suggestions: result.suggested_fixes?.filter((s: string) => !!s) || [],
             });
+          } else if (result.bestEffort) {
+            // Best effort saved — show amber warning, not red error
+            setAiFailInfo({
+              failed: false,
+              bestEffort: true,
+              message: result.violations?.join(", ") || "Closest achievable plan saved",
+              suggestions: result.suggested_fixes?.filter((s: string) => !!s) || [],
+            });
           } else {
             setAiFailInfo(null);
           }
@@ -311,7 +319,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
             </div>
           </CardTitle>
           
-          {/* Banner priority: FAIL (red) > Uncalculated (amber) > Normal macros */}
+          {/* Banner priority: FAIL (red) > Best Effort (amber) > Uncalculated (amber) > Normal macros */}
           <div className="mt-2">
           {aiFailInfo?.failed ? (
               <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 space-y-1.5">
@@ -322,9 +330,25 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                 {aiFailInfo.message && (
                   <div className="text-[10px] text-destructive/80">{aiFailInfo.message}</div>
                 )}
-                {/* Bug 7 fix: show suggestions inline, not just as toasts */}
                 {aiFailInfo.suggestions && aiFailInfo.suggestions.length > 0 && (
                   <ul className="text-[10px] text-destructive/70 space-y-0.5 list-disc pl-3">
+                    {aiFailInfo.suggestions.slice(0, 3).map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : aiFailInfo?.bestEffort ? (
+              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1.5 space-y-1.5">
+                <div className="flex items-center justify-center gap-1">
+                  <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                  <span className="font-medium">Best-effort plan saved</span>
+                </div>
+                {aiFailInfo.message && (
+                  <div className="text-[10px] text-amber-600/80 dark:text-amber-400/80">{aiFailInfo.message}</div>
+                )}
+                {aiFailInfo.suggestions && aiFailInfo.suggestions.length > 0 && (
+                  <ul className="text-[10px] text-amber-600/70 dark:text-amber-400/70 space-y-0.5 list-disc pl-3">
                     {aiFailInfo.suggestions.slice(0, 3).map((s, i) => (
                       <li key={i}>{s}</li>
                     ))}
