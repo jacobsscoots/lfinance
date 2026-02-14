@@ -105,13 +105,13 @@ export interface ToleranceConfig {
 // The solver shifts targets up by +2g internally before checking.
 export const DEFAULT_TOLERANCES: ToleranceConfig = {
   calories: { min: 0, max: 50 },
-  protein: { min: 0, max: 5 },
-  carbs: { min: 0, max: 5 },
-  fat: { min: 0, max: 5 },
+  protein: { min: 0, max: 3 },
+  carbs: { min: 0, max: 3 },
+  fat: { min: 0, max: 3 },
 };
 
 // Macro overshoot minimums — solver shifts targets up by this amount
-export const MACRO_OVERSHOOT_MIN = 2; // grams
+export const MACRO_OVERSHOOT_MIN = 0; // grams
 
 // Solver targets
 export interface SolverTargets {
@@ -239,7 +239,7 @@ export interface SolverOptions {
 
 // Default solver options
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
-  maxIterations: 1500,
+  maxIterations: 20000,
   tolerances: DEFAULT_TOLERANCES,
   debugMode: false,
   seasoningsCountMacros: false,
