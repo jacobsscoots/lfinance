@@ -355,16 +355,46 @@ export async function readWorkbook(data: ArrayBuffer): Promise<ExcelJS.Workbook>
     return workbook;
   } catch (err) {
     console.warn("ExcelJS failed, using fallback ZIP parser:", err);
-    return fallbackParseXlsx(data);
+    // Build a workbook from fallback-parsed data
+    return buildWorkbookFromFallback(data);
   }
 }
 
 /**
- * Fallback XLSX parser using JSZip + DOMParser.
- * Handles files ExcelJS chokes on (e.g. auto-filter tables).
- * Returns a minimal ExcelJS-compatible Workbook with sheet data only.
+ * Parse XLSX via JSZip + DOMParser directly to row arrays,
+ * then construct an ExcelJS workbook by adding rows (which ExcelJS reliably iterates).
  */
-async function fallbackParseXlsx(data: ArrayBuffer): Promise<ExcelJS.Workbook> {
+async function buildWorkbookFromFallback(data: ArrayBuffer): Promise<ExcelJS.Workbook> {
+  const sheets = await fallbackParseSheets(data);
+  const wb = new ExcelJS.Workbook();
+
+  for (const sheet of sheets) {
+    const ws = wb.addWorksheet(sheet.name);
+    for (const row of sheet.rows) {
+      ws.addRow(row);
+    }
+  }
+
+  // Verify
+  const firstSheet = wb.worksheets[0];
+  if (firstSheet) {
+    const headers: string[] = [];
+    firstSheet.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
+      headers.push(String(cell.value));
+    });
+    console.log("Fallback workbook headers:", headers);
+    console.log("Fallback workbook row count:", firstSheet.rowCount);
+  }
+
+  return wb;
+}
+
+interface FallbackSheet {
+  name: string;
+  rows: any[][]; // each inner array is one row of cell values
+}
+
+async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> {
   const zip = await JSZip.loadAsync(data);
 
   // 1. Read shared strings
@@ -373,10 +403,9 @@ async function fallbackParseXlsx(data: ArrayBuffer): Promise<ExcelJS.Workbook> {
   if (ssFile) {
     const ssXml = await ssFile.async("string");
     const doc = new DOMParser().parseFromString(ssXml, "application/xml");
-    const siElements = doc.getElementsByTagName("si");
+    const siElements = doc.getElementsByTagNameNS("*", "si");
     for (let i = 0; i < siElements.length; i++) {
-      // Collect all <t> text nodes within each <si>
-      const tElements = siElements[i].getElementsByTagName("t");
+      const tElements = siElements[i].getElementsByTagNameNS("*", "t");
       let text = "";
       for (let j = 0; j < tElements.length; j++) {
         text += tElements[j].textContent ?? "";
@@ -391,49 +420,82 @@ async function fallbackParseXlsx(data: ArrayBuffer): Promise<ExcelJS.Workbook> {
     if (path.endsWith(".xml")) sheetFiles.push("xl/worksheets/" + path);
   });
 
-  // 3. Build an ExcelJS workbook manually
-  const wb = new ExcelJS.Workbook();
+  const results: FallbackSheet[] = [];
 
   for (const sheetPath of sheetFiles) {
     const sheetXml = await zip.file(sheetPath)!.async("string");
     const doc = new DOMParser().parseFromString(sheetXml, "application/xml");
-    const ws = wb.addWorksheet(sheetPath.replace(/.*\//, "").replace(".xml", ""));
 
-    const rows = doc.getElementsByTagName("row");
-    for (let r = 0; r < rows.length; r++) {
-      const rowEl = rows[r];
-      const rowNum = parseInt(rowEl.getAttribute("r") || "1", 10);
-      const cells = rowEl.getElementsByTagName("c");
+    // Parse all cells into a map: rowNum -> colIdx -> value
+    const cellMap: Map<number, Map<number, any>> = new Map();
+    let maxCol = 0;
 
-      for (let c = 0; c < cells.length; c++) {
-        const cellEl = cells[c];
+    const rowElements = doc.getElementsByTagNameNS("*", "row");
+    for (let r = 0; r < rowElements.length; r++) {
+      const rowEl = rowElements[r];
+      const rowNum = parseInt(rowEl.getAttribute("r") || String(r + 1), 10);
+      const cellElements = rowEl.getElementsByTagNameNS("*", "c");
+
+      if (!cellMap.has(rowNum)) cellMap.set(rowNum, new Map());
+      const rowMap = cellMap.get(rowNum)!;
+
+      for (let c = 0; c < cellElements.length; c++) {
+        const cellEl = cellElements[c];
         const ref = cellEl.getAttribute("r") || "";
         const type = cellEl.getAttribute("t") || "";
-        const vEl = cellEl.getElementsByTagName("v")[0];
+        const vEl = cellEl.getElementsByTagNameNS("*", "v")[0];
         const rawVal = vEl?.textContent ?? "";
 
         let value: any = rawVal;
         if (type === "s") {
-          // Shared string index
           const idx = parseInt(rawVal, 10);
           value = sharedStrings[idx] ?? rawVal;
         } else if (type === "b") {
-          value = rawVal === "1";
+          value = rawVal === "1" ? "TRUE" : "FALSE";
+        } else if (type === "str" || type === "inlineStr") {
+          const isEl = cellEl.getElementsByTagNameNS("*", "is")[0];
+          if (isEl) {
+            const tEl = isEl.getElementsByTagNameNS("*", "t")[0];
+            value = tEl?.textContent ?? rawVal;
+          }
         } else if (!type && rawVal && !isNaN(Number(rawVal))) {
           value = Number(rawVal);
         }
 
-        // Parse column letter from ref (e.g. "AB12" -> column index)
         const colMatch = ref.match(/^([A-Z]+)/);
         if (colMatch) {
           const colIdx = colLetterToIndex(colMatch[1]);
-          ws.getRow(rowNum).getCell(colIdx).value = value;
+          rowMap.set(colIdx, value);
+          if (colIdx > maxCol) maxCol = colIdx;
         }
       }
     }
+
+    // Convert map to row arrays
+    const sortedRowNums = [...cellMap.keys()].sort((a, b) => a - b);
+    const rowArrays: any[][] = [];
+    for (const rowNum of sortedRowNums) {
+      const rowMap = cellMap.get(rowNum)!;
+      const arr: any[] = [];
+      for (let col = 1; col <= maxCol; col++) {
+        arr.push(rowMap.get(col) ?? null);
+      }
+      rowArrays.push(arr);
+    }
+
+    console.log("Fallback parsed sheet:", sheetPath, "rows:", rowArrays.length, "cols:", maxCol);
+    if (rowArrays.length > 0) {
+      console.log("Fallback first row (headers):", rowArrays[0]);
+      console.log("Fallback second row (data):", rowArrays[1]);
+    }
+
+    results.push({
+      name: sheetPath.replace(/.*\//, "").replace(".xml", ""),
+      rows: rowArrays,
+    });
   }
 
-  return wb;
+  return results;
 }
 
 function colLetterToIndex(letters: string): number {
