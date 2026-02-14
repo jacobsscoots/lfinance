@@ -993,7 +993,7 @@ export function useMealPlanItems(weekStart: Date) {
       const freshResult = await (supabase as any)
         .from("meal_plan_items")
         .select("*, product:products(*)")
-        .eq("plan_id", planId)
+        .eq("meal_plan_id", planId)
         .eq("user_id", user.id);
 
       const freshItems = (freshResult.data || []) as any[];
