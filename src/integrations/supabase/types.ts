@@ -3687,6 +3687,39 @@ export type Database = {
         }
         Relationships: []
       }
+      yearly_planner_cell_overrides: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          month: number
+          row_key: string
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          month: number
+          row_key: string
+          updated_at?: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          month?: number
+          row_key?: string
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       yearly_planner_overrides: {
         Row: {
           amount: number
