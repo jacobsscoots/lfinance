@@ -23,6 +23,7 @@ export interface Debt {
   opened_date: string | null;
   closed_date: string | null;
   notes: string | null;
+  linked_account_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +41,7 @@ export interface DebtInsert {
   status?: DebtStatus;
   opened_date?: string | null;
   notes?: string | null;
+  linked_account_id?: string | null;
 }
 
 export interface DebtUpdate extends Partial<DebtInsert> {
