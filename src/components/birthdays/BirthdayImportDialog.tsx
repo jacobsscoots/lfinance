@@ -86,13 +86,21 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = await readWorkbook(buffer);
+      let wb: Awaited<ReturnType<typeof readWorkbook>>;
+      try {
+        wb = await readWorkbook(buffer);
+      } catch (parseErr: any) {
+        console.error("Excel parse error:", parseErr);
+        toast.error(`Could not read file: ${parseErr?.message || "unsupported format"}`);
+        return;
+      }
       const ws = wb.worksheets[0];
       if (!ws) {
         toast.error("No worksheet found in the file");
         return;
       }
       const rows = sheetToJson<Record<string, any>>(ws);
+      console.log("Parsed rows:", rows.length, "Sample:", rows[0]);
 
       const parsed: ImportRow[] = [];
       const currentYear = new Date().getFullYear();
@@ -192,8 +200,9 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
       if (parsed.length === 0) {
         toast.error("No valid rows found. Need at least Name and Month columns.");
       }
-    } catch (err) {
-      toast.error("Failed to parse file");
+    } catch (err: any) {
+      console.error("Import parse error:", err);
+      toast.error(err?.message || "Failed to parse file");
     }
   };
 
