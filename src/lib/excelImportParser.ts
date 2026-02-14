@@ -363,7 +363,7 @@ export function sheetToJson<T = Record<string, any>>(sheet: ExcelJS.Worksheet): 
     if (rowNumber === 1) {
       // First row is headers
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        headers[colNumber - 1] = cell.value != null ? String(cell.value).trim() : `Column${colNumber}`;
+        headers[colNumber - 1] = cell.value != null ? resolveCellValue(cell.value) : `Column${colNumber}`;
       });
       return;
     }
@@ -372,7 +372,13 @@ export function sheetToJson<T = Record<string, any>>(sheet: ExcelJS.Worksheet): 
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       const header = headers[colNumber - 1];
       if (header) {
-        record[header] = cell.value;
+        // Preserve Date objects and booleans; resolve rich-text / formulas
+        const raw = cell.value;
+        if (raw instanceof Date || typeof raw === "boolean" || typeof raw === "number") {
+          record[header] = raw;
+        } else {
+          record[header] = raw != null ? resolveCellValue(raw) : null;
+        }
       }
     });
 
@@ -383,4 +389,22 @@ export function sheetToJson<T = Record<string, any>>(sheet: ExcelJS.Worksheet): 
   });
 
   return rows;
+}
+
+/** Extract a plain string from any ExcelJS cell value type */
+function resolveCellValue(val: any): string {
+  if (val == null) return "";
+  // Rich text: { richText: [{ text: "..." }, ...] }
+  if (typeof val === "object" && val.richText && Array.isArray(val.richText)) {
+    return val.richText.map((seg: any) => seg.text ?? "").join("").trim();
+  }
+  // Formula: { result: ..., formula: "..." }
+  if (typeof val === "object" && "result" in val) {
+    return val.result != null ? String(val.result).trim() : "";
+  }
+  // Hyperlink: { text: "...", hyperlink: "..." }
+  if (typeof val === "object" && "text" in val) {
+    return String(val.text).trim();
+  }
+  return String(val).trim();
 }
