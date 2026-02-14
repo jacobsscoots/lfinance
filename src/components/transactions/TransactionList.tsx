@@ -15,7 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { MoreVertical, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Receipt, Paperclip, Upload, Eye, Link, Apple } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Receipt, Paperclip, Upload, Eye, Link, Apple, Mail } from "lucide-react";
 import { Transaction } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
 import { ReceiptPreviewDialog } from "./ReceiptPreviewDialog";
@@ -23,6 +23,8 @@ import { LinkTransactionDialog } from "./LinkTransactionDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 
 const APPLE_TAGS = [
   { label: "iCloud Storage", amount: null },
@@ -47,6 +49,28 @@ interface TransactionListProps {
 }
 
 export function TransactionList({ transactions, onEdit, onDelete }: TransactionListProps) {
+  const { user } = useAuth();
+
+  // Fetch gmail receipts matched to transactions so we can show indicators
+  const { data: gmailMatches } = useQuery({
+    queryKey: ["gmail-receipt-matches", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from("gmail_receipts")
+        .select("matched_transaction_id, merchant_name, amount, match_confidence")
+        .eq("user_id", user.id)
+        .eq("match_status", "matched")
+        .not("matched_transaction_id", "is", null);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const gmailMatchMap = new Map(
+    (gmailMatches || []).map(r => [r.matched_transaction_id, r])
+  );
+
   const groupedTransactions = transactions.reduce((groups, transaction) => {
     const date = transaction.transaction_date;
     if (!groups[date]) {
@@ -75,6 +99,7 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                   transaction={transaction}
                   onEdit={onEdit}
                   onDelete={onDelete}
+                  gmailReceipt={gmailMatchMap.get(transaction.id) || null}
                 />
               ))}
             </div>
@@ -89,9 +114,10 @@ interface TransactionRowProps {
   transaction: Transaction;
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
+  gmailReceipt: { merchant_name: string | null; amount: number | null; match_confidence: string | null } | null;
 }
 
-function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) {
+function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: TransactionRowProps) {
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -99,6 +125,7 @@ function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) 
   const amount = Number(transaction.amount);
   const isIncome = transaction.type === "income";
   const hasReceipt = !!transaction.receipt_path;
+  const hasGmailReceipt = !!gmailReceipt;
   const hasLinks = !!(transaction.bill || transaction.investment);
   const isApple = isAppleTransaction(transaction);
 
@@ -156,6 +183,19 @@ function TransactionRow({ transaction, onEdit, onDelete }: TransactionRowProps) 
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Receipt attached</p>
+                  </TooltipContent>
+                </Tooltip>
+               )}
+              {hasGmailReceipt && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="text-xs py-0 gap-1 bg-success/10 text-success border-success/30">
+                      <Mail className="h-3 w-3" />
+                      Gmail receipt
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Matched from Gmail ({gmailReceipt.match_confidence} confidence)</p>
                   </TooltipContent>
                 </Tooltip>
               )}
