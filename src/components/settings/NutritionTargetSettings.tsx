@@ -695,13 +695,13 @@ export function NutritionTargetSettings() {
                       >
                         <label
                           htmlFor="target_based"
-                          className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                          className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 ${
                             field.value === "target_based" 
-                              ? "border-primary bg-primary/5" 
+                              ? "border-primary bg-primary/10" 
                               : "hover:bg-accent"
                           }`}
                         >
-                          <RadioGroupItem value="target_based" id="target_based" />
+                          <RadioGroupItem value="target_based" id="target_based" className="mt-0.5" />
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 font-medium">
                               <Target className="h-4 w-4 text-primary" />
@@ -714,13 +714,13 @@ export function NutritionTargetSettings() {
                         </label>
                         <label
                           htmlFor="manual"
-                          className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                          className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 ${
                             field.value === "manual" 
-                              ? "border-primary bg-primary/5" 
+                              ? "border-primary bg-primary/10" 
                               : "hover:bg-accent"
                           }`}
                         >
-                          <RadioGroupItem value="manual" id="manual" />
+                          <RadioGroupItem value="manual" id="manual" className="mt-0.5" />
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 font-medium">
                               <Scale className="h-4 w-4 text-primary" />
