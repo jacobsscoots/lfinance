@@ -41,6 +41,7 @@ export function useBillsScanner() {
       currentTariff,
       postcode,
       currentSpeedMbps,
+      currentDataGb,
       preferredContractMonths,
     }: {
       serviceId?: string;
@@ -53,6 +54,7 @@ export function useBillsScanner() {
       };
       postcode?: string;
       currentSpeedMbps?: number;
+      currentDataGb?: number;
       preferredContractMonths?: number;
     }) => {
       const { data, error } = await supabase.functions.invoke("compare-energy-deals", {
@@ -64,6 +66,7 @@ export function useBillsScanner() {
           currentTariff,
           postcode,
           currentSpeedMbps,
+          currentDataGb,
           preferredContractMonths,
         },
       });
@@ -95,6 +98,7 @@ export function useBillsScanner() {
       service_type: string;
       monthly_cost: number;
       current_speed_mbps?: number | null;
+      current_data_gb?: number | null;
       preferred_contract_months?: number | null;
     }>,
     options: {
@@ -119,6 +123,7 @@ export function useBillsScanner() {
             currentTariff: service.service_type === "energy" ? options.currentTariff : undefined,
             postcode: options.postcode,
             currentSpeedMbps: service.current_speed_mbps || undefined,
+            currentDataGb: service.current_data_gb || undefined,
             preferredContractMonths: service.preferred_contract_months || undefined,
           });
           results.push(result);

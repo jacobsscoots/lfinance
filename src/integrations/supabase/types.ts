@@ -3252,6 +3252,7 @@ export type Database = {
           contract_end_date: string | null
           contract_start_date: string | null
           created_at: string
+          current_data_gb: number | null
           current_speed_mbps: number | null
           estimated_savings_annual: number | null
           exit_fee: number | null
@@ -3274,6 +3275,7 @@ export type Database = {
           contract_end_date?: string | null
           contract_start_date?: string | null
           created_at?: string
+          current_data_gb?: number | null
           current_speed_mbps?: number | null
           estimated_savings_annual?: number | null
           exit_fee?: number | null
@@ -3296,6 +3298,7 @@ export type Database = {
           contract_end_date?: string | null
           contract_start_date?: string | null
           created_at?: string
+          current_data_gb?: number | null
           current_speed_mbps?: number | null
           estimated_savings_annual?: number | null
           exit_fee?: number | null

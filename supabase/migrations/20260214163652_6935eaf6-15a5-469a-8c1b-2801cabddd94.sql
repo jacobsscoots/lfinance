@@ -1,0 +1,1 @@
+ALTER TABLE public.tracked_services ADD COLUMN current_data_gb integer;
