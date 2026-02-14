@@ -30,13 +30,17 @@ export function BankConnectionCard() {
   } = useBankConnections();
   const { allAccounts } = useAccounts();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const handleConnect = () => {
     startConnection.mutate();
   };
 
   const handleSync = (connectionId: string) => {
-    syncConnection.mutate(connectionId);
+    setSyncingId(connectionId);
+    syncConnection.mutate(connectionId, {
+      onSettled: () => setSyncingId(null),
+    });
   };
 
   const handleDelete = () => {
@@ -143,10 +147,10 @@ export function BankConnectionCard() {
                       variant="outline"
                       size="icon"
                       onClick={() => handleSync(connection.id)}
-                      disabled={syncConnection.isPending}
+                      disabled={syncingId === connection.id}
                     >
                       <RefreshCw
-                        className={`h-4 w-4 ${syncConnection.isPending ? "animate-spin" : ""}`}
+                        className={`h-4 w-4 ${syncingId === connection.id ? "animate-spin" : ""}`}
                       />
                     </Button>
                     <Button
