@@ -163,23 +163,42 @@ export function useNutritionSettings() {
       
       if (error) throw error;
 
-      // Sync macros to any active weekly_nutrition_targets rows so the
-      // meal planner immediately reflects the new manual values.
-      // We update protein/carbs/fat but leave per-day calories untouched
-      // (those may be set by zigzag and should be preserved).
-      if (
-        formData.protein_target_grams != null ||
-        formData.carbs_target_grams != null ||
-        formData.fat_target_grams != null
-      ) {
-        const updatePayload: Record<string, unknown> = {};
-        if (formData.protein_target_grams != null) updatePayload.protein_target_grams = formData.protein_target_grams;
-        if (formData.carbs_target_grams != null) updatePayload.carbs_target_grams = formData.carbs_target_grams;
-        if (formData.fat_target_grams != null) updatePayload.fat_target_grams = formData.fat_target_grams;
+      // Sync ALL targets (calories + macros) to active weekly_nutrition_targets
+      // so the meal planner immediately reflects the new manual values.
+      // This sets flat daily calories (disabling zigzag) since the user is
+      // explicitly choosing manual values. To use zigzag, they use the
+      // Weekly Plan tab which has its own save flow.
+      const weeklyPayload: Record<string, unknown> = {};
+      let hasWeeklyUpdate = false;
 
+      // Sync macros
+      if (formData.protein_target_grams != null) { weeklyPayload.protein_target_grams = formData.protein_target_grams; hasWeeklyUpdate = true; }
+      if (formData.carbs_target_grams != null) { weeklyPayload.carbs_target_grams = formData.carbs_target_grams; hasWeeklyUpdate = true; }
+      if (formData.fat_target_grams != null) { weeklyPayload.fat_target_grams = formData.fat_target_grams; hasWeeklyUpdate = true; }
+
+      // Sync calories — set flat schedule for all 7 days
+      if (formData.daily_calorie_target != null) {
+        const weekdayCals = formData.daily_calorie_target;
+        const weekendCals = (formData.weekend_targets_enabled && formData.weekend_calorie_target != null)
+          ? formData.weekend_calorie_target
+          : weekdayCals;
+
+        weeklyPayload.monday_calories = weekdayCals;
+        weeklyPayload.tuesday_calories = weekdayCals;
+        weeklyPayload.wednesday_calories = weekdayCals;
+        weeklyPayload.thursday_calories = weekdayCals;
+        weeklyPayload.friday_calories = weekdayCals;
+        weeklyPayload.saturday_calories = weekendCals;
+        weeklyPayload.sunday_calories = weekendCals;
+        weeklyPayload.zigzag_enabled = false;
+        weeklyPayload.zigzag_schedule = null;
+        hasWeeklyUpdate = true;
+      }
+
+      if (hasWeeklyUpdate) {
         await supabase
           .from("weekly_nutrition_targets")
-          .update(updatePayload)
+          .update(weeklyPayload)
           .eq("user_id", user.id);
       }
 
