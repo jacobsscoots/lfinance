@@ -142,6 +142,7 @@ export default function CheaperBills() {
         } : undefined,
         postcode: settings?.postcode || "SN2 1FS",
         currentSpeedMbps: service.current_speed_mbps || undefined,
+        currentDataGb: service.current_data_gb || undefined,
         preferredContractMonths: service.preferred_contract_months || undefined,
       });
     } finally {

@@ -13,6 +13,7 @@ const compareInputSchema = z.object({
   }).optional(),
   postcode: z.string().max(10).optional(),
   currentSpeedMbps: z.number().min(0).max(10000).optional(),
+  currentDataGb: z.number().min(0).max(10000).optional(),
   preferredContractMonths: z.number().int().min(0).max(60).optional(),
 });
 
@@ -375,40 +376,52 @@ function scanBroadbandDeals(
 
 function scanMobileDeals(
   currentMonthlyCost: number,
-  savingsThreshold: number
+  savingsThreshold: number,
+  currentDataGb?: number
 ): TariffComparison[] {
   const currentAnnualCost = currentMonthlyCost * 12;
 
-  return MOBILE_PLANS.map(plan => {
-    const annualCost = plan.monthlyCost * 12;
-    const savings = Math.round((currentAnnualCost - annualCost) * 100) / 100;
+  return MOBILE_PLANS
+    .filter(plan => {
+      // Only show plans with enough data for the user's usage
+      if (currentDataGb && currentDataGb > 0) {
+        // Unlimited plans (-1) always pass
+        if (plan.data === -1) return true;
+        // Plan must offer at least the user's current usage
+        if (plan.data < currentDataGb) return false;
+      }
+      return true;
+    })
+    .map(plan => {
+      const annualCost = plan.monthlyCost * 12;
+      const savings = Math.round((currentAnnualCost - annualCost) * 100) / 100;
 
-    let recommend = false;
-    let reason = '';
-    const dataLabel = plan.data === -1 ? 'Unlimited' : `${plan.data}GB`;
+      let recommend = false;
+      let reason = '';
+      const dataLabel = plan.data === -1 ? 'Unlimited' : `${plan.data}GB`;
 
-    if (savings < savingsThreshold) {
-      reason = `Net savings (£${savings.toFixed(0)}) below your £${savingsThreshold} threshold`;
-    } else if (savings > 0) {
-      recommend = true;
-      reason = `Switch to save £${savings.toFixed(0)}/year (${dataLabel} data)`;
-    } else {
-      reason = 'No savings available with this plan';
-    }
+      if (savings < savingsThreshold) {
+        reason = `Net savings (£${savings.toFixed(0)}) below your £${savingsThreshold} threshold`;
+      } else if (savings > 0) {
+        recommend = true;
+        reason = `Switch to save £${savings.toFixed(0)}/year (${dataLabel} data)`;
+      } else {
+        reason = 'No savings available with this plan';
+      }
 
-    return {
-      provider: plan.provider,
-      planName: plan.planName,
-      monthlyCost: plan.monthlyCost,
-      annualCost,
-      savings,
-      recommend,
-      reason,
-      source: plan.source,
-      features: { data: plan.data, contract: plan.contract },
-      websiteUrl: PROVIDER_URLS[plan.provider],
-    };
-  }).sort((a, b) => b.savings - a.savings);
+      return {
+        provider: plan.provider,
+        planName: plan.planName,
+        monthlyCost: plan.monthlyCost,
+        annualCost,
+        savings,
+        recommend,
+        reason,
+        source: plan.source,
+        features: { data: plan.data, contract: plan.contract },
+        websiteUrl: PROVIDER_URLS[plan.provider],
+      };
+    }).sort((a, b) => b.savings - a.savings);
 }
 
 serve(async (req) => {
@@ -448,6 +461,7 @@ serve(async (req) => {
       currentTariff,
       postcode,
       currentSpeedMbps,
+      currentDataGb,
       preferredContractMonths,
     } = parseResult.data;
 
@@ -508,7 +522,7 @@ serve(async (req) => {
         comparisons = scanBroadbandDeals(currentMonthlyCost, savingsThreshold, currentSpeedMbps, preferredContractMonths);
         break;
       case 'mobile':
-        comparisons = scanMobileDeals(currentMonthlyCost, savingsThreshold);
+        comparisons = scanMobileDeals(currentMonthlyCost, savingsThreshold, currentDataGb);
         break;
       default:
         // Generic comparison based on monthly cost
