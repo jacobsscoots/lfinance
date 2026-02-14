@@ -38,6 +38,8 @@ const productSchema = z.object({
   price: z.coerce.number().min(0),
   offer_price: z.coerce.number().min(0).optional().nullable(),
   offer_label: z.string().max(200).optional().nullable(),
+  offer_start_date: z.string().optional().nullable(),
+  offer_end_date: z.string().optional().nullable(),
   pack_size_grams: z.coerce.number().min(0).nullable().optional(),
   retailer: z.string().optional().nullable(),
   // Serving basis
@@ -92,6 +94,8 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
     price: 0,
     offer_price: null,
     offer_label: "",
+    offer_start_date: "",
+    offer_end_date: "",
     pack_size_grams: null,
     retailer: "",
     serving_basis: "per_100g" as ServingBasis,
@@ -137,6 +141,8 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
         price: product.price || 0,
         offer_price: product.offer_price || null,
         offer_label: product.offer_label || "",
+        offer_start_date: product.offer_start_date || "",
+        offer_end_date: product.offer_end_date || "",
         pack_size_grams: product.pack_size_grams || null,
         retailer: product.retailer || "",
         serving_basis: (product.serving_basis as ServingBasis) || "per_100g",
@@ -265,6 +271,8 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
       price: values.price,
       offer_price: values.offer_price || null,
       offer_label: values.offer_label || null,
+      offer_start_date: values.offer_start_date || null,
+      offer_end_date: values.offer_end_date || null,
       pack_size_grams: values.pack_size_grams || null,
       retailer: values.retailer || null,
       serving_basis: values.serving_basis,
@@ -726,6 +734,43 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                       </FormItem>
                     )}
                   />
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="offer_start_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Offer Start</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="date" 
+                              {...field} 
+                              value={field.value || ""} 
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="offer_end_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Offer End</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="date" 
+                              {...field} 
+                              value={field.value || ""} 
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Reverts to normal price after this date
+                          </FormDescription>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
               </div>
 
