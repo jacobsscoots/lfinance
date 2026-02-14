@@ -69,6 +69,7 @@ export default function Investments() {
   } = useInvestmentTransactions(selectedInvestmentId || undefined);
 
   const { valuations, fetchLivePrice, isFetchingPrice } = useInvestmentValuations(selectedInvestmentId || undefined);
+  const { valuations: allValuations } = useInvestmentValuations();
 
   // Fetch live prices for investments with tickers
   useEffect(() => {
@@ -138,7 +139,8 @@ export default function Investments() {
           // No units — use estimated value with live daily % change
           const today = new Date();
           const startDate = new Date(inv.start_date);
-          const dailyValues = calculateDailyValues(formattedTx, [], startDate, today, inv.expected_annual_return);
+          const invValuations = allValuations.filter(v => v.investment_account_id === inv.id).map(v => ({ valuation_date: v.valuation_date, value: v.value, source: v.source as 'manual' | 'estimated' | 'live' }));
+          const dailyValues = calculateDailyValues(formattedTx, invValuations, startDate, today, inv.expected_annual_return);
           const estimatedValue = dailyValues.length > 0 ? dailyValues[dailyValues.length - 1].value : contributed;
           totalValue += estimatedValue;
           if (lp.dailyChange) totalDailyChange += estimatedValue * (lp.dailyChange.percentage / 100);
@@ -146,7 +148,8 @@ export default function Investments() {
       } else {
         const today = new Date();
         const startDate = new Date(inv.start_date);
-        const dailyValues = calculateDailyValues(formattedTx, [], startDate, today, inv.expected_annual_return);
+        const invValuations2 = allValuations.filter(v => v.investment_account_id === inv.id).map(v => ({ valuation_date: v.valuation_date, value: v.value, source: v.source as 'manual' | 'estimated' | 'live' }));
+        const dailyValues = calculateDailyValues(formattedTx, invValuations2, startDate, today, inv.expected_annual_return);
         const currentValue = dailyValues.length > 0 ? dailyValues[dailyValues.length - 1].value : 0;
         totalValue += currentValue;
         totalDailyChange += calculateDailyChange(currentValue, inv.expected_annual_return).amount;
@@ -158,7 +161,7 @@ export default function Investments() {
     const dailyPercentage = totalValue > 0 ? (totalDailyChange / (totalValue - totalDailyChange)) * 100 : 0;
 
     return { totalValue, totalInvested, totalReturn, returnPercentage, dailyChange: { amount: totalDailyChange, percentage: dailyPercentage } };
-  }, [investments, transactions, livePrices]);
+  }, [investments, transactions, livePrices, allValuations]);
 
   const handleCreateInvestment = (data: any) => {
     createInvestment({
@@ -271,7 +274,8 @@ export default function Investments() {
 
     const today = new Date();
     const startDate = new Date(selectedInvestment.start_date);
-    const dailyValues = calculateDailyValues(formattedTx, [], startDate, today, selectedInvestment.expected_annual_return);
+    const selValuations = valuations.map(v => ({ valuation_date: v.valuation_date, value: v.value, source: v.source as 'manual' | 'estimated' | 'live' }));
+    const dailyValues = calculateDailyValues(formattedTx, selValuations, startDate, today, selectedInvestment.expected_annual_return);
     return dailyValues.length > 0 ? dailyValues[dailyValues.length - 1].value : 0;
   }, [selectedInvestment, investmentTransactions, livePrices]);
 
@@ -438,6 +442,7 @@ export default function Investments() {
                   key={investment.id}
                   investment={investment}
                   transactions={transactions.filter(t => t.investment_account_id === investment.id)}
+                  valuations={allValuations.filter(v => v.investment_account_id === investment.id)}
                   livePrice={livePrices[investment.id] || null}
                   onClick={() => setSelectedInvestmentId(
                     selectedInvestmentId === investment.id ? null : investment.id
