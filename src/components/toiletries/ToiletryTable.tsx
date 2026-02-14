@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link, Search, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link, Search, ArrowUp, ArrowDown, ArrowUpDown, Package } from "lucide-react";
 import {
   calculateForecast,
   formatCurrency,
@@ -187,11 +187,13 @@ export function ToiletryTable({
               <TableRow key={item.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    {item.image_url && (
-                      <div className="h-10 w-10 rounded-lg overflow-hidden border border-border shrink-0">
+                    <div className="h-10 w-10 rounded-lg overflow-hidden border border-border shrink-0 bg-muted flex items-center justify-center">
+                      {item.image_url ? (
                         <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
-                      </div>
-                    )}
+                      ) : (
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
                     <div className="flex flex-col gap-1">
                       <span className="font-medium">{item.name}</span>
                       <div className="flex items-center gap-2">
