@@ -191,7 +191,26 @@ export default function Birthdays() {
                   onTogglePurchased={(exp) => updateExpense.mutate({ id: exp.id, is_purchased: !exp.is_purchased })}
                   onDeleteExpense={(id) => deleteExpense.mutate(id)}
                   onToggleCardSent={(e) => updateEvent.mutate({ id: e.id, card_sent: !e.card_sent })}
-                  onToggleMoneyScheduled={(e) => updateEvent.mutate({ id: e.id, money_scheduled: !e.money_scheduled })}
+                  onToggleMoneyScheduled={(e) => {
+                    const newVal = !e.money_scheduled;
+                    updateEvent.mutate({ id: e.id, money_scheduled: newVal });
+                    if (newVal && Number(e.budget) > 0) {
+                      // Auto-create a purchased expense for the budget amount
+                      const existingMoneyExpense = expenses.find(
+                        exp => exp.event_id === e.id && exp.year === year && exp.description === "Money gift"
+                      );
+                      if (!existingMoneyExpense) {
+                        addExpense.mutate({
+                          event_id: e.id,
+                          description: "Money gift",
+                          amount: Number(e.budget),
+                          year,
+                          is_purchased: true,
+                          purchase_date: new Date().toISOString().split("T")[0],
+                        });
+                      }
+                    }
+                  }}
                 />
               ))
             )}

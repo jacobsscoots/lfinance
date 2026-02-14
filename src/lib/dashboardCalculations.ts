@@ -191,7 +191,7 @@ export function buildDailySpendingData(
 export function generateAlerts(
   metrics: PayCycleMetrics,
   upcomingBills: Array<{ name: string; amount: number; dueDate: Date }>,
-  birthdayEvents?: Array<{ person_name: string; event_month: number; event_day: number | null; budget: number }>,
+  birthdayEvents?: Array<{ person_name: string; event_month: number; event_day: number | null; budget: number; card_sent: boolean | null; money_scheduled: boolean | null }>,
 ): Alert[] {
   const alerts: Alert[] = [];
   
@@ -291,6 +291,8 @@ export function generateAlerts(
     const currentDay = today.getDate();
 
     for (const ev of birthdayEvents) {
+      // Skip events where both card and money are done
+      if (ev.card_sent && ev.money_scheduled) continue;
       const m = ev.event_month;
       const d = ev.event_day ?? 1;
 
