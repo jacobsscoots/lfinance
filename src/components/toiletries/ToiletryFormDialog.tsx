@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useToiletryImageUrl } from "@/hooks/useToiletryImageUrl";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -101,14 +102,16 @@ export function ToiletryFormDialog({
   const { user } = useAuth();
   const { toast } = useToast();
 
+  const resolvedImageUrl = useToiletryImageUrl(initialData?.image_url);
+
   useEffect(() => {
-    if (initialData?.image_url) {
-      setImagePreview(initialData.image_url);
+    if (resolvedImageUrl) {
+      setImagePreview(resolvedImageUrl);
     } else {
       setImagePreview(null);
     }
     setImageFile(null);
-  }, [initialData, open]);
+  }, [resolvedImageUrl, open]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -129,8 +132,8 @@ export function ToiletryFormDialog({
       const path = `${user.id}/${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from("toiletry-images").upload(path, imageFile);
       if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from("toiletry-images").getPublicUrl(path);
-      return publicUrl;
+      // Store the path, not the public URL — bucket is now private
+      return path;
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
       return null;

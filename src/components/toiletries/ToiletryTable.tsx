@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ToiletryImage } from "./ToiletryImage";
 import {
   Table,
   TableBody,
@@ -189,7 +190,7 @@ export function ToiletryTable({
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-lg overflow-hidden border border-border shrink-0 bg-muted flex items-center justify-center">
                       {item.image_url ? (
-                        <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                        <ToiletryImage imageUrl={item.image_url} alt={item.name} />
                       ) : (
                         <Package className="h-4 w-4 text-muted-foreground" />
                       )}
