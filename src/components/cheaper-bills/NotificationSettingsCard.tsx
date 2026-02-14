@@ -16,21 +16,30 @@ export function NotificationSettingsCard() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [inAppNotifications, setInAppNotifications] = useState(true);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [hasTouched, setHasTouched] = useState(false);
 
   useEffect(() => {
-    if (settings) {
+    if (settings && !hasTouched) {
       setEmail(settings.notification_email || "");
       setEmailNotifications(settings.email_notifications);
       setInAppNotifications(settings.in_app_notifications);
     }
-  }, [settings]);
+  }, [settings, hasTouched]);
 
   const handleSave = () => {
-    updateSettings({
-      notification_email: email || null,
-      email_notifications: emailNotifications,
-      in_app_notifications: inAppNotifications,
-    });
+    updateSettings(
+      {
+        notification_email: email || null,
+        email_notifications: emailNotifications,
+        in_app_notifications: inAppNotifications,
+      },
+      {
+        onSettled: () => {
+          // Allow useEffect to sync again after mutation completes
+          setHasTouched(false);
+        },
+      } as any,
+    );
   };
 
   const handleSendTestEmail = async () => {
@@ -111,7 +120,7 @@ export function NotificationSettingsCard() {
               type="email"
               placeholder="your@email.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setHasTouched(true); setEmail(e.target.value); }}
               onBlur={() => {
                 if (email !== (settings?.notification_email || "")) {
                   handleSave();

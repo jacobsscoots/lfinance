@@ -1,12 +1,16 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { MobileNav } from "./MobileNav";
+import { useBackgroundSync } from "@/hooks/useBackgroundSync";
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  // Runs silent background syncs for smart meter, Gmail, etc. every 5 minutes
+  useBackgroundSync();
+
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
