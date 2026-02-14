@@ -11,6 +11,7 @@ import {
   isSameDay,
   addDays,
   subDays,
+  startOfDay,
 } from "date-fns";
 import { getPayCycleForDate, toPaydaySettings, type PayCycle } from "@/lib/payCycle";
 import { generateBillOccurrences } from "@/lib/billOccurrences";
@@ -128,7 +129,7 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const paydayConfig = toPaydaySettings(effectiveSettings);
   const cycle = getPayCycleForDate(referenceDate, paydayConfig);
   
-  const today = new Date();
+  const today = startOfDay(new Date());
   const daysTotal = differenceInDays(cycle.end, cycle.start) + 1;
   const daysPassed = Math.max(0, differenceInDays(today, cycle.start) + 1);
   const daysRemaining = Math.max(0, differenceInDays(cycle.end, today) + 1);
