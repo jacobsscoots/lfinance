@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
@@ -30,6 +30,10 @@ interface DetailedYearlyTableProps {
   onAddOverride: (month: number) => void;
   onDeleteOverride: (id: string) => void;
   incomeBreakdown?: Record<string, number[]>;
+  getOverride?: (rowKey: string, month: number) => number | undefined;
+  hasOverride?: (rowKey: string, month: number) => boolean;
+  onCellEdit?: (rowKey: string, month: number, amount: number) => void;
+  onCellReset?: (rowKey: string, month: number) => void;
 }
 
 function fmt(n: number) {
@@ -38,6 +42,105 @@ function fmt(n: number) {
 
 function fmtShort(n: number) {
   return `£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+// ── Editable Cell ──
+interface EditableCellProps {
+  value: number;
+  overrideValue?: number;
+  hasOverride: boolean;
+  className?: string;
+  displayFn?: (n: number) => string;
+  prefix?: string;
+  onSave: (amount: number) => void;
+  onReset: () => void;
+  isEditable?: boolean;
+}
+
+function EditableCell({
+  value,
+  overrideValue,
+  hasOverride,
+  className,
+  displayFn = fmt,
+  prefix = "",
+  onSave,
+  onReset,
+  isEditable = true,
+}: EditableCellProps) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editStartRef = useRef(0);
+
+  const displayAmount = hasOverride ? overrideValue! : value;
+
+  const startEdit = () => {
+    if (!isEditable) return;
+    editStartRef.current = Date.now();
+    setEditValue(displayAmount > 0 ? displayAmount.toFixed(2) : "");
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 50);
+  };
+
+  const commitEdit = useCallback(() => {
+    if (!editing) return;
+    const parsed = parseFloat(editValue);
+    if (!isNaN(parsed) && parsed >= 0) {
+      onSave(Math.round(parsed * 100) / 100);
+    }
+    setEditing(false);
+  }, [editing, editValue, onSave]);
+
+  const handleBlur = () => {
+    if (Date.now() - editStartRef.current < 200) return;
+    commitEdit();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+    if (e.key === "Escape") { setEditing(false); }
+  };
+
+  if (editing) {
+    return (
+      <td className={cn(className, "!p-0.5")}>
+        <input
+          ref={inputRef}
+          type="number"
+          min="0"
+          step="0.01"
+          value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="w-full h-6 text-[11px] sm:text-xs text-right px-1 bg-background border border-primary/50 rounded outline-none focus:ring-1 focus:ring-primary tabular-nums"
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      className={cn(
+        className,
+        isEditable && "cursor-pointer hover:bg-primary/5 transition-colors",
+        hasOverride && "bg-primary/10 border-b-2 border-primary/30"
+      )}
+      onClick={startEdit}
+      onContextMenu={(e) => {
+        if (hasOverride) {
+          e.preventDefault();
+          onReset();
+        }
+      }}
+      title={hasOverride ? "Overridden — right-click to reset" : isEditable ? "Click to edit" : ""}
+    >
+      {prefix}{displayAmount > 0 ? displayFn(displayAmount) : "—"}
+      {hasOverride && <span className="text-[8px] text-primary ml-0.5">✎</span>}
+    </td>
+  );
 }
 
 interface BillRow {
@@ -49,11 +152,34 @@ interface BillRow {
   priority: number;
 }
 
-export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDeleteOverride, incomeBreakdown = {} }: DetailedYearlyTableProps) {
+export function DetailedYearlyTable({
+  months,
+  bills,
+  year,
+  onAddOverride,
+  onDeleteOverride,
+  incomeBreakdown = {},
+  getOverride,
+  hasOverride: hasOverrideFn,
+  onCellEdit,
+  onCellReset,
+}: DetailedYearlyTableProps) {
   const activeBills = useMemo(() => bills.filter(b => b.is_active), [bills]);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
+  const canEdit = !!onCellEdit;
 
-  // Priority keywords for bill sorting (lower number = higher priority)
+  const getOvr = (key: string, month: number) => getOverride?.(key, month);
+  const hasOvr = (key: string, month: number) => hasOverrideFn?.(key, month) ?? false;
+  const saveCell = (key: string, month: number, amt: number) => onCellEdit?.(key, month, amt);
+  const resetCell = (key: string, month: number) => onCellReset?.(key, month);
+
+  // Helper to get effective amount for a cell (override or original)
+  const effective = (key: string, month: number, original: number): number => {
+    const ovr = getOvr(key, month);
+    return ovr !== undefined ? ovr : original;
+  };
+
+  // Priority keywords for bill sorting
   const getBillPriority = (name: string): number => {
     const n = name.toLowerCase();
     if (/rent|mortgage/.test(n)) return 0;
@@ -65,10 +191,10 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
     if (/car|petrol|fuel|transport|train/.test(n)) return 6;
     if (/tv\s*licen|netflix|disney|spotify|apple|amazon\s*prime|youtube/.test(n)) return 8;
     if (/gym|subscription|membership/.test(n)) return 9;
-    return 7; // Everything else between utilities and subscriptions
+    return 7;
   };
 
-  // April 2026 inflation adjustments (must match useYearlyPlannerData.ts)
+  // April 2026 inflation adjustments
   const APRIL_2026_INFLATION: Record<string, { type: 'percent' | 'flat' | 'fixed'; value: number }> = {
     'Council Tax':           { type: 'percent', value: 5 },
     'TV License':            { type: 'fixed',   value: 180 },
@@ -77,13 +203,10 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
     'Santander Premium Bank': { type: 'percent', value: 25 },
   };
 
-  // Council Tax: 10 instalments Apr-Jan, no payments in Feb (1) or Mar (2)
   const COUNCIL_TAX_PAYMENT_MONTHS = [0, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
   const applyInflation = (billName: string, baseAmount: number, yr: number, mo: number): number => {
-    // Council Tax: skip Feb and Mar — payment holidays
     if (/council\s*tax/i.test(billName) && !COUNCIL_TAX_PAYMENT_MONTHS.includes(mo)) return 0;
-
     if (yr < 2026 || (yr === 2026 && mo < 3)) return baseAmount;
     if (baseAmount === 0) return 0;
     const rule = APRIL_2026_INFLATION[billName];
@@ -103,11 +226,8 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
     return activeBills.map(bill => {
       const amounts: number[] = [];
       for (let month = 0; month < 12; month++) {
-        const isPast = year < currentYear || (year === currentYear && month < currentMonth);
-        const isCurrent = year === currentYear && month === currentMonth;
         const occs = getBillOccurrencesForMonth([bill], year, month);
         let monthTotal = occs.reduce((s, o) => s + o.expectedAmount, 0);
-        // Apply inflation for all months (matches hook logic)
         if (monthTotal > 0) {
           monthTotal = applyInflation(bill.name, monthTotal, year, month);
         }
@@ -129,7 +249,6 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
   // Override rows grouped by month
   const overrideRows = useMemo(() => {
     const allOverrides: YearlyOverride[] = months.flatMap(m => m.overrides);
-    // Group unique overrides by label
     const labels = [...new Set(allOverrides.map(o => o.label))];
     return labels.map(label => {
       const amounts: number[] = [];
@@ -150,11 +269,54 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
     });
   }, [months]);
 
+  // ── Compute effective totals with cell overrides ──
+  const effectiveMonths = useMemo(() => {
+    return months.map((m, i) => {
+      const incomeEff = effective("income", m.month, m.totalIncome);
+
+      // Sum bill overrides
+      let billsEff = 0;
+      billRows.forEach(row => {
+        billsEff += effective(`bill:${row.id}`, m.month, row.amounts[m.month]);
+      });
+
+      const groceryEff = effective("grocery", m.month, m.groceryForecast);
+      const birthdayEff = effective("birthday", m.month, m.birthdayOutgoings);
+      const toiletryEff = effective("toiletry", m.month, m.toiletryForecast);
+
+      // Override expense adjustments
+      let overrideExpEff = 0;
+      overrideRows.filter(o => o.type === 'expense').forEach(row => {
+        overrideExpEff += effective(`adj:${row.label}`, m.month, row.amounts[m.month]);
+      });
+
+      // Override income adjustments
+      let overrideIncEff = 0;
+      overrideRows.filter(o => o.type === 'income').forEach(row => {
+        overrideIncEff += effective(`adj:${row.label}`, m.month, row.amounts[m.month]);
+      });
+
+      const totalIncome = incomeEff + overrideIncEff;
+      const totalOutgoings = billsEff + groceryEff + birthdayEff + toiletryEff + overrideExpEff + m.discretionary;
+      const net = totalIncome - totalOutgoings;
+
+      return { ...m, totalIncome: totalIncome, totalOutgoings, net };
+    });
+  }, [months, billRows, overrideRows, getOverride]);
+
+  // Recalculate running surplus
+  const effectiveWithSurplus = useMemo(() => {
+    let running = 0;
+    return effectiveMonths.map(m => {
+      running += m.net;
+      return { ...m, runningSurplus: running };
+    });
+  }, [effectiveMonths]);
+
   const cellClass = "px-1.5 sm:px-2 py-1.5 text-right text-[11px] sm:text-xs whitespace-nowrap min-w-[60px] sm:min-w-[70px]";
   const labelClass = "px-1.5 sm:px-2 py-1.5 text-[11px] sm:text-xs font-medium whitespace-nowrap sticky left-0 bg-card z-10 min-w-[90px] sm:min-w-[120px]";
   const headerClass = "px-1.5 sm:px-2 py-2 text-center text-[11px] sm:text-xs font-semibold whitespace-nowrap";
 
-  // Check if any months have inflation applied
   const hasInflation = year >= 2026;
 
   return (
@@ -162,11 +324,18 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Detailed Breakdown</CardTitle>
-          {hasInflation && (
-             <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">
-               📈 Apr 2026+: Council Tax +5%, TV Licence →£180, EE +£2.50/mo, Santander +25% | Salary +3.4% | Broadband & Electric protected by contract
-             </span>
-          )}
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">
+                Click any value to edit • Right-click ✎ to reset
+              </span>
+            )}
+            {hasInflation && (
+               <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">
+                 📈 Apr 2026+: Council Tax +5%, TV Licence →£180, EE +£2.50/mo, Santander +25% | Salary +3.4% | Broadband & Electric protected by contract
+               </span>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
@@ -203,12 +372,19 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                 </span>
               </td>
               {months.map((m) => (
-                <td key={m.month} className={cn(cellClass, "text-success font-medium")}>
-                  {m.totalIncome > 0 ? fmt(m.totalIncome) : "—"}
-                </td>
+                <EditableCell
+                  key={m.month}
+                  value={m.totalIncome}
+                  overrideValue={getOvr("income", m.month)}
+                  hasOverride={hasOvr("income", m.month)}
+                  className={cn(cellClass, "text-success font-medium")}
+                  isEditable={canEdit}
+                  onSave={(amt) => saveCell("income", m.month, amt)}
+                  onReset={() => resetCell("income", m.month)}
+                />
               ))}
               <td className={cn(cellClass, "font-bold text-success bg-muted/50")}>
-                {fmt(months.reduce((s, m) => s + m.totalIncome, 0))}
+                {fmt(effectiveWithSurplus.reduce((s, m) => s + m.totalIncome, 0))}
               </td>
             </tr>
 
@@ -219,12 +395,19 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                   {source}
                 </td>
                 {amounts.map((amt, i) => (
-                  <td key={i} className={cn(cellClass, "text-[11px]", amt > 0 ? "text-success/70" : "text-muted-foreground/30")}>
-                    {amt > 0 ? fmt(amt) : "—"}
-                  </td>
+                  <EditableCell
+                    key={i}
+                    value={amt}
+                    overrideValue={getOvr(`income:${source}`, i)}
+                    hasOverride={hasOvr(`income:${source}`, i)}
+                    className={cn(cellClass, "text-[11px]", amt > 0 || hasOvr(`income:${source}`, i) ? "text-success/70" : "text-muted-foreground/30")}
+                    isEditable={canEdit}
+                    onSave={(a) => saveCell(`income:${source}`, i, a)}
+                    onReset={() => resetCell(`income:${source}`, i)}
+                  />
                 ))}
                 <td className={cn(cellClass, "text-[11px] font-medium bg-muted/50 text-success/70")}>
-                  {fmt(amounts.reduce((s, v) => s + v, 0))}
+                  {fmt(amounts.reduce((s, v, i) => s + effective(`income:${source}`, i, v), 0))}
                 </td>
               </tr>
             ))}
@@ -238,35 +421,42 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
 
             {/* Individual bill rows + Groceries inserted after utilities */}
             {(() => {
-              const groceryPriority = 2.5; // After utilities (2), before phone (4)
+              const groceryPriority = 2.5;
               const hasGrocery = months.some(m => m.groceryForecast > 0);
               let groceryInserted = false;
 
               const rows: React.ReactNode[] = [];
+
+              const renderGroceryRow = () => (
+                <tr key="grocery-forecast" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                  <td className={cn(labelClass, "font-normal")}>
+                    <span className="flex items-center gap-1.5">
+                      🛒 Groceries
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">Est.</Badge>
+                    </span>
+                  </td>
+                  {months.map((m, i) => (
+                    <EditableCell
+                      key={i}
+                      value={m.groceryForecast}
+                      overrideValue={getOvr("grocery", m.month)}
+                      hasOverride={hasOvr("grocery", m.month)}
+                      className={cn(cellClass, m.groceryForecast > 0 || hasOvr("grocery", m.month) ? "text-primary/80 italic" : "text-muted-foreground/40")}
+                      isEditable={canEdit}
+                      onSave={(amt) => saveCell("grocery", m.month, amt)}
+                      onReset={() => resetCell("grocery", m.month)}
+                    />
+                  ))}
+                  <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
+                    {fmt(months.reduce((s, m) => s + effective("grocery", m.month, m.groceryForecast), 0))}
+                  </td>
+                </tr>
+              );
+
               billRows.forEach((row) => {
-                // Insert groceries before the first bill with priority > groceryPriority
                 if (hasGrocery && !groceryInserted && row.priority > groceryPriority) {
                   groceryInserted = true;
-                  rows.push(
-                    <tr key="grocery-forecast" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                      <td className={cn(labelClass, "font-normal")}>
-                        <span className="flex items-center gap-1.5">
-                          🛒 Groceries
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">
-                            Est.
-                          </Badge>
-                        </span>
-                      </td>
-                      {months.map((m, i) => (
-                        <td key={i} className={cn(cellClass, m.groceryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
-                          {m.groceryForecast > 0 ? fmt(m.groceryForecast) : "—"}
-                        </td>
-                      ))}
-                      <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
-                        {fmt(months.reduce((s, m) => s + m.groceryForecast, 0))}
-                      </td>
-                    </tr>
-                  );
+                  rows.push(renderGroceryRow());
                 }
 
                 rows.push(
@@ -282,38 +472,25 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                       </span>
                     </td>
                     {row.amounts.map((amt, i) => (
-                      <td key={i} className={cn(cellClass, amt > 0 ? "text-foreground" : "text-muted-foreground/40")}>
-                        {amt > 0 ? fmt(amt) : "—"}
-                      </td>
+                      <EditableCell
+                        key={i}
+                        value={amt}
+                        overrideValue={getOvr(`bill:${row.id}`, i)}
+                        hasOverride={hasOvr(`bill:${row.id}`, i)}
+                        className={cn(cellClass, amt > 0 || hasOvr(`bill:${row.id}`, i) ? "text-foreground" : "text-muted-foreground/40")}
+                        isEditable={canEdit}
+                        onSave={(a) => saveCell(`bill:${row.id}`, i, a)}
+                        onReset={() => resetCell(`bill:${row.id}`, i)}
+                      />
                     ))}
                     <td className={cn(cellClass, "font-semibold bg-muted/50")}>
-                      {row.total > 0 ? fmt(row.total) : "—"}
+                      {fmt(row.amounts.reduce((s, v, i) => s + effective(`bill:${row.id}`, i, v), 0))}
                     </td>
                   </tr>
                 );
               });
 
-              // If all bills have priority <= groceryPriority, append at end
-              if (hasGrocery && !groceryInserted) {
-                rows.push(
-                  <tr key="grocery-forecast" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                    <td className={cn(labelClass, "font-normal")}>
-                      <span className="flex items-center gap-1.5">
-                        🛒 Groceries
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">Est.</Badge>
-                      </span>
-                    </td>
-                    {months.map((m, i) => (
-                      <td key={i} className={cn(cellClass, m.groceryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
-                        {m.groceryForecast > 0 ? fmt(m.groceryForecast) : "—"}
-                      </td>
-                    ))}
-                    <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
-                      {fmt(months.reduce((s, m) => s + m.groceryForecast, 0))}
-                    </td>
-                  </tr>
-                );
-              }
+              if (hasGrocery && !groceryInserted) rows.push(renderGroceryRow());
 
               // Birthday outgoings row
               const hasBirthdays = months.some(m => m.birthdayOutgoings > 0);
@@ -321,17 +498,22 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                 rows.push(
                   <tr key="birthday-outgoings" className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                     <td className={cn(labelClass, "font-normal")}>
-                      <span className="flex items-center gap-1.5">
-                        🎂 Birthdays &amp; Occasions
-                      </span>
+                      <span className="flex items-center gap-1.5">🎂 Birthdays &amp; Occasions</span>
                     </td>
                     {months.map((m, i) => (
-                      <td key={i} className={cn(cellClass, m.birthdayOutgoings > 0 ? "text-foreground" : "text-muted-foreground/40")}>
-                        {m.birthdayOutgoings > 0 ? fmt(m.birthdayOutgoings) : "—"}
-                      </td>
+                      <EditableCell
+                        key={i}
+                        value={m.birthdayOutgoings}
+                        overrideValue={getOvr("birthday", m.month)}
+                        hasOverride={hasOvr("birthday", m.month)}
+                        className={cn(cellClass, m.birthdayOutgoings > 0 || hasOvr("birthday", m.month) ? "text-foreground" : "text-muted-foreground/40")}
+                        isEditable={canEdit}
+                        onSave={(amt) => saveCell("birthday", m.month, amt)}
+                        onReset={() => resetCell("birthday", m.month)}
+                      />
                     ))}
                     <td className={cn(cellClass, "font-semibold bg-muted/50")}>
-                      {fmt(months.reduce((s, m) => s + m.birthdayOutgoings, 0))}
+                      {fmt(months.reduce((s, m) => s + effective("birthday", m.month, m.birthdayOutgoings), 0))}
                     </td>
                   </tr>
                 );
@@ -345,18 +527,23 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                     <td className={cn(labelClass, "font-normal")}>
                       <span className="flex items-center gap-1.5">
                         🧴 Toiletries
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">
-                          Est.
-                        </Badge>
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal text-primary/70">Est.</Badge>
                       </span>
                     </td>
                     {months.map((m, i) => (
-                      <td key={i} className={cn(cellClass, m.toiletryForecast > 0 ? "text-primary/80 italic" : "text-muted-foreground/40")}>
-                        {m.toiletryForecast > 0 ? fmt(m.toiletryForecast) : "—"}
-                      </td>
+                      <EditableCell
+                        key={i}
+                        value={m.toiletryForecast}
+                        overrideValue={getOvr("toiletry", m.month)}
+                        hasOverride={hasOvr("toiletry", m.month)}
+                        className={cn(cellClass, m.toiletryForecast > 0 || hasOvr("toiletry", m.month) ? "text-primary/80 italic" : "text-muted-foreground/40")}
+                        isEditable={canEdit}
+                        onSave={(amt) => saveCell("toiletry", m.month, amt)}
+                        onReset={() => resetCell("toiletry", m.month)}
+                      />
                     ))}
                     <td className={cn(cellClass, "font-semibold bg-muted/50 text-primary/80 italic")}>
-                      {fmt(months.reduce((s, m) => s + m.toiletryForecast, 0))}
+                      {fmt(months.reduce((s, m) => s + effective("toiletry", m.month, m.toiletryForecast), 0))}
                     </td>
                   </tr>
                 );
@@ -365,19 +552,26 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
               return rows;
             })()}
 
-            {/* Override adjustments */}
+            {/* Override adjustments (expense) */}
             {overrideRows.filter(o => o.type === 'expense').map((row) => (
               <tr key={row.label} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                 <td className={cn(labelClass, "font-normal text-warning")}>
                   {row.label}
                 </td>
                 {row.amounts.map((amt, i) => (
-                  <td key={i} className={cn(cellClass, amt > 0 ? "text-warning" : "text-muted-foreground/40")}>
-                    {amt > 0 ? fmt(amt) : "—"}
-                  </td>
+                  <EditableCell
+                    key={i}
+                    value={amt}
+                    overrideValue={getOvr(`adj:${row.label}`, i)}
+                    hasOverride={hasOvr(`adj:${row.label}`, i)}
+                    className={cn(cellClass, amt > 0 || hasOvr(`adj:${row.label}`, i) ? "text-warning" : "text-muted-foreground/40")}
+                    isEditable={canEdit}
+                    onSave={(a) => saveCell(`adj:${row.label}`, i, a)}
+                    onReset={() => resetCell(`adj:${row.label}`, i)}
+                  />
                 ))}
                 <td className={cn(cellClass, "font-semibold bg-muted/50 text-warning")}>
-                  {row.total > 0 ? fmt(row.total) : "—"}
+                  {fmt(row.amounts.reduce((s, v, i) => s + effective(`adj:${row.label}`, i, v), 0))}
                 </td>
               </tr>
             ))}
@@ -389,12 +583,23 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                   + {row.label}
                 </td>
                 {row.amounts.map((amt, i) => (
-                  <td key={i} className={cn(cellClass, amt > 0 ? "text-success" : "text-muted-foreground/40")}>
-                    {amt > 0 ? `+${fmt(amt)}` : "—"}
-                  </td>
+                  <EditableCell
+                    key={i}
+                    value={amt}
+                    overrideValue={getOvr(`adj:${row.label}`, i)}
+                    hasOverride={hasOvr(`adj:${row.label}`, i)}
+                    className={cn(cellClass, amt > 0 || hasOvr(`adj:${row.label}`, i) ? "text-success" : "text-muted-foreground/40")}
+                    displayFn={(n) => `+${fmt(n)}`}
+                    isEditable={canEdit}
+                    onSave={(a) => saveCell(`adj:${row.label}`, i, a)}
+                    onReset={() => resetCell(`adj:${row.label}`, i)}
+                  />
                 ))}
                 <td className={cn(cellClass, "font-semibold bg-muted/50 text-success")}>
-                  {row.total > 0 ? `+${fmt(row.total)}` : "—"}
+                  {row.amounts.reduce((s, v, i) => s + effective(`adj:${row.label}`, i, v), 0) > 0
+                    ? `+${fmt(row.amounts.reduce((s, v, i) => s + effective(`adj:${row.label}`, i, v), 0))}`
+                    : "—"
+                  }
                 </td>
               </tr>
             ))}
@@ -402,13 +607,13 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
             {/* SUBTOTAL */}
             <tr className="border-b-2 border-border font-bold bg-muted/30">
               <td className={cn(labelClass, "font-bold bg-muted/30")}>Total Outgoings</td>
-              {months.map((m) => (
+              {effectiveWithSurplus.map((m) => (
                 <td key={m.month} className={cn(cellClass, "font-bold")}>
                   {fmt(m.totalOutgoings)}
                 </td>
               ))}
               <td className={cn(cellClass, "font-bold bg-muted/50")}>
-                {fmt(months.reduce((s, m) => s + m.totalOutgoings, 0))}
+                {fmt(effectiveWithSurplus.reduce((s, m) => s + m.totalOutgoings, 0))}
               </td>
             </tr>
 
@@ -418,33 +623,33 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
             {/* NET */}
             <tr className="border-b border-border">
               <td className={cn(labelClass, "font-bold")}>Net</td>
-              {months.map((m) => (
+              {effectiveWithSurplus.map((m) => (
                 <td key={m.month} className={cn(cellClass, "font-bold", m.net >= 0 ? "text-success" : "text-destructive")}>
                   {m.net >= 0 ? "+" : "-"}{fmtShort(m.net)}
                 </td>
               ))}
-              <td className={cn(cellClass, "font-bold bg-muted/50", months.reduce((s, m) => s + m.net, 0) >= 0 ? "text-success" : "text-destructive")}>
-                {(() => { const n = months.reduce((s, m) => s + m.net, 0); return `${n >= 0 ? "+" : "-"}${fmtShort(n)}`; })()}
+              <td className={cn(cellClass, "font-bold bg-muted/50", effectiveWithSurplus.reduce((s, m) => s + m.net, 0) >= 0 ? "text-success" : "text-destructive")}>
+                {(() => { const n = effectiveWithSurplus.reduce((s, m) => s + m.net, 0); return `${n >= 0 ? "+" : "-"}${fmtShort(n)}`; })()}
               </td>
             </tr>
 
             {/* LEFT OVER / SAVINGS */}
             <tr className="border-b border-border">
               <td className={cn(labelClass, "font-bold")}>Left Over</td>
-              {months.map((m) => (
+              {effectiveWithSurplus.map((m) => (
                 <td key={m.month} className={cn(cellClass, "font-medium", m.net >= 0 ? "text-success" : "text-destructive")}>
                   {m.net >= 0 ? fmt(m.net) : `-${fmt(m.net)}`}
                 </td>
               ))}
               <td className={cn(cellClass, "font-bold bg-muted/50")}>
-                {fmt(months.reduce((s, m) => s + Math.max(0, m.net), 0))}
+                {fmt(effectiveWithSurplus.reduce((s, m) => s + Math.max(0, m.net), 0))}
               </td>
             </tr>
 
             {/* RUNNING SURPLUS */}
             <tr className="border-b-2 border-border">
               <td className={cn(labelClass, "font-bold")}>Running Surplus</td>
-              {months.map((m) => (
+              {effectiveWithSurplus.map((m) => (
                 <td key={m.month} className={cn(
                   cellClass, "font-bold",
                   m.runningSurplus < 0 ? "text-destructive bg-destructive/10" :
@@ -455,7 +660,7 @@ export function DetailedYearlyTable({ months, bills, year, onAddOverride, onDele
                 </td>
               ))}
               <td className={cn(cellClass, "font-bold bg-muted/50")}>
-                {(() => { const last = months[months.length - 1]; return last ? `${last.runningSurplus >= 0 ? "+" : "-"}${fmtShort(last.runningSurplus)}` : "—"; })()}
+                {(() => { const last = effectiveWithSurplus[effectiveWithSurplus.length - 1]; return last ? `${last.runningSurplus >= 0 ? "+" : "-"}${fmtShort(last.runningSurplus)}` : "—"; })()}
               </td>
             </tr>
 

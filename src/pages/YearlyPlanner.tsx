@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, LayoutGrid, Table } from "lucide-react";
 import { useYearlyPlannerData } from "@/hooks/useYearlyPlannerData";
+import { useYearlyCellOverrides } from "@/hooks/useYearlyCellOverrides";
 import { useBills } from "@/hooks/useBills";
 import { MonthColumn } from "@/components/yearly-planner/MonthColumn";
 import { YearlySummaryBar } from "@/components/yearly-planner/YearlySummaryBar";
@@ -17,6 +18,7 @@ export default function YearlyPlanner() {
 
   const { monthData, incomeBreakdown, createOverride, deleteOverride, isCreating } = useYearlyPlannerData(year);
   const { bills } = useBills();
+  const { getOverride, hasOverride, upsertOverride, removeOverride } = useYearlyCellOverrides(year);
 
   return (
     <AppLayout>
@@ -85,6 +87,14 @@ export default function YearlyPlanner() {
             onAddOverride={(month) => setOverrideMonth(month)}
             onDeleteOverride={deleteOverride}
             incomeBreakdown={incomeBreakdown}
+            getOverride={getOverride}
+            hasOverride={hasOverride}
+            onCellEdit={(rowKey, month, amount) =>
+              upsertOverride({ rowKey, month, amount })
+            }
+            onCellReset={(rowKey, month) =>
+              removeOverride({ rowKey, month })
+            }
           />
         )}
       </div>
