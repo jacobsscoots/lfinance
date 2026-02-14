@@ -1,70 +1,96 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Package } from "lucide-react";
+import { ChevronDown, ChevronUp, Store, Tag, Percent } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RetailerGroup, ShopReadyItem } from "@/lib/groceryListCalculations";
-import { DiscountType } from "@/lib/discounts";
+import { DiscountType, getRetailerDiscountOptions, getDefaultRetailerDiscount } from "@/lib/discounts";
 
 interface RetailerSectionProps {
   group: RetailerGroup;
   onDiscountChange: (retailer: string, discountType: DiscountType) => void;
 }
 
+const RETAILER_COLORS: Record<string, string> = {
+  Tesco: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+  Iceland: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
+  MyProtein: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+  Aldi: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-800",
+  Lidl: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
+  "Sainsbury's": "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800",
+  ASDA: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800",
+  Morrisons: "bg-yellow-600/10 text-yellow-800 dark:text-yellow-400 border-yellow-300 dark:border-yellow-800",
+  Unassigned: "bg-muted text-muted-foreground border-border",
+};
+
 export function RetailerSection({ group, onDiscountChange }: RetailerSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const discountOptions = getRetailerDiscountOptions(group.retailer);
+  const hasDiscountOptions = discountOptions.length > 1;
+  const colorClass = RETAILER_COLORS[group.retailer] ?? "bg-primary/10 text-primary border-primary/20";
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="border rounded-lg">
-      <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-accent/50 transition-colors">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="rounded-xl border shadow-sm overflow-hidden">
+      <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-accent/30 transition-colors">
         <div className="flex items-center gap-3">
-          <Package className="h-5 w-5 text-muted-foreground" />
-          <span className="font-medium">{group.retailer}</span>
-          <Badge variant="secondary">{group.items.length} items</Badge>
+          <div className={`p-2 rounded-lg border ${colorClass}`}>
+            <Store className="h-4 w-4" />
+          </div>
+          <div className="text-left">
+            <span className="font-semibold">{group.retailer}</span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <Badge variant="secondary" className="text-xs">
+                {group.items.length} {group.items.length === 1 ? "item" : "items"}
+              </Badge>
+              {group.discountType !== "none" && (
+                <Badge variant="outline" className="text-xs text-primary border-primary/30">
+                  <Percent className="h-3 w-3 mr-1" />
+                  {discountOptions.find(o => o.value === group.discountType)?.label ?? group.discountType}
+                </Badge>
+              )}
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-sm text-muted-foreground">
-              {group.discountAmount > 0 && (
-                <span className="text-primary">-£{group.discountAmount.toFixed(2)} </span>
-              )}
-              <span className={group.discountAmount > 0 ? "line-through" : ""}>
-                £{group.subtotal.toFixed(2)}
-              </span>
-            </div>
-            <div className="font-semibold">£{group.finalTotal.toFixed(2)}</div>
+            {group.discountAmount > 0 && (
+              <div className="text-xs text-primary font-medium">
+                -£{group.discountAmount.toFixed(2)} saved
+              </div>
+            )}
+            <div className="text-lg font-bold">£{group.finalTotal.toFixed(2)}</div>
           </div>
-          {isOpen ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
+          {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
         </div>
       </CollapsibleTrigger>
       
       <CollapsibleContent>
-        <div className="border-t p-4 space-y-4">
-          {/* Discount selector */}
-          <div className="flex items-center justify-between pb-3 border-b">
-            <span className="text-sm text-muted-foreground">Apply discount:</span>
-            <Select
-              value={group.discountType}
-              onValueChange={(value) => onDiscountChange(group.retailer, value as DiscountType)}
-            >
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No discount</SelectItem>
-                <SelectItem value="tesco_benefits">Tesco Benefits (4%)</SelectItem>
-                <SelectItem value="easysaver">EasySaver (7%)</SelectItem>
-                <SelectItem value="clubcard">Clubcard (pre-reduced)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="border-t">
+          {/* Discount selector - only show if retailer has options */}
+          {hasDiscountOptions && (
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b">
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <Tag className="h-3.5 w-3.5" />
+                Loyalty discount
+              </span>
+              <Select
+                value={group.discountType}
+                onValueChange={(value) => onDiscountChange(group.retailer, value as DiscountType)}
+              >
+                <SelectTrigger className="w-52 h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {discountOptions.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           
           {/* Items list */}
-          <div className="space-y-2">
+          <div className="p-3 space-y-1.5">
             {group.items.map((item) => (
               <RetailerItemRow key={item.product.id} item={item} />
             ))}
@@ -76,24 +102,45 @@ export function RetailerSection({ group, onDiscountChange }: RetailerSectionProp
 }
 
 function RetailerItemRow({ item }: { item: ShopReadyItem }) {
+  const hasOfferPrice = item.product.offer_price && item.product.offer_price > 0 && item.product.offer_price < item.product.price;
+  
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
+    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors group">
       <div className="flex-1 min-w-0">
-        <div className="font-medium truncate">{item.product.name}</div>
-        <div className="text-sm text-muted-foreground">
-          {item.requiredGrams}g needed
+        <div className="flex items-center gap-2">
+          <span className="font-medium truncate">{item.product.name}</span>
+          {hasOfferPrice && (
+            <Badge variant="outline" className="text-xs text-primary border-primary/30 shrink-0">
+              {item.product.offer_label || "Offer"}
+            </Badge>
+          )}
+          {item.multiBuyOffer && (
+            <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 shrink-0">
+              {item.multiBuyOffer.offerLabel}
+            </Badge>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground mt-0.5">
+          {item.netNeededGrams}g needed
           {item.stockOnHandGrams > 0 && (
-            <span className="text-primary"> (have {item.stockOnHandGrams}g)</span>
+            <span className="text-primary"> · {item.stockOnHandGrams}g in stock</span>
           )}
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="text-sm text-center min-w-[80px]">
-          <span className="font-medium">{item.purchasePacks}</span>
-          <span className="text-muted-foreground"> × {item.packNetGrams}g</span>
+      <div className="flex items-center gap-4 shrink-0">
+        <div className="text-xs text-center min-w-[70px] text-muted-foreground">
+          <span className="font-medium text-foreground">{item.purchasePacks}</span>
+          <span> × {item.packNetGrams}g</span>
         </div>
-        <div className="text-right min-w-[60px] font-medium">
-          £{item.grossCost.toFixed(2)}
+        <div className="text-right min-w-[60px]">
+          {item.multiBuyDiscount > 0 && (
+            <div className="text-xs text-primary line-through">
+              £{(item.grossCost).toFixed(2)}
+            </div>
+          )}
+          <div className="font-semibold">
+            £{item.costAfterMultiBuy.toFixed(2)}
+          </div>
         </div>
       </div>
     </div>

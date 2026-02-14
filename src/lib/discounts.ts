@@ -1,7 +1,7 @@
 // ============= Shared Discount Calculations =============
 // Used by Groceries and Toiletries modules
 
-export type DiscountType = "tesco_benefits" | "easysaver" | "clubcard" | "none" | "other";
+export type DiscountType = "tesco_benefits" | "easysaver" | "clubcard" | "rewardgateway" | "none" | "other";
 
 export interface DiscountCalculation {
   originalPrice: number;
@@ -21,9 +21,49 @@ const DISCOUNT_RATES: Record<DiscountType, number> = {
   tesco_benefits: 0.04, // 4%
   easysaver: 0.07,      // 7%
   clubcard: 0,          // Clubcard prices are pre-reduced
+  rewardgateway: 0.10,  // 10% RewardGateway (MyProtein)
   none: 0,
   other: 0,
 };
+
+/**
+ * Get the default discount type for a retailer.
+ */
+export function getDefaultRetailerDiscount(retailer: string): DiscountType {
+  switch (retailer) {
+    case "Tesco": return "tesco_benefits";
+    case "Iceland": return "easysaver";
+    case "MyProtein": return "rewardgateway";
+    default: return "none";
+  }
+}
+
+/**
+ * Get allowed discount options for a retailer.
+ */
+export function getRetailerDiscountOptions(retailer: string): Array<{ value: DiscountType; label: string }> {
+  const none = { value: "none" as DiscountType, label: "No discount" };
+  switch (retailer) {
+    case "Tesco":
+      return [
+        none,
+        { value: "tesco_benefits", label: "Benefits on Tap (4%)" },
+        { value: "clubcard", label: "Clubcard (pre-reduced)" },
+      ];
+    case "Iceland":
+      return [
+        none,
+        { value: "easysaver", label: "EasySaver Card (7%)" },
+      ];
+    case "MyProtein":
+      return [
+        none,
+        { value: "rewardgateway", label: "RewardGateway (10%)" },
+      ];
+    default:
+      return [none];
+  }
+}
 
 /**
  * Parse offer_label to detect multi-buy offers like "4 for 3", "3 for 2", "Buy 2 Get 1 Free"

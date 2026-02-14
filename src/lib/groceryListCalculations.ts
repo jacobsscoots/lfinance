@@ -1,7 +1,7 @@
 import { Product } from "@/hooks/useProducts";
 import { MealPlan } from "@/hooks/useMealPlanItems";
 import { generateGroceryList, GroceryItem } from "./mealCalculations";
-import { calculateBasketDiscount, DiscountType, parseMultiBuyOffer, calculateMultiBuyPrice, MultiBuyOffer } from "./discounts";
+import { calculateBasketDiscount, DiscountType, parseMultiBuyOffer, calculateMultiBuyPrice, MultiBuyOffer, getDefaultRetailerDiscount } from "./discounts";
 
 // ============= Types =============
 
@@ -177,11 +177,14 @@ export function generateShopReadyList(
       shopItem.purchasePacks = 1;
     }
     
-    // Calculate gross cost (before any discount)
-    shopItem.grossCost = shopItem.purchasePacks * product.price;
+    // Calculate gross cost - use offer_price if available (e.g. Clubcard price)
+    const effectivePrice = product.offer_price && product.offer_price > 0 
+      ? product.offer_price 
+      : product.price;
+    shopItem.grossCost = shopItem.purchasePacks * effectivePrice;
     
     // Apply multi-buy discount if applicable
-    const multiBuyResult = calculateMultiBuyPrice(product.price, shopItem.purchasePacks, multiBuyOffer);
+    const multiBuyResult = calculateMultiBuyPrice(effectivePrice, shopItem.purchasePacks, multiBuyOffer);
     shopItem.multiBuyDiscount = multiBuyResult.discountAmount;
     shopItem.costAfterMultiBuy = multiBuyResult.finalCost;
     
@@ -210,7 +213,7 @@ export function generateShopReadyList(
     // Subtotal after multi-buy (this is what loyalty discount applies to)
     const subtotalAfterMultiBuy = subtotal - multiBuyDiscount;
     
-    const discountType = retailerDiscounts[retailer] ?? "none";
+    const discountType = retailerDiscounts[retailer] ?? getDefaultRetailerDiscount(retailer);
     
     // Apply basket-level loyalty discount on subtotal AFTER multi-buy
     const loyaltyResult = calculateBasketDiscount(subtotalAfterMultiBuy, discountType);
