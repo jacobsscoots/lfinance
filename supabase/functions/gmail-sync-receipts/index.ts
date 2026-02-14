@@ -430,12 +430,14 @@ serve(async (req) => {
 
           console.log(`[match] Receipt ${receipt.id} (${receipt.merchant_name}): best score=${bestMatch?.score ?? 0}, reasons=${bestMatch?.reasons?.join(',')}`, bestMatch ? `tx=${bestMatch.transaction.description} £${bestMatch.transaction.amount}` : '');
           // Determine match status
+          // Only auto-link at medium+ confidence (score ≥ 60) to avoid false positives.
+          // Low-confidence matches (50-59) go to 'review' for manual inspection.
           let matchStatus = 'no_match';
           let matchConfidence = null;
-          if (bestMatch && bestMatch.score >= 50) {
+          if (bestMatch && bestMatch.score >= 60) {
             matchStatus = 'matched';
-            matchConfidence = bestMatch.score >= 80 ? 'high' : bestMatch.score >= 60 ? 'medium' : 'low';
-          } else if (bestMatch && bestMatch.score >= 35) {
+            matchConfidence = bestMatch.score >= 80 ? 'high' : 'medium';
+          } else if (bestMatch && bestMatch.score >= 40) {
             matchStatus = 'review';
             matchConfidence = 'low';
           }
