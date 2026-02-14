@@ -744,6 +744,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                           <FormControl>
                             <Input 
                               type="date" 
+                              className="min-w-0 w-full"
                               {...field} 
                               value={field.value || ""} 
                             />
@@ -760,6 +761,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                           <FormControl>
                             <Input 
                               type="date" 
+                              className="min-w-0 w-full"
                               {...field} 
                               value={field.value || ""} 
                             />
