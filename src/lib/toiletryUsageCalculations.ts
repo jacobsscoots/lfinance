@@ -129,19 +129,11 @@ export function validateWeightLog(
   existingFullWeight: number | null,
   existingFinishedAt: Date | null
 ): { valid: boolean; error?: string } {
-  // If item is already finished, no more weight logs allowed
-  if (existingFinishedAt !== null) {
+  // If item is finished but user is logging a regular or full weight, allow it (reactivates)
+  if (existingFinishedAt !== null && readingType === "empty") {
     return {
       valid: false,
-      error: "This item has been marked as finished. Create a new item to track usage.",
-    };
-  }
-  
-  // Full weight can only be set once
-  if (readingType === "full" && existingFullWeight !== null) {
-    return {
-      valid: false,
-      error: "Full weight has already been recorded for this item.",
+      error: "This item is already marked as finished. Log a regular weight to reactivate it.",
     };
   }
   

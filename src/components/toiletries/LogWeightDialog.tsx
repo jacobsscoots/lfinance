@@ -115,10 +115,10 @@ export function LogWeightDialog({
         </ResponsiveDialogHeader>
 
         {isFinished && (
-          <Alert variant="destructive">
+          <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              This item has been marked as finished. Create a new item to track usage.
+              This item is marked as finished. Logging a weight will reactivate it.
             </AlertDescription>
           </Alert>
         )}
@@ -147,7 +147,6 @@ export function LogWeightDialog({
                         placeholder="Enter weight"
                         {...field}
                         className="pr-8"
-                        disabled={isFinished}
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                         g
@@ -170,7 +169,6 @@ export function LogWeightDialog({
                       onValueChange={field.onChange}
                       value={field.value}
                       className="space-y-3"
-                      disabled={isFinished}
                     >
                       <div className="flex items-start space-x-3">
                         <RadioGroupItem 
@@ -262,7 +260,7 @@ export function LogWeightDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading || isFinished}>
+              <Button type="submit" disabled={isLoading}>
                 Save Weight
               </Button>
             </ResponsiveDialogFooter>
