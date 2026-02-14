@@ -89,11 +89,11 @@ export function MobileNav() {
               <span className="sr-only">Open menu</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-72 bg-sidebar p-0 border-sidebar-border">
-            <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
+          <SheetContent side="right" className="w-72 bg-sidebar p-0 border-sidebar-border flex flex-col h-full">
+            <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border shrink-0">
               <span className="text-lg font-semibold text-sidebar-foreground">Menu</span>
             </div>
-            <nav className="flex-1 px-4 py-4 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)]">
+            <nav className="flex-1 px-4 py-4 space-y-4 overflow-y-auto min-h-0">
               {navGroups.map((group, gi) => (
                 <div key={gi}>
                   {group.label && (
@@ -110,7 +110,7 @@ export function MobileNav() {
                           to={item.href}
                           onClick={() => setOpen(false)}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]",
                             isActive
                               ? "bg-sidebar-accent text-sidebar-accent-foreground"
                               : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
@@ -129,7 +129,7 @@ export function MobileNav() {
                 to="/settings"
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]",
                   location.pathname === "/settings"
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
@@ -139,8 +139,8 @@ export function MobileNav() {
                 Settings
               </NavLink>
             </nav>
-            {/* Footer in mobile nav */}
-            <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
+            {/* Footer - always visible at bottom */}
+            <div className="px-4 py-4 border-t border-sidebar-border space-y-2 shrink-0">
               {user && (
                 <div className="px-3 py-2 text-xs text-sidebar-foreground/60 truncate">
                   {user.email}
@@ -148,7 +148,7 @@ export function MobileNav() {
               )}
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-3 text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                className="w-full justify-start gap-3 text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 min-h-[44px]"
                 onClick={() => {
                   signOut();
                   setOpen(false);
