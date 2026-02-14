@@ -68,20 +68,44 @@ export function InvestmentCard({
         return sum;
       }, 0);
 
-      const currentValue = totalUnits * livePrice.price;
-      const totalReturn = currentValue - totalContributions;
-      const returnPercentage = calculateReturn(currentValue, totalContributions);
-      const dailyChange = livePrice.dailyChange 
-        ? { amount: totalUnits * livePrice.dailyChange.amount, percentage: livePrice.dailyChange.percentage }
-        : calculateDailyChange(currentValue, investment.expected_annual_return);
+      if (totalUnits > 0) {
+        const currentValue = totalUnits * livePrice.price;
+        const totalReturn = currentValue - totalContributions;
+        const returnPercentage = calculateReturn(currentValue, totalContributions);
+        const dailyChange = livePrice.dailyChange 
+          ? { amount: totalUnits * livePrice.dailyChange.amount, percentage: livePrice.dailyChange.percentage }
+          : calculateDailyChange(currentValue, investment.expected_annual_return);
+
+        return {
+          currentValue,
+          totalContributions,
+          returnPercentage,
+          totalReturn,
+          dailyChange,
+          totalUnits,
+          unitPrice: livePrice.price,
+          isLive: true,
+        };
+      }
+
+      // No units tracked (e.g. ChipX) — use estimated value with live daily % change
+      const today = new Date();
+      const startDate = new Date(investment.start_date);
+      const dailyValues = calculateDailyValues(formattedTransactions, [], startDate, today, investment.expected_annual_return);
+      const estimatedValue = dailyValues.length > 0 ? dailyValues[dailyValues.length - 1].value : totalContributions;
+      const totalReturn = estimatedValue - totalContributions;
+      const returnPercentage = calculateReturn(estimatedValue, totalContributions);
+      const dailyChange = livePrice.dailyChange
+        ? { amount: estimatedValue * (livePrice.dailyChange.percentage / 100), percentage: livePrice.dailyChange.percentage }
+        : calculateDailyChange(estimatedValue, investment.expected_annual_return);
 
       return {
-        currentValue,
+        currentValue: estimatedValue,
         totalContributions,
         returnPercentage,
         totalReturn,
         dailyChange,
-        totalUnits,
+        totalUnits: 0,
         unitPrice: livePrice.price,
         isLive: true,
       };
