@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { format, parse } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle, PenLine } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle, PenLine, Pencil, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +55,9 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const [copyToDateOpen, setCopyToDateOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
   const [aiFailInfo, setAiFailInfo] = useState<{ failed: boolean; bestEffort?: boolean; message?: string; suggestions?: string[] } | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editGramsValue, setEditGramsValue] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
   
   const { updateMealStatus, removeItem, updateItem, addItem: addItemMutation, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay, aiPlanDay } = useMealPlanItems(weekStart);
   
@@ -179,6 +183,20 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
 
   const toggleLock = (itemId: string, currentlyLocked: boolean) => {
     updateItem.mutate({ id: itemId, is_locked: !currentlyLocked });
+  };
+
+  const startEditGrams = (itemId: string, currentGrams: number) => {
+    setEditingItemId(itemId);
+    setEditGramsValue(String(currentGrams));
+    setTimeout(() => editInputRef.current?.select(), 50);
+  };
+
+  const commitEditGrams = () => {
+    if (editingItemId && editGramsValue) {
+      const grams = Math.max(0, Math.round(parseFloat(editGramsValue) || 0));
+      updateItem.mutate({ id: editingItemId, quantity_grams: grams });
+    }
+    setEditingItemId(null);
   };
 
   const handleCopyToNextDay = () => {
@@ -494,15 +512,31 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                           <span className="truncate">{item.custom_name || item.product?.name}</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className={cn(
-                            "text-muted-foreground tabular-nums",
-                            !item.custom_name && item.quantity_grams === 0 && "text-amber-600"
-                          )}>
-                            {item.custom_name 
-                              ? `${Math.round((item as any).custom_calories || 0)} kcal`
-                              : item.quantity_grams === 0 ? "—" : `${item.quantity_grams}g`
-                            }
-                          </span>
+                          {editingItemId === item.id ? (
+                            <form onSubmit={(e) => { e.preventDefault(); commitEditGrams(); }} className="flex items-center gap-1">
+                              <Input
+                                ref={editInputRef}
+                                type="number"
+                                min="0"
+                                value={editGramsValue}
+                                onChange={e => setEditGramsValue(e.target.value)}
+                                onBlur={commitEditGrams}
+                                className="h-5 w-16 text-xs px-1 py-0 tabular-nums"
+                                autoFocus
+                              />
+                              <span className="text-[10px] text-muted-foreground">g</span>
+                            </form>
+                          ) : (
+                            <span className={cn(
+                              "text-muted-foreground tabular-nums",
+                              !item.custom_name && item.quantity_grams === 0 && "text-amber-600"
+                            )}>
+                              {item.custom_name 
+                                ? `${Math.round((item as any).custom_calories || 0)} kcal`
+                                : item.quantity_grams === 0 ? "—" : `${item.quantity_grams}g`
+                              }
+                            </span>
+                          )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-5 sm:w-5">
@@ -510,6 +544,13 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {/* Edit Grams - only for product items, not manual entries */}
+                              {item.product_id && !item.custom_name && (
+                                <DropdownMenuItem onClick={() => startEditGrams(item.id, item.quantity_grams)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit Grams
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => toggleLock(item.id, item.is_locked)}>
                                 {item.is_locked ? (
                                   <>
@@ -526,7 +567,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                               <DropdownMenuItem 
                                 className="text-destructive"
                                 onClick={() => {
-                                  setAiFailInfo(null); // Bug 6 fix: clear fail on item removal
+                                  setAiFailInfo(null);
                                   removeItem.mutate(item.id);
                                 }}
                               >
