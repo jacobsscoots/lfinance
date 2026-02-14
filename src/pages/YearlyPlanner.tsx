@@ -22,7 +22,7 @@ export default function YearlyPlanner() {
   const { monthData, incomeBreakdown, createOverride, deleteOverride, isCreating } = useYearlyPlannerData(year);
   const { bills } = useBills();
   const { accounts } = useAccounts();
-  const { getOverride, hasOverride, upsertOverride, removeOverride } = useYearlyCellOverrides(year);
+  const { getOverride, hasOverride, upsertOverride, removeOverride, overrideMap } = useYearlyCellOverrides(year);
 
   return (
     <AppLayout>
@@ -93,6 +93,7 @@ export default function YearlyPlanner() {
             incomeBreakdown={incomeBreakdown}
             getOverride={getOverride}
             hasOverride={hasOverride}
+            overrideMap={overrideMap}
             onCellEdit={(rowKey, month, amount) =>
               upsertOverride({ rowKey, month, amount })
             }
