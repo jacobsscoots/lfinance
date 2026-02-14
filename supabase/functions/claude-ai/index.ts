@@ -523,7 +523,7 @@ async function handleMealPlanner(
     const tabu = new Set<string>();
     const MAX_TABU = 200;
 
-    for (let iter = 0; iter < 5000; iter++) {
+    for (let iter = 0; iter < 10000; iter++) {
       const totals = computeTotals(grams);
       const err = computeError(totals);
 
@@ -540,13 +540,13 @@ async function handleMealPlanner(
         return { grams: new Map(grams), totals, error: 0, iterations: iter };
       }
 
-      // Fast stagnation exit: if no improvement in 100 iterations, stop
-      if (staleCount > 100) {
+      // Stagnation exit: if no improvement in 1000 iterations, stop
+      if (staleCount > 1000) {
         break;
       }
 
-      // Perturbation escape at 40 stale iterations (much earlier than before)
-      if (staleCount > 40 && staleCount % 40 === 0) {
+      // Perturbation escape every 100 stale iterations
+      if (staleCount > 100 && staleCount % 100 === 0) {
         const shuffled = [...nonSeasoningFoods].sort(() => Math.random() - 0.5);
         const numPerturb = Math.min(3, shuffled.length);
         for (let pi = 0; pi < numPerturb; pi++) {
@@ -618,7 +618,7 @@ async function handleMealPlanner(
       grams.set(chosenFood.id, bestNewG);
     }
 
-    return { grams: bestGrams, totals: bestTotals, error: bestError, iterations: 5000 };
+    return { grams: bestGrams, totals: bestTotals, error: bestError, iterations: 10000 };
   }
 
   // ─── GENERATE STARTING POINTS ──────────────────────────
