@@ -15,6 +15,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useDebts, Debt, DebtType, InterestType } from "@/hooks/useDebts";
+import { useAccounts } from "@/hooks/useAccounts";
 import { format } from "date-fns";
+import { Link } from "lucide-react";
 
 const debtFormSchema = z.object({
   creditor_name: z.string().min(1, "Creditor name is required"),
@@ -42,6 +45,7 @@ const debtFormSchema = z.object({
   status: z.enum(['open', 'closed']),
   opened_date: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  linked_account_id: z.string().optional().nullable(),
 });
 
 type DebtFormValues = z.infer<typeof debtFormSchema>;
@@ -54,7 +58,13 @@ interface DebtFormDialogProps {
 
 export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps) {
   const { createDebt, updateDebt } = useDebts();
+  const { allAccounts } = useAccounts();
   const isEditing = !!debt;
+
+  // Filter to credit-type accounts for linking
+  const creditAccounts = allAccounts.filter(a => 
+    a.account_type === 'credit' || a.account_type === 'loan'
+  );
 
   const form = useForm<DebtFormValues>({
     resolver: zodResolver(debtFormSchema),
@@ -71,6 +81,7 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
       status: "open",
       opened_date: format(new Date(), 'yyyy-MM-dd'),
       notes: null,
+      linked_account_id: null,
     },
   });
 
@@ -89,6 +100,7 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
         status: debt.status,
         opened_date: debt.opened_date,
         notes: debt.notes,
+        linked_account_id: debt.linked_account_id || null,
       });
     } else if (open) {
       form.reset({
@@ -104,6 +116,7 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
         status: "open",
         opened_date: format(new Date(), 'yyyy-MM-dd'),
         notes: null,
+        linked_account_id: null,
       });
     }
   }, [open, debt, form]);
@@ -129,6 +142,7 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
           status: values.status,
           opened_date: values.opened_date,
           notes: values.notes,
+          linked_account_id: values.linked_account_id || null,
         });
       }
       onOpenChange(false);
@@ -367,6 +381,42 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
                 )}
               />
             </div>
+
+            {/* Link to Bank Account */}
+            <FormField
+              control={form.control}
+              name="linked_account_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">
+                    <Link className="h-3.5 w-3.5" />
+                    Link to Bank Account
+                  </FormLabel>
+                  <Select 
+                    onValueChange={(v) => field.onChange(v === "none" ? null : v)} 
+                    value={field.value || "none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No account linked" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No account linked</SelectItem>
+                      {allAccounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          {acc.display_name || acc.name} (£{Math.abs(acc.balance).toFixed(2)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Balance will auto-update when this account syncs
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

@@ -1182,6 +1182,7 @@ export type Database = {
           id: string
           import_key: string | null
           interest_type: string
+          linked_account_id: string | null
           min_payment: number | null
           notes: string | null
           opened_date: string | null
@@ -1202,6 +1203,7 @@ export type Database = {
           id?: string
           import_key?: string | null
           interest_type?: string
+          linked_account_id?: string | null
           min_payment?: number | null
           notes?: string | null
           opened_date?: string | null
@@ -1222,6 +1224,7 @@ export type Database = {
           id?: string
           import_key?: string | null
           interest_type?: string
+          linked_account_id?: string | null
           min_payment?: number | null
           notes?: string | null
           opened_date?: string | null
@@ -1231,7 +1234,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "debts_linked_account_id_fkey"
+            columns: ["linked_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_tracking_extractions: {
         Row: {

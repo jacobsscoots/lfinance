@@ -13,7 +13,7 @@ import {
 import { Debt } from "@/hooks/useDebts";
 import { DebtPayment } from "@/hooks/useDebtPayments";
 import { calculateDebtProgress, getDebtTypeLabel } from "@/lib/debtCalculations";
-import { Plus, CreditCard, Building2, Wallet, ShoppingBag, MoreHorizontal, Edit, Trash2, Receipt } from "lucide-react";
+import { Plus, CreditCard, Building2, Wallet, ShoppingBag, MoreHorizontal, Edit, Trash2, Receipt, Link } from "lucide-react";
 import { DebtFormDialog } from "./DebtFormDialog";
 import { DeleteDebtDialog } from "./DeleteDebtDialog";
 import {
@@ -187,6 +187,12 @@ export function DebtList({ debts, payments, isLoading, onAddDebt, onLogPayment }
                             </Badge>
                             {debt.status === 'closed' && (
                               <Badge variant="outline" className="text-xs">Closed</Badge>
+                            )}
+                            {debt.linked_account_id && (
+                              <Badge variant="outline" className="text-xs gap-1 border-primary/50 text-primary">
+                                <Link className="h-3 w-3" />
+                                Auto-sync
+                              </Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">
