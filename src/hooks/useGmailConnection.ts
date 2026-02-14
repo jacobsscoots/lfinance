@@ -138,6 +138,7 @@ export function useGmailConnection() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["gmail-receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-receipt-matches"] });
       queryClient.invalidateQueries({ queryKey: ["gmail-connection"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       const found = data?.receiptsFound || 0;
