@@ -75,29 +75,30 @@ export default function DebtTracker() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 lg:w-auto lg:inline-flex">
-            <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm">
-              <CreditCard className="h-4 w-4 hidden sm:inline" />
-              <span className="hidden xs:inline sm:inline">Overview</span>
-              <span className="xs:hidden sm:hidden">Home</span>
-            </TabsTrigger>
-            <TabsTrigger value="debts" className="gap-1.5 text-xs sm:text-sm">
-              <Wallet2 className="h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">Debts</span>
-            </TabsTrigger>
-            <TabsTrigger value="payments" className="gap-1.5 text-xs sm:text-sm">
-              <Receipt className="h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">Payments</span>
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="gap-1.5 text-xs sm:text-sm">
-              <ArrowRightLeft className="h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">Transactions</span>
-            </TabsTrigger>
-            <TabsTrigger value="reports" className="gap-1.5 text-xs sm:text-sm">
-              <FileText className="h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">Reports</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex w-auto min-w-full sm:min-w-0 sm:grid sm:grid-cols-5 lg:w-auto lg:inline-flex">
+              <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+                <CreditCard className="h-4 w-4 shrink-0" />
+                Home
+              </TabsTrigger>
+              <TabsTrigger value="debts" className="gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+                <Wallet2 className="h-4 w-4 shrink-0 sm:hidden" />
+                Debts
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+                <Receipt className="h-4 w-4 shrink-0 sm:hidden" />
+                Payments
+              </TabsTrigger>
+              <TabsTrigger value="transactions" className="gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+                <ArrowRightLeft className="h-4 w-4 shrink-0 sm:hidden" />
+                Trans.
+              </TabsTrigger>
+              <TabsTrigger value="reports" className="gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+                <FileText className="h-4 w-4 shrink-0 sm:hidden" />
+                Reports
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
