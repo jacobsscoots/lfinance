@@ -58,6 +58,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editGramsValue, setEditGramsValue] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+  const editStartedAtRef = useRef<number>(0);
   
   const { updateMealStatus, removeItem, updateItem, addItem: addItemMutation, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay, aiPlanDay } = useMealPlanItems(weekStart);
   
@@ -186,9 +187,10 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
   };
 
   const startEditGrams = (itemId: string, currentGrams: number) => {
+    editStartedAtRef.current = Date.now();
     setEditingItemId(itemId);
     setEditGramsValue(String(currentGrams));
-    setTimeout(() => editInputRef.current?.select(), 50);
+    setTimeout(() => editInputRef.current?.focus(), 100);
   };
 
   const commitEditGrams = () => {
@@ -197,6 +199,12 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
       updateItem.mutate({ id: editingItemId, quantity_grams: grams });
     }
     setEditingItemId(null);
+  };
+
+  const handleEditBlur = () => {
+    // Ignore blur events within 300ms of starting edit (dropdown teardown)
+    if (Date.now() - editStartedAtRef.current < 300) return;
+    setTimeout(() => commitEditGrams(), 100);
   };
 
   const handleCopyToNextDay = () => {
@@ -520,7 +528,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                                 min="0"
                                 value={editGramsValue}
                                 onChange={e => setEditGramsValue(e.target.value)}
-                                onBlur={commitEditGrams}
+                                onBlur={handleEditBlur}
                                 className="h-5 w-16 text-xs px-1 py-0 tabular-nums"
                                 autoFocus
                               />
@@ -546,7 +554,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                             <DropdownMenuContent align="end">
                               {/* Edit Grams - only for product items, not manual entries */}
                               {item.product_id && !item.custom_name && (
-                                <DropdownMenuItem onClick={() => startEditGrams(item.id, item.quantity_grams)}>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); startEditGrams(item.id, item.quantity_grams); }}>
                                   <Pencil className="h-4 w-4 mr-2" />
                                   Edit Grams
                                 </DropdownMenuItem>
