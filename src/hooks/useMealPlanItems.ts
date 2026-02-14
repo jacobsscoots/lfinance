@@ -21,13 +21,18 @@ export interface MealPlanItem {
   id: string;
   user_id: string;
   meal_plan_id: string;
-  product_id: string;
+  product_id: string | null;
   meal_type: MealType;
   quantity_grams: number;
   is_locked: boolean;
   created_at: string;
   updated_at: string;
   product?: Product;
+  custom_name?: string | null;
+  custom_calories?: number;
+  custom_protein?: number;
+  custom_carbs?: number;
+  custom_fat?: number;
 }
 
 export interface MealPlan {
@@ -71,10 +76,15 @@ export interface MealPlan {
 
 export interface MealPlanItemFormData {
   meal_plan_id: string;
-  product_id: string;
+  product_id?: string | null;
   meal_type: MealType;
   quantity_grams: number;
   is_locked?: boolean;
+  custom_name?: string;
+  custom_calories?: number;
+  custom_protein?: number;
+  custom_carbs?: number;
+  custom_fat?: number;
 }
 
 import { getShoppingWeekRange, getShoppingWeekDateStrings } from "@/lib/mealPlannerWeek";

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parse } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle, PenLine } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { DayMacros, MealMacros } from "@/lib/mealCalculations";
 import { getDailyTargets, MacroTotals, WeeklyTargetsOverride } from "@/lib/dailyTargets";
 import { MealItemMultiSelectDialog } from "./MealItemMultiSelectDialog";
 import { EatingOutDialog, EatingOutData } from "./EatingOutDialog";
+import { ManualItemDialog, ManualItemData } from "./ManualItemDialog";
 import { DayDetailModal } from "./DayDetailModal";
 import { DayMacroSummary } from "./DayMacroSummary";
 import { CopyToDateDialog } from "./CopyToDateDialog";
@@ -48,12 +49,13 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
 export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, previousWeekOverride, weekDates, mealPlans = [] }: MealDayCardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
+  const [manualItemOpen, setManualItemOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [copyToDateOpen, setCopyToDateOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType>("breakfast");
   const [aiFailInfo, setAiFailInfo] = useState<{ failed: boolean; bestEffort?: boolean; message?: string; suggestions?: string[] } | null>(null);
   
-  const { updateMealStatus, removeItem, updateItem, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay, aiPlanDay } = useMealPlanItems(weekStart);
+  const { updateMealStatus, removeItem, updateItem, addItem: addItemMutation, copyDayToNext, copyDayToPrevious, copyDayToDate, clearDay, recalculateDay, aiPlanDay } = useMealPlanItems(weekStart);
   
   // Parse as local date to avoid UTC-shift issues
   const date = parse(plan.meal_date, "yyyy-MM-dd", new Date());
@@ -154,6 +156,25 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
       eatingOutLabel: data.label,
     });
     setEatingOutOpen(false);
+  };
+
+  const handleManualItem = (mealType: MealType) => {
+    setSelectedMealType(mealType);
+    setManualItemOpen(true);
+  };
+
+  const handleManualItemConfirm = (data: ManualItemData) => {
+    addItemMutation.mutate({
+      meal_plan_id: plan.id,
+      product_id: null,
+      meal_type: data.meal_type,
+      quantity_grams: data.quantity_grams,
+      custom_name: data.custom_name,
+      custom_calories: data.custom_calories,
+      custom_protein: data.custom_protein,
+      custom_carbs: data.custom_carbs,
+      custom_fat: data.custom_fat,
+    });
   };
 
   const toggleLock = (itemId: string, currentlyLocked: boolean) => {
@@ -402,6 +423,10 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                         <Plus className="h-4 w-4 mr-2" />
                         Add Item
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleManualItem(mealType)}>
+                        <PenLine className="h-4 w-4 mr-2" />
+                        Manual Entry
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem 
                         onClick={() => handleSetStatus(mealType, "planned")}
@@ -461,17 +486,22 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                       >
                         <div className="flex items-center gap-1 truncate">
                           {item.is_locked && <Lock className="h-3 w-3 text-primary" />}
-                          {item.product?.product_type === "fixed" && (
+                          {!item.product_id && item.custom_name ? (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0">Manual</Badge>
+                          ) : item.product?.product_type === "fixed" ? (
                             <Badge variant="outline" className="text-[10px] px-1 py-0">Fixed</Badge>
-                          )}
-                          <span className="truncate">{item.product?.name}</span>
+                          ) : null}
+                          <span className="truncate">{item.custom_name || item.product?.name}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <span className={cn(
                             "text-muted-foreground tabular-nums",
-                            item.quantity_grams === 0 && "text-amber-600"
+                            !item.custom_name && item.quantity_grams === 0 && "text-amber-600"
                           )}>
-                            {item.quantity_grams === 0 ? "—" : `${item.quantity_grams}g`}
+                            {item.custom_name 
+                              ? `${Math.round((item as any).custom_calories || 0)} kcal`
+                              : item.quantity_grams === 0 ? "—" : `${item.quantity_grams}g`
+                            }
                           </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -529,6 +559,13 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
         open={eatingOutOpen}
         onOpenChange={setEatingOutOpen}
         onConfirm={handleEatingOutConfirm}
+      />
+
+      <ManualItemDialog
+        open={manualItemOpen}
+        onOpenChange={setManualItemOpen}
+        mealType={selectedMealType}
+        onConfirm={handleManualItemConfirm}
       />
 
       <DayDetailModal
