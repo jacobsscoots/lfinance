@@ -217,6 +217,9 @@ export default function CheaperBills() {
 
           {/* Energy Tab */}
           <TabsContent value="energy" className="space-y-4">
+            {/* Home Profile — must be filled before comparisons */}
+            <EnergyProfileCard />
+
             {/* Current Tariff */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -287,9 +290,6 @@ export default function CheaperBills() {
                 ))}
               </div>
             )}
-
-            {/* Energy Profile - Personalize AI tips */}
-            <EnergyProfileCard />
 
             {/* AI Assistant */}
             <BillsAssistant />

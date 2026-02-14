@@ -30,6 +30,15 @@ export interface EnergyProfile {
   has_solar: boolean;
   tariff_type: string | null;
   peak_time_avoidance: boolean;
+  // Property eligibility (new)
+  ownership_type: string | null;
+  boiler_type: string | null;
+  hot_water_type: string | null;
+  has_electric_boiler: boolean;
+  has_heat_pump: boolean;
+  insulation_level: string | null;
+  epc_rating: string | null;
+  property_age: string | null;
   // Custom notes
   notes: string | null;
   created_at: string;
@@ -51,6 +60,8 @@ const DEFAULT_PROFILE: Partial<EnergyProfile> = {
   has_ev: false,
   has_solar: false,
   peak_time_avoidance: false,
+  has_electric_boiler: false,
+  has_heat_pump: false,
 };
 
 export function useEnergyProfile() {

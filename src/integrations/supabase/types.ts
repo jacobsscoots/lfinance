@@ -1299,20 +1299,28 @@ export type Database = {
       }
       energy_profiles: {
         Row: {
+          boiler_type: string | null
           created_at: string
           dishwasher_runs_per_week: number | null
           dryer_runs_per_week: number | null
           eco_mode_dishwasher: boolean | null
           eco_mode_washer: boolean | null
+          epc_rating: string | null
+          has_electric_boiler: boolean | null
           has_ev: boolean | null
+          has_heat_pump: boolean | null
           has_solar: boolean | null
           heating_type: string | null
           home_type: string | null
+          hot_water_type: string | null
           id: string
+          insulation_level: string | null
           low_temp_washing: boolean | null
           notes: string | null
           occupants: number | null
+          ownership_type: string | null
           peak_time_avoidance: boolean | null
+          property_age: string | null
           shower_minutes_avg: number | null
           smart_meter: boolean | null
           smart_thermostat: boolean | null
@@ -1325,20 +1333,28 @@ export type Database = {
           work_from_home_days: number | null
         }
         Insert: {
+          boiler_type?: string | null
           created_at?: string
           dishwasher_runs_per_week?: number | null
           dryer_runs_per_week?: number | null
           eco_mode_dishwasher?: boolean | null
           eco_mode_washer?: boolean | null
+          epc_rating?: string | null
+          has_electric_boiler?: boolean | null
           has_ev?: boolean | null
+          has_heat_pump?: boolean | null
           has_solar?: boolean | null
           heating_type?: string | null
           home_type?: string | null
+          hot_water_type?: string | null
           id?: string
+          insulation_level?: string | null
           low_temp_washing?: boolean | null
           notes?: string | null
           occupants?: number | null
+          ownership_type?: string | null
           peak_time_avoidance?: boolean | null
+          property_age?: string | null
           shower_minutes_avg?: number | null
           smart_meter?: boolean | null
           smart_thermostat?: boolean | null
@@ -1351,20 +1367,28 @@ export type Database = {
           work_from_home_days?: number | null
         }
         Update: {
+          boiler_type?: string | null
           created_at?: string
           dishwasher_runs_per_week?: number | null
           dryer_runs_per_week?: number | null
           eco_mode_dishwasher?: boolean | null
           eco_mode_washer?: boolean | null
+          epc_rating?: string | null
+          has_electric_boiler?: boolean | null
           has_ev?: boolean | null
+          has_heat_pump?: boolean | null
           has_solar?: boolean | null
           heating_type?: string | null
           home_type?: string | null
+          hot_water_type?: string | null
           id?: string
+          insulation_level?: string | null
           low_temp_washing?: boolean | null
           notes?: string | null
           occupants?: number | null
+          ownership_type?: string | null
           peak_time_avoidance?: boolean | null
+          property_age?: string | null
           shower_minutes_avg?: number | null
           smart_meter?: boolean | null
           smart_thermostat?: boolean | null
