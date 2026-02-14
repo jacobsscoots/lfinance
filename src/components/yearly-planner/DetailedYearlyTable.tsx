@@ -35,6 +35,8 @@ interface DetailedYearlyTableProps {
   onCellEdit?: (rowKey: string, month: number, amount: number) => void;
   onCellReset?: (rowKey: string, month: number) => void;
   onMonthHeaderClick?: (month: number) => void;
+  /** Pass the raw override map so useMemo can depend on its identity for recalculation */
+  overrideMap?: Map<string, number>;
 }
 
 function fmt(n: number) {
@@ -165,19 +167,28 @@ export function DetailedYearlyTable({
   onCellEdit,
   onCellReset,
   onMonthHeaderClick,
+  overrideMap: overrideMapProp,
 }: DetailedYearlyTableProps) {
   const activeBills = useMemo(() => bills.filter(b => b.is_active), [bills]);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
   const canEdit = !!onCellEdit;
 
-  const getOvr = (key: string, month: number) => getOverride?.(key, month);
-  const hasOvr = (key: string, month: number) => hasOverrideFn?.(key, month) ?? false;
+  // Use a ref so the useMemo always reads the latest override function
+  const getOverrideRef = useRef(getOverride);
+  const hasOverrideRef = useRef(hasOverrideFn);
+  useEffect(() => {
+    getOverrideRef.current = getOverride;
+    hasOverrideRef.current = hasOverrideFn;
+  }, [getOverride, hasOverrideFn]);
+
+  const getOvr = (key: string, month: number) => getOverrideRef.current?.(key, month);
+  const hasOvr = (key: string, month: number) => hasOverrideRef.current?.(key, month) ?? false;
   const saveCell = (key: string, month: number, amt: number) => onCellEdit?.(key, month, amt);
   const resetCell = (key: string, month: number) => onCellReset?.(key, month);
 
   // Helper to get effective amount for a cell (override or original)
   const effective = (key: string, month: number, original: number): number => {
-    const ovr = getOvr(key, month);
+    const ovr = getOverrideRef.current?.(key, month);
     return ovr !== undefined ? ovr : original;
   };
 
@@ -304,7 +315,7 @@ export function DetailedYearlyTable({
 
       return { ...m, totalIncome: totalIncome, totalOutgoings, net };
     });
-  }, [months, billRows, overrideRows, getOverride]);
+  }, [months, billRows, overrideRows, overrideMapProp]);
 
   // Recalculate running surplus
   const effectiveWithSurplus = useMemo(() => {
