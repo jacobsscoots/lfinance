@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -16,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link, Search } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link, Search, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import {
   calculateForecast,
   formatCurrency,
@@ -35,6 +36,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ToiletryCard } from "./ToiletryCard";
 import { cn } from "@/lib/utils";
 
+type SortKey = "name" | "category" | "remaining" | "dailyUsage" | "daysLeft" | "orderBy" | "monthly";
+type SortDir = "asc" | "desc";
+
 interface ToiletryTableProps {
   items: ToiletryItem[];
   onEdit: (item: ToiletryItem) => void;
@@ -45,6 +49,11 @@ interface ToiletryTableProps {
   onFindPrices?: (item: ToiletryItem) => void;
   usageRates?: Record<string, number | null>;
   shippingProfiles?: Record<string, ShippingProfile | null>;
+}
+
+function SortIcon({ sortKey, currentKey, dir }: { sortKey: SortKey; currentKey: SortKey | null; dir: SortDir }) {
+  if (currentKey !== sortKey) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+  return dir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
 }
 
 export function ToiletryTable({
@@ -59,6 +68,17 @@ export function ToiletryTable({
   shippingProfiles,
 }: ToiletryTableProps) {
   const isMobile = useIsMobile();
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   if (items.length === 0) {
     return (
@@ -78,15 +98,43 @@ export function ToiletryTable({
     });
   };
 
+  const forecastMap = new Map<string, ToiletryForecast>();
+  items.forEach(item => forecastMap.set(item.id, getForecast(item)));
+
+  const sortedItems = [...items].sort((a, b) => {
+    if (!sortKey) return 0;
+    const fa = forecastMap.get(a.id)!;
+    const fb = forecastMap.get(b.id)!;
+    let cmp = 0;
+    switch (sortKey) {
+      case "name": cmp = a.name.localeCompare(b.name); break;
+      case "category": cmp = a.category.localeCompare(b.category); break;
+      case "remaining": cmp = fa.percentRemaining - fb.percentRemaining; break;
+      case "dailyUsage": cmp = fa.effectiveDailyUsage - fb.effectiveDailyUsage; break;
+      case "daysLeft": {
+        const da = fa.daysRemaining === Infinity ? 999999 : fa.daysRemaining;
+        const db = fb.daysRemaining === Infinity ? 999999 : fb.daysRemaining;
+        cmp = da - db; break;
+      }
+      case "orderBy": {
+        const oa = fa.orderByDate?.getTime() ?? Infinity;
+        const ob = fb.orderByDate?.getTime() ?? Infinity;
+        cmp = oa - ob; break;
+      }
+      case "monthly": cmp = fa.monthlyCost - fb.monthlyCost; break;
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
   // Mobile: Card layout
   if (isMobile) {
     return (
       <div className="space-y-3">
-        {items.map((item) => (
+        {sortedItems.map((item) => (
           <ToiletryCard
             key={item.id}
             item={item}
-            forecast={getForecast(item)}
+            forecast={forecastMap.get(item.id)!}
             onEdit={onEdit}
             onDelete={onDelete}
             onRestock={onRestock}
@@ -96,25 +144,41 @@ export function ToiletryTable({
     );
   }
 
+  const headerClass = "cursor-pointer select-none hover:text-foreground transition-colors";
+
   // Desktop: Table layout
   return (
     <div className="rounded-md border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Item</TableHead>
-            <TableHead className="hidden sm:table-cell">Category</TableHead>
-            <TableHead>Remaining</TableHead>
-            <TableHead className="hidden md:table-cell">Daily Usage</TableHead>
-            <TableHead className="hidden md:table-cell">Days Left</TableHead>
-            <TableHead className="hidden lg:table-cell">Order By</TableHead>
-            <TableHead className="hidden lg:table-cell">Monthly</TableHead>
+            <TableHead className={headerClass} onClick={() => toggleSort("name")}>
+              <span className="inline-flex items-center">Item <SortIcon sortKey="name" currentKey={sortKey} dir={sortDir} /></span>
+            </TableHead>
+            <TableHead className={cn("hidden sm:table-cell", headerClass)} onClick={() => toggleSort("category")}>
+              <span className="inline-flex items-center">Category <SortIcon sortKey="category" currentKey={sortKey} dir={sortDir} /></span>
+            </TableHead>
+            <TableHead className={headerClass} onClick={() => toggleSort("remaining")}>
+              <span className="inline-flex items-center">Remaining <SortIcon sortKey="remaining" currentKey={sortKey} dir={sortDir} /></span>
+            </TableHead>
+            <TableHead className={cn("hidden md:table-cell", headerClass)} onClick={() => toggleSort("dailyUsage")}>
+              <span className="inline-flex items-center">Daily Usage <SortIcon sortKey="dailyUsage" currentKey={sortKey} dir={sortDir} /></span>
+            </TableHead>
+            <TableHead className={cn("hidden md:table-cell", headerClass)} onClick={() => toggleSort("daysLeft")}>
+              <span className="inline-flex items-center">Days Left <SortIcon sortKey="daysLeft" currentKey={sortKey} dir={sortDir} /></span>
+            </TableHead>
+            <TableHead className={cn("hidden lg:table-cell", headerClass)} onClick={() => toggleSort("orderBy")}>
+              <span className="inline-flex items-center">Order By <SortIcon sortKey="orderBy" currentKey={sortKey} dir={sortDir} /></span>
+            </TableHead>
+            <TableHead className={cn("hidden lg:table-cell", headerClass)} onClick={() => toggleSort("monthly")}>
+              <span className="inline-flex items-center">Monthly <SortIcon sortKey="monthly" currentKey={sortKey} dir={sortDir} /></span>
+            </TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((item) => {
-            const forecast = getForecast(item);
+          {sortedItems.map((item) => {
+            const forecast = forecastMap.get(item.id)!;
             const categoryLabel = TOILETRY_CATEGORIES.find(
               (c) => c.value === item.category
             )?.label || item.category;
@@ -122,20 +186,27 @@ export function ToiletryTable({
             return (
               <TableRow key={item.id}>
                 <TableCell>
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium">{item.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {item.total_size}{item.size_unit} • {formatCurrency(item.cost_per_item)}
-                      </span>
-                      <Badge variant={getStatusBadgeVariant(item, forecast)} className="text-xs">
-                        {getStatusDisplayText(item, forecast)}
-                      </Badge>
-                      {item.retailer && (
-                        <Badge variant="outline" className="text-xs">
-                          {item.retailer}
+                  <div className="flex items-center gap-3">
+                    {item.image_url && (
+                      <div className="h-10 w-10 rounded-lg overflow-hidden border border-border shrink-0">
+                        <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">{item.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {item.total_size}{item.size_unit} • {formatCurrency(item.cost_per_item)}
+                        </span>
+                        <Badge variant={getStatusBadgeVariant(item, forecast)} className="text-xs">
+                          {getStatusDisplayText(item, forecast)}
                         </Badge>
-                      )}
+                        {item.retailer && (
+                          <Badge variant="outline" className="text-xs">
+                            {item.retailer}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </TableCell>
