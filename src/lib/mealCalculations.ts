@@ -71,7 +71,10 @@ export function calculateMealMacros(
   items: MealPlanItem[],
   mealType: MealType,
   status: MealStatus,
-  eatingOutCalories: number = 0
+  eatingOutCalories: number = 0,
+  eatingOutProtein: number = 0,
+  eatingOutCarbs: number = 0,
+  eatingOutFat: number = 0
 ): MealMacros {
   if (status === "skipped") {
     return { mealType, status, calories: 0, protein: 0, carbs: 0, fat: 0 };
@@ -82,9 +85,9 @@ export function calculateMealMacros(
       mealType,
       status,
       calories: eatingOutCalories,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
+      protein: eatingOutProtein,
+      carbs: eatingOutCarbs,
+      fat: eatingOutFat,
     };
   }
 
@@ -142,10 +145,10 @@ export function calculateDayMacros(
   const items = plan.items || [];
   
   const meals: MealMacros[] = [
-    calculateMealMacros(items, "breakfast", plan.breakfast_status, plan.eating_out_breakfast_calories),
-    calculateMealMacros(items, "lunch", plan.lunch_status, plan.eating_out_lunch_calories),
-    calculateMealMacros(items, "dinner", plan.dinner_status, plan.eating_out_dinner_calories),
-    calculateMealMacros(items, "snack", plan.snack_status, plan.eating_out_snack_calories),
+    calculateMealMacros(items, "breakfast", plan.breakfast_status, plan.eating_out_breakfast_calories, plan.eating_out_breakfast_protein, plan.eating_out_breakfast_carbs, plan.eating_out_breakfast_fat),
+    calculateMealMacros(items, "lunch", plan.lunch_status, plan.eating_out_lunch_calories, plan.eating_out_lunch_protein, plan.eating_out_lunch_carbs, plan.eating_out_lunch_fat),
+    calculateMealMacros(items, "dinner", plan.dinner_status, plan.eating_out_dinner_calories, plan.eating_out_dinner_protein, plan.eating_out_dinner_carbs, plan.eating_out_dinner_fat),
+    calculateMealMacros(items, "snack", plan.snack_status, plan.eating_out_snack_calories, plan.eating_out_snack_protein, plan.eating_out_snack_carbs, plan.eating_out_snack_fat),
   ];
 
   const totals = meals.reduce(

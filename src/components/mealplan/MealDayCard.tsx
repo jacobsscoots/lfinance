@@ -11,7 +11,7 @@ import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { DayMacros, MealMacros } from "@/lib/mealCalculations";
 import { getDailyTargets, MacroTotals, WeeklyTargetsOverride } from "@/lib/dailyTargets";
 import { MealItemMultiSelectDialog } from "./MealItemMultiSelectDialog";
-import { EatingOutDialog } from "./EatingOutDialog";
+import { EatingOutDialog, EatingOutData } from "./EatingOutDialog";
 import { DayDetailModal } from "./DayDetailModal";
 import { DayMacroSummary } from "./DayMacroSummary";
 import { CopyToDateDialog } from "./CopyToDateDialog";
@@ -142,12 +142,16 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
     }
   };
 
-  const handleEatingOutConfirm = (calories: number) => {
+  const handleEatingOutConfirm = (data: EatingOutData) => {
     updateMealStatus.mutate({
       planId: plan.id,
       mealType: selectedMealType,
       status: "eating_out",
-      eatingOutCalories: calories,
+      eatingOutCalories: data.calories,
+      eatingOutProtein: data.protein,
+      eatingOutCarbs: data.carbs,
+      eatingOutFat: data.fat,
+      eatingOutLabel: data.label,
     });
     setEatingOutOpen(false);
   };
@@ -427,8 +431,16 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                 {status === "skipped" ? (
                   <div className="text-xs text-muted-foreground italic py-1">Skipped</div>
                 ) : status === "eating_out" ? (
-                  <div className="text-xs text-primary py-1">
-                    Eating out ({Math.round(mealMacros?.calories || 0)} kcal est.)
+                  <div className="text-xs text-primary py-1 space-y-0.5">
+                    <div className="font-medium truncate">
+                      {(plan as any)[`eating_out_${mealType}_label`] || "Eating out"}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {Math.round(mealMacros?.calories || 0)} kcal
+                      {(mealMacros?.protein || 0) > 0 && ` · ${Math.round(mealMacros!.protein)}P`}
+                      {(mealMacros?.carbs || 0) > 0 && ` · ${Math.round(mealMacros!.carbs)}C`}
+                      {(mealMacros?.fat || 0) > 0 && ` · ${Math.round(mealMacros!.fat)}F`}
+                    </div>
                   </div>
                 ) : mealItems.length === 0 ? (
                   <Button 
