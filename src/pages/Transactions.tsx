@@ -179,7 +179,7 @@ export default function Transactions() {
           </div>
         ) : (
           /* Desktop: Side-by-side layout */
-          <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+          <div className="grid gap-6 xl:grid-cols-[300px_1fr]">
             {/* Filters Sidebar */}
             <div className="space-y-4">
               <TransactionFilters filters={filters} onFiltersChange={setFilters} />
@@ -217,7 +217,7 @@ export default function Transactions() {
             </div>
 
             {/* Transaction List */}
-            <div>
+            <div className="min-w-0">
               {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map((i) => (
