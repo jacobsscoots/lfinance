@@ -5,19 +5,23 @@ import { ChevronLeft, ChevronRight, LayoutGrid, Table } from "lucide-react";
 import { useYearlyPlannerData } from "@/hooks/useYearlyPlannerData";
 import { useYearlyCellOverrides } from "@/hooks/useYearlyCellOverrides";
 import { useBills } from "@/hooks/useBills";
+import { useAccounts } from "@/hooks/useAccounts";
 import { MonthColumn } from "@/components/yearly-planner/MonthColumn";
 import { YearlySummaryBar } from "@/components/yearly-planner/YearlySummaryBar";
 import { DetailedYearlyTable } from "@/components/yearly-planner/DetailedYearlyTable";
 import { OverrideFormDialog } from "@/components/yearly-planner/OverrideFormDialog";
+import { MonthAccountBreakdownDialog } from "@/components/yearly-planner/MonthAccountBreakdownDialog";
 
 export default function YearlyPlanner() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [overrideMonth, setOverrideMonth] = useState<number | null>(null);
   const [view, setView] = useState<"cards" | "table">("table");
+  const [breakdownMonth, setBreakdownMonth] = useState<number | null>(null);
 
   const { monthData, incomeBreakdown, createOverride, deleteOverride, isCreating } = useYearlyPlannerData(year);
   const { bills } = useBills();
+  const { accounts } = useAccounts();
   const { getOverride, hasOverride, upsertOverride, removeOverride } = useYearlyCellOverrides(year);
 
   return (
@@ -95,6 +99,7 @@ export default function YearlyPlanner() {
             onCellReset={(rowKey, month) =>
               removeOverride({ rowKey, month })
             }
+            onMonthHeaderClick={(month) => setBreakdownMonth(month)}
           />
         )}
       </div>
@@ -106,6 +111,18 @@ export default function YearlyPlanner() {
           month={overrideMonth}
           onSubmit={createOverride}
           isLoading={isCreating}
+        />
+      )}
+
+      {breakdownMonth !== null && (
+        <MonthAccountBreakdownDialog
+          open={breakdownMonth !== null}
+          onOpenChange={(open) => { if (!open) setBreakdownMonth(null); }}
+          month={breakdownMonth}
+          year={year}
+          bills={bills}
+          accounts={accounts}
+          getOverride={getOverride}
         />
       )}
     </AppLayout>
