@@ -57,16 +57,16 @@ export default function DebtTracker() {
               Track your debts, payments, and plan your path to debt freedom
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setStepChangeImportOpen(true)}>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => setStepChangeImportOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Import StepChange
             </Button>
-            <Button variant="outline" onClick={() => setExcelImportOpen(true)}>
+            <Button variant="outline" size="sm" onClick={() => setExcelImportOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Import Excel
             </Button>
-            <Button onClick={() => setDebtDialogOpen(true)}>
+            <Button size="sm" onClick={() => setDebtDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Debt
             </Button>
