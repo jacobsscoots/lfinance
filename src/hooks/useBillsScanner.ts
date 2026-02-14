@@ -94,6 +94,8 @@ export function useBillsScanner() {
       id: string;
       service_type: string;
       monthly_cost: number;
+      current_speed_mbps?: number | null;
+      preferred_contract_months?: number | null;
     }>,
     options: {
       postcode?: string;
@@ -116,6 +118,8 @@ export function useBillsScanner() {
             annualConsumptionKwh: service.service_type === "energy" ? options.annualConsumptionKwh : undefined,
             currentTariff: service.service_type === "energy" ? options.currentTariff : undefined,
             postcode: options.postcode,
+            currentSpeedMbps: service.current_speed_mbps || undefined,
+            preferredContractMonths: service.preferred_contract_months || undefined,
           });
           results.push(result);
         } catch (e) {
