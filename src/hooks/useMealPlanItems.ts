@@ -989,17 +989,55 @@ export function useMealPlanItems(weekStart: Date) {
       const plan = mealPlans.find(p => p.id === planId);
       if (!plan) throw new Error("Plan not found");
 
-      const items = plan.items || [];
+      // Fetch FRESH items from DB to avoid stale React state
+      const freshResult = await (supabase as any)
+        .from("meal_plan_items")
+        .select("*, product:products(*)")
+        .eq("plan_id", planId)
+        .eq("user_id", user.id);
+
+      const freshItems = (freshResult.data || []) as any[];
+      const fetchError = freshResult.error;
+
+      if (fetchError) throw fetchError;
+      const items = freshItems || [];
       if (items.length === 0) throw new Error("No items to plan");
 
       const dayDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
       const targets = getDailyTargets(dayDate, settings, weeklyOverride, previousWeekOverride);
 
+      // Compute current solution quality (before AI) for quality gate
+      const currentTotals = items.reduce((acc, item) => {
+        const g = item.quantity_grams || 0;
+        const p = item.product;
+        if (!p || g === 0) return acc;
+        const isCustom = !item.product_id && (item as any).custom_name;
+        if (isCustom) {
+          return {
+            calories: acc.calories + ((item as any).custom_calories || 0),
+            protein: acc.protein + ((item as any).custom_protein || 0),
+            carbs: acc.carbs + ((item as any).custom_carbs || 0),
+            fat: acc.fat + ((item as any).custom_fat || 0),
+          };
+        }
+        return {
+          calories: acc.calories + (p.calories_per_100g || 0) * g / 100,
+          protein: acc.protein + (p.protein_per_100g || 0) * g / 100,
+          carbs: acc.carbs + (p.carbs_per_100g || 0) * g / 100,
+          fat: acc.fat + (p.fat_per_100g || 0) * g / 100,
+        };
+      }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+      const currentError = Math.abs(currentTotals.calories - targets.calories)
+        + Math.abs(currentTotals.protein - targets.protein) * 4
+        + Math.abs(currentTotals.carbs - targets.carbs) * 4
+        + Math.abs(currentTotals.fat - targets.fat) * 9;
+
       // Build item data for AI
       const itemsPayload = items.map(item => ({
         id: item.id,
         product_id: item.product_id,
-        name: item.product?.name || 'Unknown',
+        name: item.product?.name || (item as any).custom_name || 'Unknown',
         meal_type: item.meal_type,
         is_locked: item.is_locked || item.product?.product_type === 'fixed',
         quantity_grams: item.quantity_grams,
@@ -1050,6 +1088,30 @@ export function useMealPlanItems(weekStart: Date) {
         throw new Error("AI returned no portions");
       }
 
+      // QUALITY GATE: Compare AI result against current solution
+      // Only save if AI found something equal or better
+      const aiTotals = data?.totals || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      const aiError = Math.abs(aiTotals.calories - targets.calories)
+        + Math.abs(aiTotals.protein - targets.protein) * 4
+        + Math.abs(aiTotals.carbs - targets.carbs) * 4
+        + Math.abs(aiTotals.fat - targets.fat) * 9;
+
+      console.log("QUALITY_GATE", { currentError: currentError.toFixed(1), aiError: aiError.toFixed(1), currentCalOvershoot: (currentTotals.calories - targets.calories).toFixed(0), aiCalOvershoot: (aiTotals.calories - targets.calories).toFixed(0) });
+
+      // If current solution already has portions assigned and AI is worse, reject
+      const hasExistingPortions = items.some((i: any) => (i.quantity_grams || 0) > 0 && !i.is_locked && i.product?.product_type !== 'fixed');
+      if (hasExistingPortions && aiError > currentError + 5) {
+        console.log("SAVE_CALLED?", "NO — AI solution worse than current, keeping existing");
+        return {
+          updated: 0,
+          failed: false,
+          bestEffort: false,
+          rejected: true,
+          violations: [`AI solution (+${Math.round(aiTotals.calories - targets.calories)}kcal) was worse than current (+${Math.round(currentTotals.calories - targets.calories)}kcal) — kept existing plan`],
+          suggested_fixes: [],
+        };
+      }
+
       const isBestEffort = data?.status === 'BEST_EFFORT';
       console.log("SAVE_CALLED?", `YES — ${isBestEffort ? 'BEST_EFFORT' : 'PASS'}, saving`, data.portions.length, "portions");
       
@@ -1086,6 +1148,8 @@ export function useMealPlanItems(weekStart: Date) {
             toast.info(fix, { duration: 15000 });
           }
         }
+      } else if ((result as any).rejected) {
+        toast.info(result.violations?.[0] || "AI couldn't beat the current solution — kept existing plan", { duration: 8000 });
       } else if (result.bestEffort) {
         queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
         toast.warning(`Best-effort plan saved (${result.updated} items) — targets couldn't be hit exactly`, { duration: 8000 });
