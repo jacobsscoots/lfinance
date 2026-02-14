@@ -14,7 +14,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Receipt-related search keywords
+// Receipt-related search keywords — broadened to catch all transactional emails
 const RECEIPT_KEYWORDS = [
   'receipt',
   'order confirmation',
@@ -23,6 +23,22 @@ const RECEIPT_KEYWORDS = [
   'payment received',
   'purchase confirmation',
   'your order',
+  'payment confirmation',
+  'billing statement',
+  'payment successful',
+  'transaction',
+  'subscription',
+  'renewal',
+  'charge',
+  'your payment',
+  'your purchase',
+  'dispatched',
+  'shipped',
+  'delivery confirmation',
+  'billing',
+  'amount due',
+  'paid',
+  'statement',
 ];
 
 /**
@@ -177,19 +193,22 @@ serve(async (req) => {
     const afterDate = new Date();
     afterDate.setDate(afterDate.getDate() - scanDays);
 
-    // Build Gmail search query
+    // Build Gmail search query — search subject OR body for receipt indicators
+    // Using broader matching: subject keywords + category:purchases (Gmail's built-in label)
+    const subjectPart = RECEIPT_KEYWORDS.map(k => `subject:"${k}"`).join(' OR ');
     const searchParts = [
       `after:${afterDate.toISOString().split('T')[0].replace(/-/g, '/')}`,
-      `(${RECEIPT_KEYWORDS.map(k => `subject:${k}`).join(' OR ')})`,
+      `(${subjectPart} OR category:purchases OR category:updates OR label:receipts)`,
     ];
     if (settings?.allowed_domains?.length > 0) {
       searchParts.push(`(${settings.allowed_domains.map((d: string) => `from:${d}`).join(' OR ')})`);
     }
     const searchQuery = searchParts.join(' ');
+    console.log('[gmail] Search query:', searchQuery);
 
-    // Search Gmail
+    // Search Gmail — fetch up to 100 messages
     const searchResponse = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(searchQuery)}&maxResults=50`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(searchQuery)}&maxResults=100`,
       { headers: { Authorization: `Bearer ${connection.access_token}` } }
     );
     if (!searchResponse.ok) {
@@ -199,12 +218,13 @@ serve(async (req) => {
 
     const searchResult = await searchResponse.json();
     const messages = searchResult.messages || [];
+    console.log(`[gmail] Found ${messages.length} candidate messages`);
 
     let receiptsFound = 0;
     let receiptsMatched = 0;
 
-    // Process each message
-    for (const msg of messages.slice(0, 20)) {
+    // Process each message (up to 50 per sync)
+    for (const msg of messages.slice(0, 50)) {
       const { data: existing } = await supabase
         .from('gmail_receipts')
         .select('id')
