@@ -2151,33 +2151,48 @@ export type Database = {
       meal_plan_items: {
         Row: {
           created_at: string
+          custom_calories: number | null
+          custom_carbs: number | null
+          custom_fat: number | null
+          custom_name: string | null
+          custom_protein: number | null
           id: string
           is_locked: boolean
           meal_plan_id: string
           meal_type: string
-          product_id: string
+          product_id: string | null
           quantity_grams: number
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          custom_calories?: number | null
+          custom_carbs?: number | null
+          custom_fat?: number | null
+          custom_name?: string | null
+          custom_protein?: number | null
           id?: string
           is_locked?: boolean
           meal_plan_id: string
           meal_type: string
-          product_id: string
+          product_id?: string | null
           quantity_grams?: number
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          custom_calories?: number | null
+          custom_carbs?: number | null
+          custom_fat?: number | null
+          custom_name?: string | null
+          custom_protein?: number | null
           id?: string
           is_locked?: boolean
           meal_plan_id?: string
           meal_type?: string
-          product_id?: string
+          product_id?: string | null
           quantity_grams?: number
           updated_at?: string
           user_id?: string

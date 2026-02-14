@@ -50,6 +50,16 @@ export interface BalanceWarning {
 
 // Calculate macros for a single item (applies eaten_factor for solver consistency)
 export function calculateItemMacros(item: MealPlanItem): MacroTotals {
+  // Manual entries: use custom fields directly (total values, not per-100g)
+  if (!item.product_id && (item as any).custom_name) {
+    return {
+      calories: (item as any).custom_calories || 0,
+      protein: (item as any).custom_protein || 0,
+      carbs: (item as any).custom_carbs || 0,
+      fat: (item as any).custom_fat || 0,
+    };
+  }
+
   const product = item.product;
   if (!product || product.ignore_macros) {
     return { calories: 0, protein: 0, carbs: 0, fat: 0 };
