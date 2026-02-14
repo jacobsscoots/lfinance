@@ -437,16 +437,16 @@ async function handleMealPlanner(
   console.log(`[solver:${RUN_ID}] feasibility min: cal=${Math.round(theoreticalMin.calories)} p=${Math.round(theoreticalMin.protein)} c=${Math.round(theoreticalMin.carbs)} f=${Math.round(theoreticalMin.fat)}`);
   console.log(`[solver:${RUN_ID}] feasibility max: cal=${Math.round(theoreticalMax.calories)} p=${Math.round(theoreticalMax.protein)} c=${Math.round(theoreticalMax.carbs)} f=${Math.round(theoreticalMax.fat)}`);
 
-  // Check hard infeasibility
+  // Check hard infeasibility using matching tolerance bands
   const infeasible: string[] = [];
   if (theoreticalMax.calories < fullCalTarget - 50) infeasible.push(`kcal: max achievable ${Math.round(theoreticalMax.calories)} < min required ${fullCalTarget - 50}`);
-  if (theoreticalMax.protein < fullPTarget - 2) infeasible.push(`protein: max achievable ${theoreticalMax.protein.toFixed(1)}g < min required ${fullPTarget - 2}g`);
-  if (theoreticalMax.carbs < fullCTarget - 2) infeasible.push(`carbs: max achievable ${theoreticalMax.carbs.toFixed(1)}g < min required ${fullCTarget - 2}g`);
-  if (theoreticalMax.fat < fullFTarget - 2) infeasible.push(`fat: max achievable ${theoreticalMax.fat.toFixed(1)}g < min required ${fullFTarget - 2}g`);
-  if (theoreticalMin.calories > fullCalTarget) infeasible.push(`kcal: min achievable ${Math.round(theoreticalMin.calories)} > target ${fullCalTarget}`);
-  if (theoreticalMin.protein > fullPTarget) infeasible.push(`protein: min achievable ${theoreticalMin.protein.toFixed(1)}g > target ${fullPTarget}g`);
-  if (theoreticalMin.carbs > fullCTarget) infeasible.push(`carbs: min achievable ${theoreticalMin.carbs.toFixed(1)}g > target ${fullCTarget}g`);
-  if (theoreticalMin.fat > fullFTarget) infeasible.push(`fat: min achievable ${theoreticalMin.fat.toFixed(1)}g > target ${fullFTarget}g`);
+  if (theoreticalMax.protein < fullPTarget) infeasible.push(`protein: max achievable ${theoreticalMax.protein.toFixed(1)}g < min required ${fullPTarget}g`);
+  if (theoreticalMax.carbs < fullCTarget) infeasible.push(`carbs: max achievable ${theoreticalMax.carbs.toFixed(1)}g < min required ${fullCTarget}g`);
+  if (theoreticalMax.fat < fullFTarget - 1) infeasible.push(`fat: max achievable ${theoreticalMax.fat.toFixed(1)}g < min required ${fullFTarget - 1}g`);
+  if (theoreticalMin.calories > fullCalTarget + 50) infeasible.push(`kcal: min achievable ${Math.round(theoreticalMin.calories)} > max allowed ${fullCalTarget + 50}`);
+  if (theoreticalMin.protein > fullPTarget + 2) infeasible.push(`protein: min achievable ${theoreticalMin.protein.toFixed(1)}g > max allowed ${fullPTarget + 2}g`);
+  if (theoreticalMin.carbs > fullCTarget + 2) infeasible.push(`carbs: min achievable ${theoreticalMin.carbs.toFixed(1)}g > max allowed ${fullCTarget + 2}g`);
+  if (theoreticalMin.fat > fullFTarget + 2) infeasible.push(`fat: min achievable ${theoreticalMin.fat.toFixed(1)}g > max allowed ${fullFTarget + 2}g`);
 
   if (infeasible.length > 0) {
     console.warn(`[solver:${RUN_ID}] INFEASIBLE: ${infeasible.join('; ')}`);
@@ -482,30 +482,36 @@ async function handleMealPlanner(
     return { calories: cal, protein: p, carbs: c, fat: f };
   }
 
+  // Tolerance bands matching local solver (portioningTypes.ts DEFAULT_TOLERANCES):
+  // Calories: ±50 kcal symmetric
+  // Protein:  0 under / +2 over
+  // Carbs:    0 under / +2 over
+  // Fat:      -1 under / +2 over
   function meetsAll(totals: { calories: number; protein: number; carbs: number; fat: number }) {
     return (
-      totals.calories >= fullCalTarget - 50 && totals.calories <= fullCalTarget &&
-      totals.protein >= fullPTarget - 2 && totals.protein <= fullPTarget &&
-      totals.carbs >= fullCTarget - 2 && totals.carbs <= fullCTarget &&
-      totals.fat >= fullFTarget - 2 && totals.fat <= fullFTarget
+      totals.calories >= fullCalTarget - 50 && totals.calories <= fullCalTarget + 50 &&
+      totals.protein >= fullPTarget && totals.protein <= fullPTarget + 2 &&
+      totals.carbs >= fullCTarget && totals.carbs <= fullCTarget + 2 &&
+      totals.fat >= fullFTarget - 1 && totals.fat <= fullFTarget + 2
     );
   }
 
-  // Weighted error: 0 = perfect. Over-target penalties are much heavier.
+  // Weighted error: 0 = perfect. Out-of-band penalties.
+  // Bands match meetsAll: cal ±50, protein 0/+2, carbs 0/+2, fat -1/+2
   function computeError(totals: { calories: number; protein: number; carbs: number; fat: number }): number {
     let err = 0;
-    // Calories: band is [fullCalTarget - 50, fullCalTarget]
-    if (totals.calories > fullCalTarget) err += (totals.calories - fullCalTarget) * 2;
-    else if (totals.calories < fullCalTarget - 50) err += (fullCalTarget - 50 - totals.calories);
-    // Protein: band is [fullPTarget - 2, fullPTarget]
-    if (totals.protein > fullPTarget) err += (totals.protein - fullPTarget) * 50;
-    else if (totals.protein < fullPTarget - 2) err += (fullPTarget - 2 - totals.protein) * 50;
-    // Carbs
-    if (totals.carbs > fullCTarget) err += (totals.carbs - fullCTarget) * 50;
-    else if (totals.carbs < fullCTarget - 2) err += (fullCTarget - 2 - totals.carbs) * 50;
-    // Fat
-    if (totals.fat > fullFTarget) err += (totals.fat - fullFTarget) * 50;
-    else if (totals.fat < fullFTarget - 2) err += (fullFTarget - 2 - totals.fat) * 50;
+    // Calories: band is [fullCalTarget - 50, fullCalTarget + 50]
+    if (totals.calories > fullCalTarget + 50) err += (totals.calories - fullCalTarget - 50) * 2;
+    else if (totals.calories < fullCalTarget - 50) err += (fullCalTarget - 50 - totals.calories) * 2;
+    // Protein: band is [fullPTarget, fullPTarget + 2]
+    if (totals.protein > fullPTarget + 2) err += (totals.protein - fullPTarget - 2) * 50;
+    else if (totals.protein < fullPTarget) err += (fullPTarget - totals.protein) * 50;
+    // Carbs: band is [fullCTarget, fullCTarget + 2]
+    if (totals.carbs > fullCTarget + 2) err += (totals.carbs - fullCTarget - 2) * 50;
+    else if (totals.carbs < fullCTarget) err += (fullCTarget - totals.carbs) * 50;
+    // Fat: band is [fullFTarget - 1, fullFTarget + 2]
+    if (totals.fat > fullFTarget + 2) err += (totals.fat - fullFTarget - 2) * 50;
+    else if (totals.fat < fullFTarget - 1) err += (fullFTarget - 1 - totals.fat) * 50;
     return err;
   }
 
@@ -678,12 +684,12 @@ async function handleMealPlanner(
 
   // Bug 1 fix: AI prompt uses FULL daily targets, tells AI about locked contributions
   const systemPrompt = `You are a meal portion calculator. Assign gram portions to the FREE (unlocked) foods to make the FULL DAY totals (locked + free combined) hit these targets:
-- Calories: ${fullCalTarget} kcal (must be at or below, within 50 under)
-- Protein: ${fullPTarget}g (must be at or below, within 2g under)
-- Carbs: ${fullCTarget}g (must be at or below, within 2g under)
-- Fat: ${fullFTarget}g (must be at or below, within 2g under)
+- Calories: ${fullCalTarget} kcal (valid band: ${fullCalTarget - 50} to ${fullCalTarget + 50} kcal)
+- Protein: ${fullPTarget}g (valid band: ${fullPTarget} to ${fullPTarget + 2}g)
+- Carbs: ${fullCTarget}g (valid band: ${fullCTarget} to ${fullCTarget + 2}g)
+- Fat: ${fullFTarget}g (valid band: ${fullFTarget - 1} to ${fullFTarget + 2}g)
 
-IMPORTANT: NEVER exceed any target. The valid band is [target-tolerance, target].
+IMPORTANT: Stay within the valid bands above. Slight overshoot within the band is acceptable.
 
 Locked items (already counted, DO NOT change):
 ${lockedList}
@@ -833,14 +839,14 @@ Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions o
   if (!finalOk) {
     // FAIL — build diagnostics
     const violations: string[] = [];
-    if (roundedTotals.calories > fullCalTarget) violations.push(`kcal over by ${roundedTotals.calories - fullCalTarget}`);
+    if (roundedTotals.calories > fullCalTarget + 50) violations.push(`kcal over by ${roundedTotals.calories - fullCalTarget}`);
     else if (roundedTotals.calories < fullCalTarget - 50) violations.push(`kcal under by ${fullCalTarget - roundedTotals.calories}`);
-    if (roundedTotals.protein > fullPTarget) violations.push(`protein over by ${(roundedTotals.protein - fullPTarget).toFixed(1)}g`);
-    else if (roundedTotals.protein < fullPTarget - 2) violations.push(`protein under by ${(fullPTarget - roundedTotals.protein).toFixed(1)}g`);
-    if (roundedTotals.carbs > fullCTarget) violations.push(`carbs over by ${(roundedTotals.carbs - fullCTarget).toFixed(1)}g`);
-    else if (roundedTotals.carbs < fullCTarget - 2) violations.push(`carbs under by ${(fullCTarget - roundedTotals.carbs).toFixed(1)}g`);
-    if (roundedTotals.fat > fullFTarget) violations.push(`fat over by ${(roundedTotals.fat - fullFTarget).toFixed(1)}g`);
-    else if (roundedTotals.fat < fullFTarget - 2) violations.push(`fat under by ${(fullFTarget - roundedTotals.fat).toFixed(1)}g`);
+    if (roundedTotals.protein > fullPTarget + 2) violations.push(`protein over by ${(roundedTotals.protein - fullPTarget).toFixed(1)}g`);
+    else if (roundedTotals.protein < fullPTarget) violations.push(`protein under by ${(fullPTarget - roundedTotals.protein).toFixed(1)}g`);
+    if (roundedTotals.carbs > fullCTarget + 2) violations.push(`carbs over by ${(roundedTotals.carbs - fullCTarget).toFixed(1)}g`);
+    else if (roundedTotals.carbs < fullCTarget) violations.push(`carbs under by ${(fullCTarget - roundedTotals.carbs).toFixed(1)}g`);
+    if (roundedTotals.fat > fullFTarget + 2) violations.push(`fat over by ${(roundedTotals.fat - fullFTarget).toFixed(1)}g`);
+    else if (roundedTotals.fat < fullFTarget - 1) violations.push(`fat under by ${(fullFTarget - roundedTotals.fat).toFixed(1)}g`);
 
     // Log solver-attempted grams (server only, NOT in response)
     for (const food of freeFoods) {
