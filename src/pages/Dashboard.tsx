@@ -53,15 +53,15 @@ export default function Dashboard() {
         </div>
 
         {/* 2-Column Layout: Main (2/3) + Sidebar (1/3) */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
           {/* Main Content Column */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 min-w-0">
             {/* Runway & Balance - Key Widget */}
             <RunwayBalanceCard metrics={metrics} isLoading={isLoading} />
             
             {/* Charts Row */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <div className="md:col-span-2 lg:col-span-1">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="sm:col-span-2 lg:col-span-1">
                 <SpendPaceChart 
                   data={metrics.dailySpending} 
                   isOverPace={metrics.isOverPace}
@@ -101,7 +101,7 @@ export default function Dashboard() {
           </div>
           
           {/* Sidebar Column */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {/* Alerts & Actions */}
             <AlertsPanel alerts={alerts} isLoading={isLoading} />
             
