@@ -995,16 +995,14 @@ export function useMealPlanItems(weekStart: Date) {
       // DEBUG: log raw AI response for verification
       console.log("AI_RESPONSE", { success: data?.success, status: data?.status, totals: data?.totals, targets: data?.targets, violations: data?.violations, portionCount: data?.portions?.length });
       
-      // HARD VALIDATION GATE: If server says FAIL_CONSTRAINTS, do NOT save
-      if (!data?.success || data?.status === 'FAIL_CONSTRAINTS') {
+      // HARD FAIL: only block if server explicitly says FAIL_CONSTRAINTS
+      if (data?.status === 'FAIL_CONSTRAINTS') {
         console.log("SAVE_CALLED?", "NO — FAIL_CONSTRAINTS gate blocked save");
-        const violations = data?.violations || [];
-        const fixes = data?.suggested_fixes || [];
         return {
           updated: 0,
           failed: true,
-          violations,
-          suggested_fixes: fixes,
+          violations: data?.violations || [],
+          suggested_fixes: data?.suggested_fixes || [],
           totals: data?.totals,
           targets: data?.targets,
         };
@@ -1014,9 +1012,10 @@ export function useMealPlanItems(weekStart: Date) {
         throw new Error("AI returned no portions");
       }
 
-      console.log("SAVE_CALLED?", "YES — PASS, saving", data.portions.length, "portions");
+      const isBestEffort = data?.status === 'BEST_EFFORT';
+      console.log("SAVE_CALLED?", `YES — ${isBestEffort ? 'BEST_EFFORT' : 'PASS'}, saving`, data.portions.length, "portions");
       
-      // PASS: Apply validated portions to DB
+      // Apply portions to DB (both PASS and BEST_EFFORT)
       let updated = 0;
       for (const portion of data.portions) {
         const item = items.find(i => i.id === portion.id);
@@ -1033,26 +1032,28 @@ export function useMealPlanItems(weekStart: Date) {
         updated++;
       }
 
-      return { updated, failed: false };
+      return {
+        updated,
+        failed: false,
+        bestEffort: isBestEffort,
+        violations: isBestEffort ? (data?.violations || []) : [],
+        suggested_fixes: isBestEffort ? (data?.suggested_fixes || []) : [],
+      };
     },
     onSuccess: (result) => {
       if (result.failed) {
-        // FAIL: No DB writes occurred. UI state is unchanged.
         toast.error("AI Plan failed — no changes were saved.", { duration: 8000 });
         if (result.suggested_fixes?.length) {
-          // Show top 2 suggestions as separate toasts for readability
           for (const fix of result.suggested_fixes.slice(0, 2)) {
             toast.info(fix, { duration: 15000 });
           }
         }
-        console.log("SAVE_CALLED?", "NO — FAIL_CONSTRAINTS");
-        console.log("FAIL_DETAILS", {
-          violations: result.violations,
-          suggested_fixes: result.suggested_fixes,
-          totals: result.totals,
-          targets: result.targets,
-        });
-        // DO NOT invalidate queries — keep UI showing saved state
+      } else if (result.bestEffort) {
+        queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+        toast.warning(`Best-effort plan saved (${result.updated} items) — targets couldn't be hit exactly`, { duration: 8000 });
+        if (result.violations?.length) {
+          toast.info(result.violations.join(", "), { duration: 10000 });
+        }
       } else {
         queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
         toast.success(`AI planned ${result.updated} portions`);

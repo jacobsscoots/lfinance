@@ -448,23 +448,9 @@ async function handleMealPlanner(
   if (theoreticalMin.carbs > fullCTarget + 2) infeasible.push(`carbs: min achievable ${theoreticalMin.carbs.toFixed(1)}g > max allowed ${fullCTarget + 2}g`);
   if (theoreticalMin.fat > fullFTarget + 2) infeasible.push(`fat: min achievable ${theoreticalMin.fat.toFixed(1)}g > max allowed ${fullFTarget + 2}g`);
 
+  // Log infeasibility but DON'T return early — let solver find best-effort solution
   if (infeasible.length > 0) {
-    console.warn(`[solver:${RUN_ID}] INFEASIBLE: ${infeasible.join('; ')}`);
-    const suggested_fixes = buildSuggestions(null, freeFoods, lockedMacros, fullCalTarget, fullPTarget, fullCTarget, fullFTarget, infeasible);
-    return {
-      success: false,
-      status: 'FAIL_CONSTRAINTS',
-      run_id: RUN_ID,
-      portions: [],
-      totals: { calories: Math.round(theoreticalMax.calories), protein: Math.round(theoreticalMax.protein), carbs: Math.round(theoreticalMax.carbs), fat: Math.round(theoreticalMax.fat) },
-      targets: { calories: fullCalTarget, protein: fullPTarget, carbs: fullCTarget, fat: fullFTarget },
-      violations: infeasible,
-      suggested_fixes,
-      food_breakdown: freeFoods.map(f => ({
-        name: f.name, savedGrams: f.savedG, minG: f.minG, maxG: f.maxG, isSeasoning: f.isSeasoning,
-        perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
-      })),
-    };
+    console.warn(`[solver:${RUN_ID}] INFEASIBLE (will attempt best-effort): ${infeasible.join('; ')}`);
   }
 
   // ─── CORE SOLVER FUNCTIONS ─────────────────────────────
@@ -836,8 +822,14 @@ Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions o
 
   // ─── RESULT ────────────────────────────────────────────
 
+  // Build portions array (used for both PASS and BEST_EFFORT)
+  const bestEffortPortions = [
+    ...lockedItems.map((item: any) => ({ id: item.id, quantity_grams: item.quantity_grams })),
+    ...freeFoods.map(food => ({ id: food.id, quantity_grams: finalGrams.get(food.id) || food.minG })),
+  ];
+
   if (!finalOk) {
-    // FAIL — build diagnostics
+    // BEST EFFORT — couldn't hit exact tolerance but return closest solution
     const violations: string[] = [];
     if (roundedTotals.calories > fullCalTarget + 50) violations.push(`kcal over by ${roundedTotals.calories - fullCalTarget}`);
     else if (roundedTotals.calories < fullCalTarget - 50) violations.push(`kcal under by ${fullCalTarget - roundedTotals.calories}`);
@@ -848,46 +840,34 @@ Use LARGE portions of carb-dense foods to hit carb targets. Use LARGE portions o
     if (roundedTotals.fat > fullFTarget + 2) violations.push(`fat over by ${(roundedTotals.fat - fullFTarget).toFixed(1)}g`);
     else if (roundedTotals.fat < fullFTarget - 1) violations.push(`fat under by ${(fullFTarget - roundedTotals.fat).toFixed(1)}g`);
 
-    // Log solver-attempted grams (server only, NOT in response)
     for (const food of freeFoods) {
       const solverG = finalGrams.get(food.id) || 0;
-      console.log(`[solver:${RUN_ID}] FAIL breakdown: ${food.name} savedG=${food.savedG} solverG=${solverG} (min=${food.minG} max=${food.maxG})`);
+      console.log(`[solver:${RUN_ID}] BEST_EFFORT breakdown: ${food.name} savedG=${food.savedG} solverG=${solverG} (min=${food.minG} max=${food.maxG})`);
     }
 
     const suggested_fixes = buildSuggestions(finalGrams, freeFoods, lockedMacros, fullCalTarget, fullPTarget, fullCTarget, fullFTarget, violations);
+    console.log(`[solver:${RUN_ID}] BEST_EFFORT: ${JSON.stringify(roundedTotals)} violations: ${violations.join(', ')}`);
 
-    console.log(`[solver:${RUN_ID}] FAIL suggestions: ${suggested_fixes.join(' | ')}`);
-
-    // Bug 7 fix: response does NOT include solverAttemptedGrams
     return {
-      success: false,
-      status: 'FAIL_CONSTRAINTS',
+      success: true,
+      status: 'BEST_EFFORT',
       run_id: RUN_ID,
-      portions: [],
+      portions: bestEffortPortions,
       totals: roundedTotals,
       targets: { calories: fullCalTarget, protein: fullPTarget, carbs: fullCTarget, fat: fullFTarget },
       violations,
       suggested_fixes,
-      food_breakdown: freeFoods.map(f => ({
-        name: f.name, savedGrams: f.savedG, minG: f.minG, maxG: f.maxG, isSeasoning: f.isSeasoning,
-        perGram: { cal: f.calPer1g, p: f.pPer1g, c: f.cPer1g, f: f.fPer1g },
-      })),
     };
   }
 
-  // PASS — build portions array
-  const portions = [
-    ...lockedItems.map((item: any) => ({ id: item.id, quantity_grams: item.quantity_grams })),
-    ...freeFoods.map(food => ({ id: food.id, quantity_grams: finalGrams.get(food.id) || food.minG })),
-  ];
-
+  // PASS
   console.log(`[solver:${RUN_ID}] PASS: ${JSON.stringify(roundedTotals)}`);
 
   return {
     success: true,
     status: 'PASS',
     run_id: RUN_ID,
-    portions,
+    portions: bestEffortPortions,
     totals: roundedTotals,
     tolerances_check: { kcal_ok: true, protein_ok: true, carbs_ok: true, fat_ok: true },
   };
