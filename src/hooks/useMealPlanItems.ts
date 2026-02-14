@@ -48,6 +48,22 @@ export interface MealPlan {
   eating_out_lunch_calories: number;
   eating_out_dinner_calories: number;
   eating_out_snack_calories: number;
+  eating_out_breakfast_protein: number;
+  eating_out_breakfast_carbs: number;
+  eating_out_breakfast_fat: number;
+  eating_out_breakfast_label: string | null;
+  eating_out_lunch_protein: number;
+  eating_out_lunch_carbs: number;
+  eating_out_lunch_fat: number;
+  eating_out_lunch_label: string | null;
+  eating_out_dinner_protein: number;
+  eating_out_dinner_carbs: number;
+  eating_out_dinner_fat: number;
+  eating_out_dinner_label: string | null;
+  eating_out_snack_protein: number;
+  eating_out_snack_carbs: number;
+  eating_out_snack_fat: number;
+  eating_out_snack_label: string | null;
   created_at: string;
   updated_at: string;
   items?: MealPlanItem[];
@@ -488,12 +504,20 @@ export function useMealPlanItems(weekStart: Date) {
       planId, 
       mealType, 
       status,
-      eatingOutCalories 
+      eatingOutCalories,
+      eatingOutProtein,
+      eatingOutCarbs,
+      eatingOutFat,
+      eatingOutLabel,
     }: { 
       planId: string; 
       mealType: MealType; 
       status: MealStatus;
       eatingOutCalories?: number;
+      eatingOutProtein?: number;
+      eatingOutCarbs?: number;
+      eatingOutFat?: number;
+      eatingOutLabel?: string;
     }) => {
       if (!user) throw new Error("Not authenticated");
       
@@ -501,8 +525,12 @@ export function useMealPlanItems(weekStart: Date) {
         [`${mealType}_status`]: status,
       };
       
-      if (status === "eating_out" && eatingOutCalories !== undefined) {
-        updateData[`eating_out_${mealType}_calories`] = eatingOutCalories;
+      if (status === "eating_out") {
+        if (eatingOutCalories !== undefined) updateData[`eating_out_${mealType}_calories`] = eatingOutCalories;
+        if (eatingOutProtein !== undefined) updateData[`eating_out_${mealType}_protein`] = eatingOutProtein;
+        if (eatingOutCarbs !== undefined) updateData[`eating_out_${mealType}_carbs`] = eatingOutCarbs;
+        if (eatingOutFat !== undefined) updateData[`eating_out_${mealType}_fat`] = eatingOutFat;
+        if (eatingOutLabel !== undefined) updateData[`eating_out_${mealType}_label`] = eatingOutLabel;
       }
       
       const { data, error } = await supabase

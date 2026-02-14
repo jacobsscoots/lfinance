@@ -2207,9 +2207,25 @@ export type Database = {
           dinner: string | null
           dinner_status: string
           eating_out_breakfast_calories: number | null
+          eating_out_breakfast_carbs: number | null
+          eating_out_breakfast_fat: number | null
+          eating_out_breakfast_label: string | null
+          eating_out_breakfast_protein: number | null
           eating_out_dinner_calories: number | null
+          eating_out_dinner_carbs: number | null
+          eating_out_dinner_fat: number | null
+          eating_out_dinner_label: string | null
+          eating_out_dinner_protein: number | null
           eating_out_lunch_calories: number | null
+          eating_out_lunch_carbs: number | null
+          eating_out_lunch_fat: number | null
+          eating_out_lunch_label: string | null
+          eating_out_lunch_protein: number | null
           eating_out_snack_calories: number | null
+          eating_out_snack_carbs: number | null
+          eating_out_snack_fat: number | null
+          eating_out_snack_label: string | null
+          eating_out_snack_protein: number | null
           grocery_cycle_id: string | null
           id: string
           lunch: string | null
@@ -2228,9 +2244,25 @@ export type Database = {
           dinner?: string | null
           dinner_status?: string
           eating_out_breakfast_calories?: number | null
+          eating_out_breakfast_carbs?: number | null
+          eating_out_breakfast_fat?: number | null
+          eating_out_breakfast_label?: string | null
+          eating_out_breakfast_protein?: number | null
           eating_out_dinner_calories?: number | null
+          eating_out_dinner_carbs?: number | null
+          eating_out_dinner_fat?: number | null
+          eating_out_dinner_label?: string | null
+          eating_out_dinner_protein?: number | null
           eating_out_lunch_calories?: number | null
+          eating_out_lunch_carbs?: number | null
+          eating_out_lunch_fat?: number | null
+          eating_out_lunch_label?: string | null
+          eating_out_lunch_protein?: number | null
           eating_out_snack_calories?: number | null
+          eating_out_snack_carbs?: number | null
+          eating_out_snack_fat?: number | null
+          eating_out_snack_label?: string | null
+          eating_out_snack_protein?: number | null
           grocery_cycle_id?: string | null
           id?: string
           lunch?: string | null
@@ -2249,9 +2281,25 @@ export type Database = {
           dinner?: string | null
           dinner_status?: string
           eating_out_breakfast_calories?: number | null
+          eating_out_breakfast_carbs?: number | null
+          eating_out_breakfast_fat?: number | null
+          eating_out_breakfast_label?: string | null
+          eating_out_breakfast_protein?: number | null
           eating_out_dinner_calories?: number | null
+          eating_out_dinner_carbs?: number | null
+          eating_out_dinner_fat?: number | null
+          eating_out_dinner_label?: string | null
+          eating_out_dinner_protein?: number | null
           eating_out_lunch_calories?: number | null
+          eating_out_lunch_carbs?: number | null
+          eating_out_lunch_fat?: number | null
+          eating_out_lunch_label?: string | null
+          eating_out_lunch_protein?: number | null
           eating_out_snack_calories?: number | null
+          eating_out_snack_carbs?: number | null
+          eating_out_snack_fat?: number | null
+          eating_out_snack_label?: string | null
+          eating_out_snack_protein?: number | null
           grocery_cycle_id?: string | null
           id?: string
           lunch?: string | null
