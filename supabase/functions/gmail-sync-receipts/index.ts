@@ -14,7 +14,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Receipt-related search keywords — broadened to catch all transactional emails
+// Receipt-related search keywords — focused on actual purchase/payment emails only
 const RECEIPT_KEYWORDS = [
   'receipt',
   'order confirmation',
@@ -22,23 +22,34 @@ const RECEIPT_KEYWORDS = [
   'thank you for your order',
   'payment received',
   'purchase confirmation',
-  'your order',
   'payment confirmation',
-  'billing statement',
   'payment successful',
-  'transaction',
-  'subscription',
-  'renewal',
-  'charge',
-  'your payment',
+  'your receipt',
   'your purchase',
   'dispatched',
-  'shipped',
   'delivery confirmation',
-  'billing',
-  'amount due',
-  'paid',
-  'statement',
+];
+
+// Subject patterns that indicate NON-receipt emails (marketing, notifications, etc.)
+const EXCLUDE_SUBJECT_PATTERNS = [
+  /join us/i,
+  /summit/i,
+  /webinar/i,
+  /newsletter/i,
+  /unsubscribe/i,
+  /security\s*(alert|finding|update)/i,
+  /oauth\s*application/i,
+  /third.party.*added/i,
+  /action\s*required.*review/i,
+  /complaint/i,
+  /credentials/i,
+  /guest\s*account/i,
+  /verify\s*your\s*email/i,
+  /confirm\s*your\s*(email|account)/i,
+  /password\s*reset/i,
+  /sign.?in\s*attempt/i,
+  /two.?factor/i,
+  /2fa/i,
 ];
 
 /**
@@ -276,6 +287,13 @@ serve(async (req) => {
         }
       }
 
+      // Filter out non-receipt emails (marketing, security alerts, etc.)
+      const isExcluded = EXCLUDE_SUBJECT_PATTERNS.some(pattern => pattern.test(subject));
+      if (isExcluded) {
+        console.log(`[gmail] Skipping non-receipt email: "${subject.slice(0, 60)}"`);
+        continue;
+      }
+
       console.log(`Receipt: merchant=${merchantName}, amount=${amount}, subject="${subject.slice(0, 50)}"`);
 
       const { error: insertError } = await supabase
@@ -417,10 +435,11 @@ serve(async (req) => {
               }
             }
 
-            // Boost: if merchant matches strongly but no amount on receipt, still allow match
-            // (handles emails where amount extraction failed)
-            if (receipt.amount === null && score >= 40) {
-              score += 10; reasons.push('No-amount merchant+date boost');
+            // CRITICAL: Receipts without an extracted amount should NOT auto-match.
+            // They're likely marketing/notification emails rather than actual receipts.
+            if (receipt.amount === null) {
+              score = Math.min(score, 45); // Cap below auto-match threshold
+              reasons.push('No amount extracted — capped');
             }
 
             if (!bestMatch || score > bestMatch.score) {
