@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 // --- Sheet Detection ---
 
@@ -349,8 +350,98 @@ export function normaliseBoolean(value: any): boolean | null {
 
 export async function readWorkbook(data: ArrayBuffer): Promise<ExcelJS.Workbook> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(data);
-  return workbook;
+  try {
+    await workbook.xlsx.load(data);
+    return workbook;
+  } catch (err) {
+    console.warn("ExcelJS failed, using fallback ZIP parser:", err);
+    return fallbackParseXlsx(data);
+  }
+}
+
+/**
+ * Fallback XLSX parser using JSZip + DOMParser.
+ * Handles files ExcelJS chokes on (e.g. auto-filter tables).
+ * Returns a minimal ExcelJS-compatible Workbook with sheet data only.
+ */
+async function fallbackParseXlsx(data: ArrayBuffer): Promise<ExcelJS.Workbook> {
+  const zip = await JSZip.loadAsync(data);
+
+  // 1. Read shared strings
+  const sharedStrings: string[] = [];
+  const ssFile = zip.file("xl/sharedStrings.xml");
+  if (ssFile) {
+    const ssXml = await ssFile.async("string");
+    const doc = new DOMParser().parseFromString(ssXml, "application/xml");
+    const siElements = doc.getElementsByTagName("si");
+    for (let i = 0; i < siElements.length; i++) {
+      // Collect all <t> text nodes within each <si>
+      const tElements = siElements[i].getElementsByTagName("t");
+      let text = "";
+      for (let j = 0; j < tElements.length; j++) {
+        text += tElements[j].textContent ?? "";
+      }
+      sharedStrings.push(text);
+    }
+  }
+
+  // 2. Find sheet files
+  const sheetFiles: string[] = [];
+  zip.folder("xl/worksheets")?.forEach((path) => {
+    if (path.endsWith(".xml")) sheetFiles.push("xl/worksheets/" + path);
+  });
+
+  // 3. Build an ExcelJS workbook manually
+  const wb = new ExcelJS.Workbook();
+
+  for (const sheetPath of sheetFiles) {
+    const sheetXml = await zip.file(sheetPath)!.async("string");
+    const doc = new DOMParser().parseFromString(sheetXml, "application/xml");
+    const ws = wb.addWorksheet(sheetPath.replace(/.*\//, "").replace(".xml", ""));
+
+    const rows = doc.getElementsByTagName("row");
+    for (let r = 0; r < rows.length; r++) {
+      const rowEl = rows[r];
+      const rowNum = parseInt(rowEl.getAttribute("r") || "1", 10);
+      const cells = rowEl.getElementsByTagName("c");
+
+      for (let c = 0; c < cells.length; c++) {
+        const cellEl = cells[c];
+        const ref = cellEl.getAttribute("r") || "";
+        const type = cellEl.getAttribute("t") || "";
+        const vEl = cellEl.getElementsByTagName("v")[0];
+        const rawVal = vEl?.textContent ?? "";
+
+        let value: any = rawVal;
+        if (type === "s") {
+          // Shared string index
+          const idx = parseInt(rawVal, 10);
+          value = sharedStrings[idx] ?? rawVal;
+        } else if (type === "b") {
+          value = rawVal === "1";
+        } else if (!type && rawVal && !isNaN(Number(rawVal))) {
+          value = Number(rawVal);
+        }
+
+        // Parse column letter from ref (e.g. "AB12" -> column index)
+        const colMatch = ref.match(/^([A-Z]+)/);
+        if (colMatch) {
+          const colIdx = colLetterToIndex(colMatch[1]);
+          ws.getRow(rowNum).getCell(colIdx).value = value;
+        }
+      }
+    }
+  }
+
+  return wb;
+}
+
+function colLetterToIndex(letters: string): number {
+  let idx = 0;
+  for (let i = 0; i < letters.length; i++) {
+    idx = idx * 26 + (letters.charCodeAt(i) - 64);
+  }
+  return idx;
 }
 
 // --- Sheet to JSON Helper (replaces XLSX.utils.sheet_to_json) ---
