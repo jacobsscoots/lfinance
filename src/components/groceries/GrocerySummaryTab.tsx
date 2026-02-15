@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { startOfWeek } from "date-fns";
+import { getSmartWeekStart } from "@/lib/smartWeekStart";
 import { TrendingUp, PiggyBank, ShoppingCart, AlertTriangle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { generateShopReadyList, calculateForecastedMonthlySpend, getReorderAlert
 import { calculateActualMonthlySpend, calculateTotalSavings } from "@/lib/discounts";
 
 export function GrocerySummaryTab() {
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekStart = getSmartWeekStart();
   
   const { mealPlans, isLoading: plansLoading } = useMealPlanItems(weekStart);
   const { products, isLoading: productsLoading } = useProducts();

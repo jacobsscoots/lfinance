@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { format, startOfWeek, endOfWeek, addWeeks } from "date-fns";
+import { format, endOfWeek, addWeeks } from "date-fns";
+import { getSmartWeekStart } from "@/lib/smartWeekStart";
 import { ChevronLeft, ChevronRight, ShoppingCart, PackageCheck, RefreshCw, RotateCcw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +19,8 @@ export function ShopReadyListView() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [retailerDiscounts, setRetailerDiscounts] = useState<Record<string, DiscountType>>({});
   
-  const today = new Date();
-  const weekStart = startOfWeek(addWeeks(today, weekOffset), { weekStartsOn: 1 });
+  const smartDefault = getSmartWeekStart();
+  const weekStart = addWeeks(smartDefault, weekOffset);
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
   
   const { mealPlans, isLoading: plansLoading } = useMealPlanItems(weekStart);
