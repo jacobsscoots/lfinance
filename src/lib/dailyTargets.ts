@@ -29,26 +29,25 @@ export interface WeeklyTargetsOverride {
   schedule: WeeklyCalorieSchedule;
   protein?: number | null;
   carbs?: number | null;
-  fat?: number | null; // Stored but IGNORED - fat is always derived
+  fat?: number | null;
 }
 
 /**
  * Get the authoritative daily targets for a specific date.
  *
- * CRITICAL: Fat is ALWAYS derived from remaining calories:
- *   fatGrams = (targetCalories - protein×4 - carbs×4) / 9
+ * Macro resolution order:
+ * 1. If weekend + globalSettings.weekend_targets_enabled → use weekend macros from globalSettings
+ * 2. Else if weeklyOverride has explicit macros → use those
+ * 3. Else → fall back to globalSettings weekday macros
  *
- * This ensures calorie/macro consistency and eliminates drift.
- *
- * Week-to-week continuity: when no weekly override exists for the current
- * week, if a `previousWeekOverride` is provided, weekday calories carry
- * forward from the previous week's Mon-Fri values.
+ * Fat is used from the explicit setting when available, NOT derived.
+ * Derivation only happens as a last-resort fallback when no fat target is set.
  *
  * @param date - The date to get targets for (as Date object)
  * @param globalSettings - User's global nutrition settings
  * @param weeklyOverride - Optional weekly targets override for current week
  * @param previousWeekOverride - Optional override from the previous week (for carry-forward)
- * @returns MacroTotals with calories, protein, carbs, and DERIVED fat
+ * @returns MacroTotals with calories, protein, carbs, and fat
  */
 export function getDailyTargets(
   date: Date,
@@ -63,9 +62,13 @@ export function getDailyTargets(
     return defaults;
   }
 
+  const dayOfWeek = getDay(date); // 0=Sun, 6=Sat
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
   let targetCalories: number;
   let targetProtein: number;
   let targetCarbs: number;
+  let targetFat: number;
 
   // Check if weekly override applies to this date
   if (weeklyOverride) {
@@ -76,38 +79,23 @@ export function getDailyTargets(
       // Use weekly override schedule for calories
       targetCalories = getCaloriesForDate(date, weeklyOverride.schedule);
 
-      // HYBRID behavior: Only use weekly macros if explicitly set (not null/undefined)
-      // Otherwise, fall back to latest global settings
-      // When macros are explicitly set in weekly override, use them directly (no scaling)
-      // When falling back to global, scale by calorie ratio
-      const baseCalories = weeklyOverride.schedule.monday;
-      const ratio = baseCalories > 0 ? targetCalories / baseCalories : 1;
-      
-      // Use weekly-stored values if explicitly set, otherwise use scaled global settings
-      if (weeklyOverride.protein != null) {
-        // Explicit weekly protein - use directly without scaling
-        targetProtein = weeklyOverride.protein;
+      // Weekend-specific macros from globalSettings take priority
+      if (isWeekend && globalSettings.weekend_targets_enabled) {
+        targetProtein = globalSettings.weekend_protein_target_grams ?? globalSettings.protein_target_grams ?? 150;
+        targetCarbs = globalSettings.weekend_carbs_target_grams ?? globalSettings.carbs_target_grams ?? 200;
+        targetFat = globalSettings.weekend_fat_target_grams ?? globalSettings.fat_target_grams ?? 65;
       } else {
-        // Fall back to global, scaled by calorie ratio
-        targetProtein = Math.max(0, Math.round((globalSettings.protein_target_grams ?? 150) * ratio));
+        // Weekday: use weekly override macros if set, else global weekday macros
+        targetProtein = weeklyOverride.protein ?? globalSettings.protein_target_grams ?? 150;
+        targetCarbs = weeklyOverride.carbs ?? globalSettings.carbs_target_grams ?? 200;
+        targetFat = weeklyOverride.fat ?? globalSettings.fat_target_grams ?? 65;
       }
-      
-      if (weeklyOverride.carbs != null) {
-        // Explicit weekly carbs - use directly without scaling
-        targetCarbs = weeklyOverride.carbs;
-      } else {
-        // Fall back to global, scaled by calorie ratio
-        targetCarbs = Math.max(0, Math.round((globalSettings.carbs_target_grams ?? 200) * ratio));
-      }
-
-      // DERIVE fat from remaining calories (ignore stored fat value)
-      const derivedFat = deriveFatFromCalories(targetCalories, targetProtein, targetCarbs);
 
       return {
         calories: targetCalories,
         protein: targetProtein,
         carbs: targetCarbs,
-        fat: derivedFat,
+        fat: targetFat,
       };
     }
   }
@@ -118,56 +106,44 @@ export function getDailyTargets(
   // continuity is maintained without the user having to manually re-enter.
   if (previousWeekOverride) {
     const s = previousWeekOverride.schedule;
-    const dayOfWeek = getDay(date); // 0 = Sunday, 6 = Saturday
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
     if (isWeekend) {
-      // Weekend: use previous week's weekend values
       targetCalories = dayOfWeek === 6 ? s.saturday : s.sunday;
     } else {
-      // Weekday: use previous week's Mon-Fri average
       const weekdayAvg = Math.round(
         (s.monday + s.tuesday + s.wednesday + s.thursday + s.friday) / 5
       );
       targetCalories = weekdayAvg;
     }
 
-    // Carry forward macros from previous week if set, otherwise use global
-    targetProtein = previousWeekOverride.protein ?? globalSettings.protein_target_grams ?? 150;
-    targetCarbs = previousWeekOverride.carbs ?? globalSettings.carbs_target_grams ?? 200;
+    // Use weekend-specific macros if applicable
+    if (isWeekend && globalSettings.weekend_targets_enabled) {
+      targetProtein = globalSettings.weekend_protein_target_grams ?? globalSettings.protein_target_grams ?? 150;
+      targetCarbs = globalSettings.weekend_carbs_target_grams ?? globalSettings.carbs_target_grams ?? 200;
+      targetFat = globalSettings.weekend_fat_target_grams ?? globalSettings.fat_target_grams ?? 65;
+    } else {
+      targetProtein = previousWeekOverride.protein ?? globalSettings.protein_target_grams ?? 150;
+      targetCarbs = previousWeekOverride.carbs ?? globalSettings.carbs_target_grams ?? 200;
+      targetFat = previousWeekOverride.fat ?? globalSettings.fat_target_grams ?? 65;
+    }
 
-    const derivedFat = deriveFatFromCalories(targetCalories, targetProtein, targetCarbs);
-    return {
-      calories: targetCalories,
-      protein: targetProtein,
-      carbs: targetCarbs,
-      fat: derivedFat,
-    };
+    return { calories: targetCalories, protein: targetProtein, carbs: targetCarbs, fat: targetFat };
   }
 
   // Fall back to global settings with weekday/weekend logic
-  const dayOfWeek = getDay(date); // 0 = Sunday, 6 = Saturday
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
   if (isWeekend && globalSettings.weekend_targets_enabled) {
     targetCalories = globalSettings.weekend_calorie_target ?? globalSettings.daily_calorie_target ?? 2000;
     targetProtein = globalSettings.weekend_protein_target_grams ?? globalSettings.protein_target_grams ?? 150;
     targetCarbs = globalSettings.weekend_carbs_target_grams ?? globalSettings.carbs_target_grams ?? 200;
+    targetFat = globalSettings.weekend_fat_target_grams ?? globalSettings.fat_target_grams ?? 65;
   } else {
     targetCalories = globalSettings.daily_calorie_target ?? 2000;
     targetProtein = globalSettings.protein_target_grams ?? 150;
     targetCarbs = globalSettings.carbs_target_grams ?? 200;
+    targetFat = globalSettings.fat_target_grams ?? 65;
   }
 
-  // DERIVE fat from remaining calories
-  const derivedFat = deriveFatFromCalories(targetCalories, targetProtein, targetCarbs);
-
-  return {
-    calories: targetCalories,
-    protein: targetProtein,
-    carbs: targetCarbs,
-    fat: derivedFat,
-  };
+  return { calories: targetCalories, protein: targetProtein, carbs: targetCarbs, fat: targetFat };
 }
 
 /**
