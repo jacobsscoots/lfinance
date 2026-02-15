@@ -22,8 +22,8 @@ describe("getPayCycleForDate", () => {
     expect(cycle.start.getDate()).toBe(20);
     expect(cycle.start.getMonth()).toBe(1); // February
     
-    // Should end on Mar 19, 2026 (day before Mar 20)
-    expect(cycle.end.getDate()).toBe(19);
+    // Should end on Mar 20, 2026 (next payday)
+    expect(cycle.end.getDate()).toBe(20);
     expect(cycle.end.getMonth()).toBe(2); // March
   });
 
@@ -36,19 +36,22 @@ describe("getPayCycleForDate", () => {
     expect(cycle.start.getMonth()).toBe(0); // January
     expect(cycle.start.getDate()).toBe(20);
     
-    // Should end on Feb 19, 2026
+    // Should end on Feb 20, 2026 (payday)
     expect(cycle.end.getMonth()).toBe(1); // February
-    expect(cycle.end.getDate()).toBe(19);
+    expect(cycle.end.getDate()).toBe(20);
   });
 
   it("returns correct cycle when date is exactly on payday", () => {
     // Feb 20, 2026 is a Friday (working day)
+    // Payday is the LAST day of the old cycle
     const date = new Date(2026, 1, 20);
     const cycle = getPayCycleForDate(date, defaultSettings);
     
-    // Should be part of the cycle starting Feb 20
+    // Should be part of the cycle that started Jan 20 and ends Feb 20
     expect(cycle.start.getDate()).toBe(20);
-    expect(cycle.start.getMonth()).toBe(1);
+    expect(cycle.start.getMonth()).toBe(0); // January
+    expect(cycle.end.getDate()).toBe(20);
+    expect(cycle.end.getMonth()).toBe(1); // February
   });
 
   it("handles weekend payday adjustment", () => {

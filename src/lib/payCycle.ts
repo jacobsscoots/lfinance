@@ -1,4 +1,4 @@
-import { format, addMonths, subMonths, startOfMonth, isBefore, isSameDay, subDays } from "date-fns";
+import { format, addMonths, subMonths, startOfMonth, isBefore, isSameDay } from "date-fns";
 import { getPayday, PaydaySettings, AdjustmentRule } from "./payday";
 
 export interface PayCycle {
@@ -22,26 +22,24 @@ export function getPayCycleForDate(
   // Get the payday for the current month
   const currentMonthPayday = getPayday(date.getFullYear(), date.getMonth(), settings);
   
-  // If the date is on or after this month's payday, the cycle started this month
-  if (isSameDay(date, currentMonthPayday) || date >= currentMonthPayday) {
-    const nextMonthPayday = getPayday(
-      addMonths(date, 1).getFullYear(),
-      addMonths(date, 1).getMonth(),
-      settings
-    );
+  // Payday is the LAST day of the old cycle, so only start a new cycle
+  // the day AFTER payday (strictly after, not same day)
+  if (!isSameDay(date, currentMonthPayday) && date > currentMonthPayday) {
+    const nextMonth = addMonths(date, 1);
+    const nextMonthPayday = getPayday(nextMonth.getFullYear(), nextMonth.getMonth(), settings);
     return {
       start: currentMonthPayday,
-      end: subDays(nextMonthPayday, 1),
+      end: nextMonthPayday,
     };
   }
   
-  // Otherwise, the cycle started last month
+  // On payday or before it: cycle started last month, ends on this month's payday
   const prevMonth = subMonths(date, 1);
   const prevMonthPayday = getPayday(prevMonth.getFullYear(), prevMonth.getMonth(), settings);
   
   return {
     start: prevMonthPayday,
-    end: subDays(currentMonthPayday, 1),
+    end: currentMonthPayday,
   };
 }
 
@@ -52,16 +50,15 @@ export function getNextPayCycle(
   currentCycle: PayCycle,
   settings: PaydaySettings = DEFAULT_PAYDAY_SETTINGS
 ): PayCycle {
-  // Next cycle starts the day after current cycle ends
-  const nextStart = addMonths(currentCycle.start, 1);
-  const nextStartPayday = getPayday(nextStart.getFullYear(), nextStart.getMonth(), settings);
+  // Next cycle starts on the current cycle's end date (payday)
+  const nextStartPayday = currentCycle.end;
   
-  const followingMonth = addMonths(nextStart, 1);
+  const followingMonth = addMonths(nextStartPayday, 1);
   const followingPayday = getPayday(followingMonth.getFullYear(), followingMonth.getMonth(), settings);
   
   return {
     start: nextStartPayday,
-    end: subDays(followingPayday, 1),
+    end: followingPayday,
   };
 }
 
@@ -72,13 +69,13 @@ export function getPrevPayCycle(
   currentCycle: PayCycle,
   settings: PaydaySettings = DEFAULT_PAYDAY_SETTINGS
 ): PayCycle {
-  // Previous cycle ends the day before current cycle starts
+  // Previous cycle ends on current cycle's start (payday)
   const prevStart = subMonths(currentCycle.start, 1);
   const prevStartPayday = getPayday(prevStart.getFullYear(), prevStart.getMonth(), settings);
   
   return {
     start: prevStartPayday,
-    end: subDays(currentCycle.start, 1),
+    end: currentCycle.start,
   };
 }
 
