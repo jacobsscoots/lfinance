@@ -6,6 +6,7 @@ import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { useGroceryForecast } from "@/hooks/useGroceryForecast";
 import { useBirthdayEvents } from "@/hooks/useBirthdayEvents";
 import { useToiletryForecasts } from "@/hooks/useToiletryForecasts";
+import { useMedicash } from "@/hooks/useMedicash";
 import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
 import { toast } from "sonner";
 
@@ -34,6 +35,7 @@ export interface MonthData {
   discretionary: number;
   overrideIncome: number;
   overrideExpense: number;
+  medicashIncome: number;
   totalIncome: number;
   totalOutgoings: number;
   net: number;
@@ -48,6 +50,7 @@ export function useYearlyPlannerData(year: number) {
   const { monthlySpend: groceryMonthlyForecast } = useGroceryForecast();
   const { events: birthdayEvents } = useBirthdayEvents();
   const { totalMonthlyCost: toiletryMonthlyForecast } = useToiletryForecasts();
+  const { claims: medicashClaims } = useMedicash();
   const queryClient = useQueryClient();
 
   // Fetch overrides for the year
@@ -264,7 +267,12 @@ export function useYearlyPlannerData(year: number) {
       .filter(o => o.type === 'expense')
       .reduce((s, o) => s + Number(o.amount), 0);
 
-    const totalIncome = income + overrideIncome;
+    // Medicash cashback claims for this month
+    const medicashIncome = medicashClaims
+      .filter(c => c.claim_date.startsWith(monthStr))
+      .reduce((s, c) => s + Number(c.amount), 0);
+
+    const totalIncome = income + overrideIncome + medicashIncome;
     const totalOutgoings = billsTotal + discretionary + groceryForecast + overrideExpense + birthdayOutgoings + toiletryForecast;
     const net = totalIncome - totalOutgoings;
     runningSurplus += net;
@@ -282,6 +290,7 @@ export function useYearlyPlannerData(year: number) {
       discretionary,
       overrideIncome,
       overrideExpense,
+      medicashIncome,
       totalIncome,
       totalOutgoings,
       net,
@@ -383,7 +392,19 @@ export function useYearlyPlannerData(year: number) {
           sources.forEach(source => {
             if (incomeBreakdown[source][month] === 0) {
               incomeBreakdown[source][month] = perSource;
-            }
+  }
+
+  // Add Medicash cashback income row
+  const medicashLabel = "Medicash Cashback";
+  const hasMedicashClaims = medicashClaims.some(c => c.claim_date.startsWith(`${year}-`));
+  if (hasMedicashClaims) {
+    incomeBreakdown[medicashLabel] = new Array(12).fill(0);
+    medicashClaims.forEach(c => {
+      if (!c.claim_date.startsWith(`${year}-`)) return;
+      const monthIdx = parseInt(c.claim_date.substring(5, 7), 10) - 1;
+      incomeBreakdown[medicashLabel][monthIdx] += Number(c.amount);
+    });
+  }
           });
         }
       }

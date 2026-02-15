@@ -21,6 +21,7 @@ import YearlyPlanner from "./pages/YearlyPlanner";
 import NetWorth from "./pages/NetWorth";
 import Deliveries from "./pages/Deliveries";
 import Birthdays from "./pages/Birthdays";
+import Medicash from "./pages/Medicash";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/net-worth" element={<ProtectedRoute><NetWorth /></ProtectedRoute>} />
             <Route path="/deliveries" element={<ProtectedRoute><Deliveries /></ProtectedRoute>} />
             <Route path="/birthdays" element={<ProtectedRoute><Birthdays /></ProtectedRoute>} />
+            <Route path="/medicash" element={<ProtectedRoute><Medicash /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/landing" element={<Landing />} />
             <Route path="/login" element={<Login />} />

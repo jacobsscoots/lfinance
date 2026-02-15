@@ -2393,6 +2393,125 @@ export type Database = {
         }
         Relationships: []
       }
+      medicash_benefit_categories: {
+        Row: {
+          created_at: string
+          icon: string | null
+          id: string
+          is_active: boolean
+          is_per_event: boolean
+          name: string
+          per_event_amount: number | null
+          sort_order: number
+          updated_at: string
+          user_id: string
+          yearly_max: number | null
+        }
+        Insert: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          is_per_event?: boolean
+          name: string
+          per_event_amount?: number | null
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+          yearly_max?: number | null
+        }
+        Update: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          is_per_event?: boolean
+          name?: string
+          per_event_amount?: number | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+          yearly_max?: number | null
+        }
+        Relationships: []
+      }
+      medicash_claims: {
+        Row: {
+          amount: number
+          category_id: string
+          claim_date: string
+          created_at: string
+          description: string | null
+          id: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          claim_date: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          claim_date?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicash_claims_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "medicash_benefit_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medicash_settings: {
+        Row: {
+          created_at: string
+          id: string
+          plan_level: string
+          plan_type: string
+          policy_year_start_day: number
+          policy_year_start_month: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          plan_level?: string
+          plan_type?: string
+          policy_year_start_day?: number
+          policy_year_start_month?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          plan_level?: string
+          plan_type?: string
+          policy_year_start_day?: number
+          policy_year_start_month?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       online_orders: {
         Row: {
           created_at: string
