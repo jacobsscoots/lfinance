@@ -690,6 +690,10 @@ export function useMealPlanItems(weekStart: Date) {
         editableMode = product.editable_mode as 'LOCKED' | 'BOUNDED' | 'FREE';
       }
       
+      // Auto-clamp: pass actual quantity for locked items; for non-locked, pass
+      // the current DB value so the solver can clamp it to valid constraints
+      const isEffectivelyLocked = item.is_locked || product.product_type === 'fixed';
+      
       return productToSolverItem(
         {
           id: item.id, // Use item.id, not product.id, for portion mapping
@@ -711,7 +715,7 @@ export function useMealPlanItems(weekStart: Date) {
           fixed_portion_grams: product.fixed_portion_grams,
         },
         item.meal_type as SolverMealType,
-        item.is_locked || product.product_type === 'fixed' ? item.quantity_grams : 0
+        isEffectivelyLocked ? item.quantity_grams : item.quantity_grams  // Always pass actual grams; solver will clamp
       );
     });
   }, []);
