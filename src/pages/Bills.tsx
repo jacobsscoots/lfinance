@@ -114,7 +114,7 @@ export default function Bills() {
                     </div>
                   </div>
                   <p className="text-[10px] text-muted-foreground max-w-[160px] text-right">
-                    Estimated based on meal plan &amp; calorie targets · £{grocery.weeklySpend.toFixed(2)}/wk · £{grocery.monthlySpend.toFixed(0)}/mo
+                    Estimated based on meal plan & calorie targets · £{grocery.weeklySpend.toFixed(2)}/wk · £{grocery.monthlySpend.toFixed(0)}/mo
                   </p>
                 </>
               ) : (

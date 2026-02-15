@@ -66,7 +66,7 @@ export function AuthForm() {
             <Wallet className="w-8 h-8 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">Life Tracker</CardTitle>
+            <CardTitle className="text-2xl font-bold">Lifehub</CardTitle>
             <CardDescription className="text-muted-foreground">
               {isLogin ? 'Welcome back! Sign in to continue.' : 'Create an account to get started.'}
             </CardDescription>

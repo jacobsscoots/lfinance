@@ -78,7 +78,7 @@ export function MobileNav() {
             <TrendingUp className="h-4 w-4 text-sidebar-primary-foreground" />
           </div>
           <span className="text-lg font-semibold text-sidebar-foreground">
-            Life Tracker
+            Lifehub
           </span>
         </div>
 

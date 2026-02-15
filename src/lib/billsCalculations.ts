@@ -230,7 +230,7 @@ export function generateIcsContent(
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Life Tracker//Cheaper Bills//EN
+PRODID:-//Lifehub//Cheaper Bills//EN
 BEGIN:VEVENT
 UID:${Date.now()}@lifetracker
 DTSTAMP:${formatDate(new Date())}
