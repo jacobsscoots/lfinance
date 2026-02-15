@@ -104,11 +104,13 @@ export function buildZigzagSchedule(
   const weeklyTotal = targetDaily * 7;
 
   if (scheduleType === "schedule_1") {
-    // Calculator.net Schedule 1: Weekend days = maintenance TDEE,
-    // Weekdays absorb the full weekly deficit.
-    const highDay = Math.round(tdee); // maintenance on Sat + Sun
-    const weekdayTotal = weeklyTotal - highDay * 2;
-    const lowDay = Math.round(weekdayTotal / 5);
+    // Calculator.net Schedule 1: Uses a fixed high/low ratio of 6:5 (1.2x).
+    // lowDay = floor(target * 35/37), highDay fills the remainder to hit weekly total.
+    // Verified against calculator.net for all goal modes with TDEE 2086:
+    //   Mild loss (1836 avg): Mon-Fri=1736, Sat-Sun=2086
+    //   Weight loss (1586 avg): Mon-Fri=1500, Sat-Sun=1801
+    const lowDay = Math.floor(targetDaily * 35 / 37);
+    const highDay = Math.round((weeklyTotal - lowDay * 5) / 2);
     
     return {
       monday: lowDay,

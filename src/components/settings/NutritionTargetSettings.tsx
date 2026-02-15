@@ -181,7 +181,7 @@ export function NutritionTargetSettings() {
       try {
         const result = calculateNutritionTargets(
           input,
-          (calcValues.goal_type as GoalType) || "maintain",
+          "maintain",
           {
             proteinPerKg: calcValues.protein_per_kg || 2.2,
             fatPerKg: calcValues.fat_per_kg || 0.8,
@@ -448,52 +448,30 @@ export function NutritionTargetSettings() {
                       )}
                     />
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={calcForm.control}
-                        name="formula"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Formula</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || "mifflin_st_jeor"}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="mifflin_st_jeor">Mifflin-St Jeor</SelectItem>
-                                <SelectItem value="harris_benedict">Harris-Benedict</SelectItem>
-                                <SelectItem value="katch_mcardle" disabled={!calcValues.body_fat_percent}>
-                                  Katch-McArdle
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={calcForm.control}
-                        name="goal_type"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Goal</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || "maintain"}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Object.entries(GOAL_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                    <FormField
+                      control={calcForm.control}
+                      name="formula"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Formula</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || "mifflin_st_jeor"}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="mifflin_st_jeor">Mifflin-St Jeor</SelectItem>
+                              <SelectItem value="harris_benedict">Harris-Benedict</SelectItem>
+                              <SelectItem value="katch_mcardle" disabled={!calcValues.body_fat_percent}>
+                                Katch-McArdle
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>Goal is set on the Weekly Calorie Plan page</FormDescription>
+                        </FormItem>
+                      )}
+                    />
 
                     {/* Advanced macro rules */}
                     <Collapsible>
