@@ -15,7 +15,7 @@ import { DailyBudgetCard } from "@/components/bills/DailyBudgetCard";
 
 export default function Bills() {
   const { bills, isLoading } = useBills();
-  const { weeklySpend: groceryWeekly, monthlySpend: groceryMonthly } = useGroceryForecast();
+  const grocery = useGroceryForecast();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
@@ -91,25 +91,43 @@ export default function Bills() {
         <DailyBudgetCard />
 
         {/* Grocery Forecast */}
-        {groceryMonthly > 0 && (
-          <Card>
-            <CardContent className="py-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <ShoppingCart className="h-5 w-5 text-primary" />
-                </div>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <ShoppingCart className="h-5 w-5 text-primary" />
+              </div>
+              {grocery.hasData ? (
+                <>
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground">Grocery Forecast</p>
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-xl font-bold">
+                        £{grocery.payCycleSpend.toFixed(2)}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          /{grocery.payCycleDays} days
+                        </span>
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        £{grocery.dailyCost.toFixed(2)}/day
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground max-w-[160px] text-right">
+                    Estimated based on meal plan &amp; calorie targets · £{grocery.weeklySpend.toFixed(2)}/wk · £{grocery.monthlySpend.toFixed(0)}/mo
+                  </p>
+                </>
+              ) : (
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground">Grocery Forecast</p>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-xl font-bold">£{groceryMonthly.toFixed(2)}<span className="text-sm font-normal text-muted-foreground">/mo</span></span>
-                    <span className="text-sm text-muted-foreground">£{groceryWeekly.toFixed(2)}/wk</span>
-                  </div>
+                  <p className="text-sm text-muted-foreground/70">
+                    Add products and create a meal plan to see predicted grocery costs
+                  </p>
                 </div>
-                <p className="text-[10px] text-muted-foreground max-w-[140px] text-right">Based on meal plan needs minus stock on hand</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Summary Card */}
         <Card>
