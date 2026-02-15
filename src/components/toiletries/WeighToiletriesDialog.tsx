@@ -52,7 +52,7 @@ export function WeighToiletriesDialog({ open, onOpenChange, items }: WeighToilet
         const { error } = await supabase
           .from("toiletry_items")
           .update({
-            current_weight_grams: weight,
+            current_weight_grams: Math.round(weight),
             last_weighed_at: new Date().toISOString(),
           })
           .eq("id", id);
