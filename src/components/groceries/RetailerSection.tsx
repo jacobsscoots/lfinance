@@ -108,41 +108,43 @@ function RetailerItemRow({ item }: { item: ShopReadyItem }) {
   const hasOfferPrice = item.product.offer_price && item.product.offer_price > 0 && item.product.offer_price < item.product.price;
   
   return (
-    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors group">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium truncate">{item.product.name}</span>
-          {hasOfferPrice && (
-            <Badge variant="outline" className="text-xs text-primary border-primary/30 shrink-0">
-              {item.product.offer_label || "Offer"}
-            </Badge>
-          )}
-          {item.multiBuyOffer && (
-            <Badge variant="outline" className="text-xs shrink-0" style={{ color: "hsl(var(--chart-4))", borderColor: "hsl(var(--chart-4) / 0.3)" }}>
-              {item.multiBuyOffer.offerLabel}
-            </Badge>
-          )}
+    <div className="py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors group space-y-1">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-medium text-sm leading-tight">{item.product.name}</span>
+            {hasOfferPrice && (
+              <Badge variant="outline" className="text-xs text-primary border-primary/30 shrink-0">
+                {item.product.offer_label || "Offer"}
+              </Badge>
+            )}
+            {item.multiBuyOffer && (
+              <Badge variant="outline" className="text-xs shrink-0" style={{ color: "hsl(var(--chart-4))", borderColor: "hsl(var(--chart-4) / 0.3)" }}>
+                {item.multiBuyOffer.offerLabel}
+              </Badge>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {item.netNeededGrams}g needed
+            {item.stockOnHandGrams > 0 && (
+              <span className="text-primary"> · {item.stockOnHandGrams}g in stock</span>
+            )}
+          </div>
         </div>
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {item.netNeededGrams}g needed
-          {item.stockOnHandGrams > 0 && (
-            <span className="text-primary"> · {item.stockOnHandGrams}g in stock</span>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-4 shrink-0">
-        <div className="text-xs text-center min-w-[70px] text-muted-foreground">
-          <span className="font-medium text-foreground">{item.purchasePacks}</span>
-          <span> × {item.packNetGrams}g</span>
-        </div>
-        <div className="text-right min-w-[60px]">
-          {item.multiBuyDiscount > 0 && (
-            <div className="text-xs text-primary line-through">
-              £{(item.grossCost).toFixed(2)}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-xs text-center text-muted-foreground">
+            <span className="font-medium text-foreground">{item.purchasePacks}</span>
+            <span> × {item.packNetGrams}g</span>
+          </div>
+          <div className="text-right">
+            {item.multiBuyDiscount > 0 && (
+              <div className="text-xs text-primary line-through">
+                £{(item.grossCost).toFixed(2)}
+              </div>
+            )}
+            <div className="font-semibold">
+              £{item.costAfterMultiBuy.toFixed(2)}
             </div>
-          )}
-          <div className="font-semibold">
-            £{item.costAfterMultiBuy.toFixed(2)}
           </div>
         </div>
       </div>
