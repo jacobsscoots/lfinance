@@ -54,3 +54,6 @@ verify_jwt = false
 [functions.claude-ai]
 verify_jwt = false
 
+[functions.sync-truelayer-cron]
+verify_jwt = false
+

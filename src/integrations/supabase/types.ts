@@ -82,6 +82,7 @@ export type Database = {
           access_token_encrypted: string | null
           created_at: string
           id: string
+          last_sync_error: string | null
           last_synced_at: string | null
           provider: string
           refresh_token: string | null
@@ -96,6 +97,7 @@ export type Database = {
           access_token_encrypted?: string | null
           created_at?: string
           id?: string
+          last_sync_error?: string | null
           last_synced_at?: string | null
           provider?: string
           refresh_token?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           access_token_encrypted?: string | null
           created_at?: string
           id?: string
+          last_sync_error?: string | null
           last_synced_at?: string | null
           provider?: string
           refresh_token?: string | null
@@ -3016,6 +3019,53 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_logs: {
+        Row: {
+          accounts_synced: number | null
+          completed_at: string | null
+          connection_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          started_at: string
+          status: string
+          transactions_synced: number | null
+          user_id: string
+        }
+        Insert: {
+          accounts_synced?: number | null
+          completed_at?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          transactions_synced?: number | null
+          user_id: string
+        }
+        Update: {
+          accounts_synced?: number | null
+          completed_at?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          transactions_synced?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_logs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "bank_connections"
             referencedColumns: ["id"]
           },
         ]
