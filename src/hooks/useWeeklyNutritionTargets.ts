@@ -150,8 +150,23 @@ export function useWeeklyNutritionTargets(weekStartDate?: Date) {
         sunday: weeklyTargets.sunday_calories,
       };
 
+      const dayCals = getCaloriesForDate(date, schedule);
+      
+      // If zigzag is enabled and we have global weekend targets, use day-appropriate macros
+      const dayOfWeek = getDay(date); // 0=Sun, 6=Sat
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      if (isWeekend && globalSettings?.weekend_targets_enabled) {
+        return {
+          calories: dayCals,
+          protein: globalSettings.weekend_protein_target_grams ?? weeklyTargets.protein_target_grams ?? 150,
+          carbs: globalSettings.weekend_carbs_target_grams ?? weeklyTargets.carbs_target_grams ?? 200,
+          fat: globalSettings.weekend_fat_target_grams ?? weeklyTargets.fat_target_grams ?? 65,
+        };
+      }
+
       return {
-        calories: getCaloriesForDate(date, schedule),
+        calories: dayCals,
         protein: weeklyTargets.protein_target_grams ?? globalSettings?.protein_target_grams ?? 150,
         carbs: weeklyTargets.carbs_target_grams ?? globalSettings?.carbs_target_grams ?? 200,
         fat: weeklyTargets.fat_target_grams ?? globalSettings?.fat_target_grams ?? 65,

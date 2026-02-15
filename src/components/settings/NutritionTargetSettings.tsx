@@ -60,7 +60,7 @@ const calculatorSchema = z.object({
   body_fat_percent: z.coerce.number().min(3).max(60).nullable().optional(),
   activity_level: z.enum(["sedentary", "lightly_active", "moderately_active", "very_active", "extremely_active"]),
   formula: z.enum(["mifflin_st_jeor", "harris_benedict", "katch_mcardle"]),
-  goal_type: z.enum(["maintain", "cut", "bulk"]),
+  goal_type: z.enum(["maintain", "mild_loss", "cut", "bulk"]),
   protein_per_kg: z.coerce.number().min(1).max(4),
   fat_per_kg: z.coerce.number().min(0.3).max(2),
 });
