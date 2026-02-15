@@ -11,6 +11,7 @@ import { useShopListCollected } from "@/hooks/useShopListCollected";
 import { generateShopReadyList, ShopReadyList } from "@/lib/groceryListCalculations";
 import { DiscountType } from "@/lib/discounts";
 import { RetailerSection } from "./RetailerSection";
+import { EasySaverCalculator } from "./EasySaverCalculator";
 import { toast } from "sonner";
 
 export function ShopReadyListView() {
@@ -185,6 +186,13 @@ export function ShopReadyListView() {
               onToggleCollected={handleToggleCollected}
             />
           ))}
+          
+          {/* Easy Saver Gift Card Calculator — show when Iceland items exist */}
+          {shopList.byRetailer.some(g => g.retailer === "Iceland") && (
+            <EasySaverCalculator
+              icelandTotal={shopList.byRetailer.find(g => g.retailer === "Iceland")?.finalTotal ?? 0}
+            />
+          )}
           
           {/* Already covered items */}
           {shopList.alreadyCovered.length > 0 && (
