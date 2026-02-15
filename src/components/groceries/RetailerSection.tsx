@@ -2,12 +2,15 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Store, Tag, Percent, Truck } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { RetailerGroup, ShopReadyItem } from "@/lib/groceryListCalculations";
 import { DiscountType, getRetailerDiscountOptions, getDefaultRetailerDiscount } from "@/lib/discounts";
 
 interface RetailerSectionProps {
   group: RetailerGroup;
   onDiscountChange: (retailer: string, discountType: DiscountType) => void;
+  collectedIds?: Set<string>;
+  onToggleCollected?: (productId: string) => void;
 }
 
 const RETAILER_COLORS: Record<string, string> = {
@@ -31,10 +34,14 @@ const DISCOUNT_LABELS: Record<string, string> = {
   other: "",
 };
 
-export function RetailerSection({ group, onDiscountChange }: RetailerSectionProps) {
+export function RetailerSection({ group, onDiscountChange, collectedIds, onToggleCollected }: RetailerSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
   const colorClass = RETAILER_COLORS[group.retailer] ?? "bg-primary/10 text-primary border-primary/20";
   const discountLabel = DISCOUNT_LABELS[group.discountType] ?? "";
+
+  const collectedCount = collectedIds
+    ? group.items.filter(i => collectedIds.has(i.product.id)).length
+    : 0;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="rounded-xl border shadow-sm overflow-hidden">
@@ -47,7 +54,10 @@ export function RetailerSection({ group, onDiscountChange }: RetailerSectionProp
             <span className="font-semibold">{group.retailer}</span>
             <div className="flex items-center gap-2 mt-0.5">
               <Badge variant="secondary" className="text-xs">
-                {group.items.length} {group.items.length === 1 ? "item" : "items"}
+                {collectedIds
+                  ? `${collectedCount}/${group.items.length} collected`
+                  : `${group.items.length} ${group.items.length === 1 ? "item" : "items"}`
+                }
               </Badge>
               {discountLabel && (
                 <Badge variant="outline" className="text-xs text-primary border-primary/30">
@@ -95,7 +105,12 @@ export function RetailerSection({ group, onDiscountChange }: RetailerSectionProp
           {/* Items list */}
           <div className="p-3 space-y-1.5">
             {group.items.map((item) => (
-              <RetailerItemRow key={item.product.id} item={item} />
+              <RetailerItemRow
+                key={item.product.id}
+                item={item}
+                isCollected={collectedIds?.has(item.product.id) ?? false}
+                onToggle={onToggleCollected ? () => onToggleCollected(item.product.id) : undefined}
+              />
             ))}
           </div>
         </div>
@@ -104,31 +119,46 @@ export function RetailerSection({ group, onDiscountChange }: RetailerSectionProp
   );
 }
 
-function RetailerItemRow({ item }: { item: ShopReadyItem }) {
+function RetailerItemRow({ item, isCollected, onToggle }: { item: ShopReadyItem; isCollected: boolean; onToggle?: () => void }) {
   const hasOfferPrice = item.product.offer_price && item.product.offer_price > 0 && item.product.offer_price < item.product.price;
   
   return (
-    <div className="py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors group space-y-1">
+    <div
+      className={`py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors group space-y-1 ${
+        isCollected ? "opacity-50" : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-medium text-sm leading-tight">{item.product.name}</span>
-            {hasOfferPrice && (
-              <Badge variant="outline" className="text-xs text-primary border-primary/30 shrink-0">
-                {item.product.offer_label || "Offer"}
-              </Badge>
-            )}
-            {item.multiBuyOffer && (
-              <Badge variant="outline" className="text-xs shrink-0" style={{ color: "hsl(var(--chart-4))", borderColor: "hsl(var(--chart-4) / 0.3)" }}>
-                {item.multiBuyOffer.offerLabel}
-              </Badge>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {item.netNeededGrams}g needed
-            {item.stockOnHandGrams > 0 && (
-              <span className="text-primary"> · {item.stockOnHandGrams}g in stock</span>
-            )}
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          {onToggle && (
+            <Checkbox
+              checked={isCollected}
+              onCheckedChange={onToggle}
+              className="mt-0.5 h-5 w-5 shrink-0"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`font-medium text-sm leading-tight ${isCollected ? "line-through" : ""}`}>
+                {item.product.name}
+              </span>
+              {hasOfferPrice && (
+                <Badge variant="outline" className="text-xs text-primary border-primary/30 shrink-0">
+                  {item.product.offer_label || "Offer"}
+                </Badge>
+              )}
+              {item.multiBuyOffer && (
+                <Badge variant="outline" className="text-xs shrink-0" style={{ color: "hsl(var(--chart-4))", borderColor: "hsl(var(--chart-4) / 0.3)" }}>
+                  {item.multiBuyOffer.offerLabel}
+                </Badge>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {item.netNeededGrams}g needed
+              {item.stockOnHandGrams > 0 && (
+                <span className="text-primary"> · {item.stockOnHandGrams}g in stock</span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">

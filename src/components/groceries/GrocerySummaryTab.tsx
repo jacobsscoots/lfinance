@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { startOfWeek } from "date-fns";
-import { TrendingUp, PiggyBank, ShoppingCart, AlertTriangle } from "lucide-react";
+import { TrendingUp, PiggyBank, ShoppingCart, AlertTriangle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMealPlanItems } from "@/hooks/useMealPlanItems";
@@ -11,53 +11,59 @@ import { generateShopReadyList, calculateForecastedMonthlySpend, getReorderAlert
 import { calculateActualMonthlySpend, calculateTotalSavings } from "@/lib/discounts";
 
 export function GrocerySummaryTab() {
-  // Get current week's shop list for forecast
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   
-  const { mealPlans } = useMealPlanItems(weekStart);
-  const { products } = useProducts();
-  const { purchases } = useGroceryPurchases();
-  const { orders } = useGroceryOrders();
+  const { mealPlans, isLoading: plansLoading } = useMealPlanItems(weekStart);
+  const { products, isLoading: productsLoading } = useProducts();
+  const { purchases, isLoading: purchasesLoading } = useGroceryPurchases();
+  const { orders, isLoading: ordersLoading } = useGroceryOrders();
+  
+  const isLoading = plansLoading || productsLoading || purchasesLoading || ordersLoading;
   
   const stats = useMemo(() => {
-    // Generate shop list
     const shopList = generateShopReadyList(mealPlans, products);
-    
-    // Forecasted spend (from shop list)
     const forecastedWeekly = shopList.totals.finalCost;
     const forecastedMonthly = calculateForecastedMonthlySpend(shopList);
     
-    // Actual spend (from purchases + orders)
     const purchaseData = purchases.map(p => ({
       final_cost: p.final_cost,
       purchase_date: p.purchase_date,
     }));
-    
     const orderData = orders.map(o => ({
       final_cost: o.total_amount,
       purchase_date: o.order_date,
     }));
-    
     const actualMonthly = calculateActualMonthlySpend([...purchaseData, ...orderData]);
-    
-    // Total savings from discounts
     const totalSavings = calculateTotalSavings(purchases);
-    
-    // Reorder alerts
     const reorderAlerts = getReorderAlerts(shopList);
     
-    return {
-      forecastedWeekly,
-      forecastedMonthly,
-      actualMonthly,
-      totalSavings,
-      reorderAlerts,
-      shopList,
-    };
+    return { forecastedWeekly, forecastedMonthly, actualMonthly, totalSavings, reorderAlerts, shopList };
   }, [mealPlans, products, purchases, orders]);
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const hasNoData = mealPlans.length === 0 && purchases.length === 0 && orders.length === 0;
   
   return (
     <div className="space-y-6">
+      {hasNoData && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-medium mb-2">No data yet</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-sm">
+              Plan your meals for the week and record purchases to see your spending summary here.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -98,7 +104,7 @@ export function GrocerySummaryTab() {
               {stats.actualMonthly > 0 ? `£${stats.actualMonthly.toFixed(2)}` : "—"}
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats.actualMonthly > 0 ? "Average from purchases" : "No data yet"}
+              {stats.actualMonthly > 0 ? "Average from purchases" : "No purchase data yet"}
             </p>
           </CardContent>
         </Card>

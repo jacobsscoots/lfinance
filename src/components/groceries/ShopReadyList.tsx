@@ -1,29 +1,30 @@
 import { useState, useMemo } from "react";
 import { format, startOfWeek, endOfWeek, addWeeks } from "date-fns";
-import { ChevronLeft, ChevronRight, ShoppingCart, PackageCheck, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShoppingCart, PackageCheck, RefreshCw, RotateCcw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { useProducts } from "@/hooks/useProducts";
+import { useShopListCollected } from "@/hooks/useShopListCollected";
 import { generateShopReadyList, ShopReadyList } from "@/lib/groceryListCalculations";
 import { DiscountType } from "@/lib/discounts";
 import { RetailerSection } from "./RetailerSection";
+import { toast } from "sonner";
 
 export function ShopReadyListView() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [retailerDiscounts, setRetailerDiscounts] = useState<Record<string, DiscountType>>({});
   
-  // Calculate week dates
   const today = new Date();
   const weekStart = startOfWeek(addWeeks(today, weekOffset), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
   
-  // Fetch meal plans for the week - hook requires weekStart param
   const { mealPlans, isLoading: plansLoading } = useMealPlanItems(weekStart);
   const { products, isLoading: productsLoading } = useProducts();
+  const { collectedIds, toggleCollected, resetAll } = useShopListCollected(weekStart);
   
-  // Generate shop-ready list
   const shopList = useMemo<ShopReadyList>(() => {
     if (mealPlans.length === 0 || products.length === 0) {
       return {
@@ -44,13 +45,28 @@ export function ShopReadyListView() {
   }, [mealPlans, products, retailerDiscounts]);
   
   const handleDiscountChange = (retailer: string, discountType: DiscountType) => {
-    setRetailerDiscounts(prev => ({
-      ...prev,
-      [retailer]: discountType,
-    }));
+    setRetailerDiscounts(prev => ({ ...prev, [retailer]: discountType }));
+  };
+
+  const handleToggleCollected = (productId: string) => {
+    toggleCollected.mutate(productId);
+  };
+
+  const handleResetAll = () => {
+    resetAll.mutate(undefined, {
+      onSuccess: () => toast.success("Shopping list reset"),
+    });
   };
   
   const isLoading = plansLoading || productsLoading;
+
+  // Progress calculation
+  const totalItems = shopList.totals.itemCount;
+  const collectedCount = shopList.byRetailer.reduce(
+    (sum, g) => sum + g.items.filter(i => collectedIds.has(i.product.id)).length,
+    0
+  );
+  const progressPercent = totalItems > 0 ? (collectedCount / totalItems) * 100 : 0;
   
   if (isLoading) {
     return (
@@ -92,7 +108,34 @@ export function ShopReadyListView() {
         </CardHeader>
         
         {hasItems && (
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 space-y-3">
+            {/* Progress bar */}
+            {totalItems > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                    <span className="font-medium">
+                      {collectedCount}/{totalItems} items collected
+                    </span>
+                  </div>
+                  {collectedCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={handleResetAll}
+                      disabled={resetAll.isPending}
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset
+                    </Button>
+                  )}
+                </div>
+                <Progress value={progressPercent} className="h-2" />
+              </div>
+            )}
+
             <div className="flex items-center justify-between py-3 border-t">
               <div className="text-sm text-muted-foreground">
                 {shopList.totals.itemCount} items across {shopList.byRetailer.length} {shopList.byRetailer.length === 1 ? "retailer" : "retailers"}
@@ -138,6 +181,8 @@ export function ShopReadyListView() {
               key={group.retailer}
               group={group}
               onDiscountChange={handleDiscountChange}
+              collectedIds={collectedIds}
+              onToggleCollected={handleToggleCollected}
             />
           ))}
           
