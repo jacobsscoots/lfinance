@@ -564,6 +564,31 @@ export function generateFixSuggestions(
   const totals = sumMacros(items, portions, true);
   const delta = calculateDelta(totals, targets);
 
+  // 0. Feasibility: show max achievable per macro
+  const { minTotals, maxTotals } = computeFeasibilityBounds(items, true);
+  const macroChecks: Array<{ name: string; key: keyof MacroTotals; unit: string; targetVal: number }> = [
+    { name: 'Calories', key: 'calories', unit: 'kcal', targetVal: targets.calories },
+    { name: 'Protein', key: 'protein', unit: 'g', targetVal: targets.protein },
+    { name: 'Carbs', key: 'carbs', unit: 'g', targetVal: targets.carbs },
+    { name: 'Fat', key: 'fat', unit: 'g', targetVal: targets.fat },
+  ];
+  for (const mc of macroChecks) {
+    if (maxTotals[mc.key] < mc.targetVal) {
+      const gap = Math.round(mc.targetVal - maxTotals[mc.key]);
+      suggestions.push({
+        type: 'info',
+        message: `${mc.name}: max achievable ${Math.round(maxTotals[mc.key])}${mc.unit} vs target ${mc.targetVal}${mc.unit} (${gap}${mc.unit} short — need to add ${mc.name.toLowerCase()}-rich items)`,
+      });
+    }
+    const tolMax = mc.key === 'calories' ? tolerances.calories.max : (tolerances[mc.key as keyof ToleranceConfig] as { min: number; max: number })?.max ?? 0;
+    if (minTotals[mc.key] > mc.targetVal + tolMax) {
+      suggestions.push({
+        type: 'info',
+        message: `${mc.name}: minimum achievable ${Math.round(minTotals[mc.key])}${mc.unit} exceeds target ${mc.targetVal}${mc.unit} — locked items contribute too much`,
+      });
+    }
+  }
+
   // 1. Fixed/locked item budget analysis
   const fixedItems = items.filter(i => i.editableMode === 'LOCKED' && i.category !== 'seasoning');
   let fixedCalories = 0;
@@ -583,7 +608,6 @@ export function generateFixSuggestions(
       message: `Fixed items total ${Math.round(fixedCalories)} kcal (${fixedPct}% of ${targets.calories} target), leaving only ${Math.round(remainingCal)} kcal for variable items`,
     });
     
-    // Find the biggest fixed item and suggest swapping it
     let biggestFixed: { name: string; cal: number } | null = null;
     for (const item of fixedItems) {
       const grams = portions.get(item.id) ?? item.currentGrams;
@@ -612,19 +636,25 @@ export function generateFixSuggestions(
     });
   }
 
-  // 3. Macro-specific suggestions
-  if (delta.carbs < -10) {
-    // Under on carbs
+  // 3. Specific item suggestions for macro gaps
+  if (delta.fat < -10) {
     suggestions.push({
       type: 'add',
-      message: `Add a high-carb, low-fat item (e.g. rice, oats, fruit) to help reach carb target (${Math.abs(Math.round(delta.carbs))}g short)`,
+      message: `Add a high-fat item (e.g. peanut butter, olive oil, cheese, avocado, nuts) to reach fat target (${Math.abs(Math.round(delta.fat))}g short)`,
+    });
+  }
+  
+  if (delta.carbs < -10) {
+    suggestions.push({
+      type: 'add',
+      message: `Add a high-carb, low-fat item (e.g. rice, oats, bread, fruit, pasta) to help reach carb target (${Math.abs(Math.round(delta.carbs))}g short)`,
     });
   }
   
   if (delta.protein < -10) {
     suggestions.push({
       type: 'add',
-      message: `Add a leaner protein source to help reach protein target (${Math.abs(Math.round(delta.protein))}g short)`,
+      message: `Add a lean protein source (e.g. chicken breast, whey protein, egg whites, tuna) to help reach protein target (${Math.abs(Math.round(delta.protein))}g short)`,
     });
   }
   
@@ -632,6 +662,13 @@ export function generateFixSuggestions(
     suggestions.push({
       type: 'swap',
       message: `Swap a high-fat item for a leaner alternative to reduce fat (${Math.round(delta.fat)}g over target)`,
+    });
+  }
+  
+  if (delta.protein > 10) {
+    suggestions.push({
+      type: 'swap',
+      message: `Swap a high-protein item for a lower-protein alternative (${Math.round(delta.protein)}g over target)`,
     });
   }
   
@@ -646,11 +683,18 @@ export function generateFixSuggestions(
   for (const item of items) {
     if (item.editableMode === 'LOCKED') continue;
     const grams = portions.get(item.id) ?? 0;
-    if (item.maxPortionGrams > 0 && grams >= item.maxPortionGrams && item.nutritionPer100g.carbs > 30) {
-      suggestions.push({
-        type: 'info',
-        message: `${item.name} hit max portion (${item.maxPortionGrams}g cap from ${Math.round(item.nutritionPer100g.carbs)}g carbs/100g). Increase max_portion_grams to add more carbs`,
-      });
+    if (item.maxPortionGrams > 0 && grams >= item.maxPortionGrams) {
+      if (item.nutritionPer100g.fat > 5 && delta.fat < -5) {
+        suggestions.push({
+          type: 'info',
+          message: `${item.name} hit max portion (${item.maxPortionGrams}g cap). Increase max_portion_grams to add more fat`,
+        });
+      } else if (item.nutritionPer100g.carbs > 30 && delta.carbs < -5) {
+        suggestions.push({
+          type: 'info',
+          message: `${item.name} hit max portion (${item.maxPortionGrams}g cap). Increase max_portion_grams to add more carbs`,
+        });
+      }
     }
   }
 
@@ -821,7 +865,7 @@ function checkFeasibility(
 // MULTI-START INITIALIZATION STRATEGIES (Fix A2)
 // ============================================================================
 
-type InitStrategy = 'current' | 'midpoint' | 'protein_heavy' | 'carb_heavy';
+type InitStrategy = 'current' | 'midpoint' | 'protein_heavy' | 'carb_heavy' | 'fat_heavy';
 
 function initializePortionsWithStrategy(
   items: SolverItem[],
@@ -861,6 +905,18 @@ function initializePortionsWithStrategy(
             grams = Math.round(min + (max - min) * 0.75);
           } else if (item.category === 'protein') {
             grams = Math.round(min + (max - min) * 0.25);
+          } else {
+            grams = Math.round((min + max) / 2);
+          }
+          break;
+        case 'fat_heavy':
+          // Fat sources at max, protein/carb items at lower range
+          if (item.nutritionPer100g.fat > 5) {
+            // High-fat item — push to max
+            grams = max;
+          } else if (item.category === 'protein') {
+            // Reduce protein to compensate calories
+            grams = Math.round(min + (max - min) * 0.3);
           } else {
             grams = Math.round((min + max) / 2);
           }
@@ -1054,8 +1110,8 @@ function runGradientSolve(
     };
   });
 
-  // Macro weights matching calculateNetError
-  const W = { cal: 1, pro: 10, carb: 8, fat: 10 };
+  // Macro weights — ALL macros equal priority
+  const W = { cal: 1, pro: 10, carb: 10, fat: 10 };
 
   // Collect ALL valid candidates for funnel selection (no early exit on perfect)
   const allCandidates: CandidatePlan[] = [];
@@ -1588,11 +1644,12 @@ export function solve(
   }
 
   const initPortfolios: Array<{ name: string; portions: Map<string, number>; iterShare: number }> = [
-    { name: 'macro_balance', portions: macroBalanceInit(items, targets, seasoningsCountMacros), iterShare: 0.30 },
-    { name: 'midpoint', portions: initializePortionsWithStrategy(items, 'midpoint'), iterShare: 0.20 },
-    { name: 'current', portions: initializePortionsWithStrategy(items, 'current'), iterShare: 0.20 },
-    { name: 'random1', portions: randomStart1, iterShare: 0.15 },
-    { name: 'random2', portions: randomStart2, iterShare: 0.15 },
+    { name: 'macro_balance', portions: macroBalanceInit(items, targets, seasoningsCountMacros), iterShare: 0.25 },
+    { name: 'fat_heavy', portions: initializePortionsWithStrategy(items, 'fat_heavy'), iterShare: 0.20 },
+    { name: 'midpoint', portions: initializePortionsWithStrategy(items, 'midpoint'), iterShare: 0.15 },
+    { name: 'current', portions: initializePortionsWithStrategy(items, 'current'), iterShare: 0.15 },
+    { name: 'random1', portions: randomStart1, iterShare: 0.125 },
+    { name: 'random2', portions: randomStart2, iterShare: 0.125 },
   ];
 
   // Greedy fallback gets whatever is left
@@ -1641,7 +1698,7 @@ export function solve(
     const currentFailure = (result as { success: false; failure: SolverFailure }).failure;
     const currentScore = Math.abs(currentFailure.targetDelta.calories) +
       Math.abs(currentFailure.targetDelta.protein) * 10 +
-      Math.abs(currentFailure.targetDelta.carbs) * 8 +
+      Math.abs(currentFailure.targetDelta.carbs) * 10 +
       Math.abs(currentFailure.targetDelta.fat) * 10;
 
     if (!bestResult) {
@@ -1652,7 +1709,7 @@ export function solve(
       const bestFailure = (bestResult as { success: false; failure: SolverFailure }).failure;
       const bestScore = Math.abs(bestFailure.targetDelta.calories) +
         Math.abs(bestFailure.targetDelta.protein) * 10 +
-        Math.abs(bestFailure.targetDelta.carbs) * 8 +
+        Math.abs(bestFailure.targetDelta.carbs) * 10 +
         Math.abs(bestFailure.targetDelta.fat) * 10;
       if (currentScore < bestScore) {
         bestResult = result;
@@ -2062,11 +2119,11 @@ export function productToSolverItem(
     eatenFactor: product.eaten_factor ?? 1,
     seasoningRatePer100g: product.seasoning_rate_per_100g ?? null,
     pairedProteinId: pairedProteinId ?? null,
+    // Auto-clamp: ensure currentGrams respects min/max constraints.
     // Seasonings start at 0 — scaleSeasonings() will set the correct proportional amount.
-    // If user explicitly saved a non-zero amount, use that (clamped to max).
     currentGrams: isSeasoning
       ? Math.min(initialGrams || 0, DEFAULT_SEASONING_MAX_GRAMS)
-      : (initialGrams > 0 ? initialGrams : (product.fixed_portion_grams ?? effectiveInitialGrams)),
+      : Math.min(Math.max(initialGrams > 0 ? initialGrams : (product.fixed_portion_grams ?? effectiveInitialGrams), minPortion), maxPortion),
     countMacros: !isSeasoning,
   };
 }
