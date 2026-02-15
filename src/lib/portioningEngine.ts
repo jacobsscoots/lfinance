@@ -1902,11 +1902,8 @@ export function productToSolverItem(
   
   const defaults = defaultConstraints[category] ?? defaultConstraints.other;
   
-  // For seasonings, use sensible initial grams if not specified
+  // For seasonings, leave at 0 — scaleSeasonings() will calculate proportionally
   let effectiveInitialGrams = initialGrams;
-  if (category === 'seasoning' && initialGrams === 0) {
-    effectiveInitialGrams = DEFAULT_SEASONING_FALLBACK_GRAMS;
-  }
   
   // ============================================================
   // FIX B0: Seasoning constraints OVERRIDE product constraints
@@ -1949,11 +1946,10 @@ export function productToSolverItem(
     eatenFactor: product.eaten_factor ?? 1,
     seasoningRatePer100g: product.seasoning_rate_per_100g ?? null,
     pairedProteinId: pairedProteinId ?? null,
-    // FIX B: For locked/fixed items, initialGrams comes from the actual DB
-    // item.quantity_grams (the user-set value). Use it as the authoritative source.
-    // Only fall back to product.fixed_portion_grams when initialGrams is 0 (FREE items).
+    // Seasonings start at 0 — scaleSeasonings() will set the correct proportional amount.
+    // If user explicitly saved a non-zero amount, use that (clamped to max).
     currentGrams: isSeasoning
-      ? Math.min(effectiveInitialGrams || (product.fixed_portion_grams ?? DEFAULT_SEASONING_FALLBACK_GRAMS), DEFAULT_SEASONING_MAX_GRAMS)
+      ? Math.min(initialGrams || 0, DEFAULT_SEASONING_MAX_GRAMS)
       : (initialGrams > 0 ? initialGrams : (product.fixed_portion_grams ?? effectiveInitialGrams)),
     countMacros: !isSeasoning,
   };

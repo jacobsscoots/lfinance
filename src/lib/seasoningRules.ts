@@ -14,8 +14,8 @@
 // Default hard cap for ALL seasonings (configurable in future)
 export const DEFAULT_SEASONING_MAX_GRAMS = 15;
 
-// Default grams for seasonings without a paired protein
-export const DEFAULT_SEASONING_FALLBACK_GRAMS = 10;
+// Default grams for seasonings without a paired protein (0 = solver calculates proportionally)
+export const DEFAULT_SEASONING_FALLBACK_GRAMS = 0;
 
 export interface SeasoningCapOptions {
   maxGrams?: number; // Default: 15g

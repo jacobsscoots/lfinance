@@ -99,15 +99,15 @@ export function MealItemDialog({
       if (selectedProduct.product_type === "fixed" && selectedProduct.fixed_portion_grams) {
         setQuantity(String(selectedProduct.fixed_portion_grams));
       } else if (isSeasoning) {
-        // Seasonings default to fallback grams (5g) in target mode
-        setQuantity(String(DEFAULT_SEASONING_FALLBACK_GRAMS));
+        // Seasonings default to 0 — solver calculates proportionally to protein
+        setQuantity("0");
       } else {
         // Otherwise default to 0 - will be calculated via Generate button
         setQuantity("0");
       }
     } else if (selectedProduct && !isTargetMode && !manualOverride) {
-      // Manual mode: seasonings get 5g, others get 100g
-      setQuantity(isSeasoning ? String(DEFAULT_SEASONING_FALLBACK_GRAMS) : "100");
+      // Manual mode: seasonings default to 0 (auto-calculated), others get 100g
+      setQuantity(isSeasoning ? "0" : "100");
     }
   }, [selectedProduct, isTargetMode, manualOverride, isSeasoning]);
 
