@@ -14,10 +14,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Package, Scale, AlertTriangle, Target, Zap } from "lucide-react";
 import { Product, MealEligibility } from "@/hooks/useProducts";
 import { MealType, MealPlanItem, useMealPlanItems } from "@/hooks/useMealPlanItems";
+import { format } from "date-fns";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { 
   calculateSingleItemPortion, 
   isProductAllowedForMeal,
+  isProductAllowedForDay,
   PortioningSettings,
   DEFAULT_PORTIONING_SETTINGS 
 } from "@/lib/autoPortioning";
@@ -58,10 +60,17 @@ export function MealItemDialog({
     ? shouldCapAsSeasoning(selectedProduct.food_type, selectedProduct.name, selectedProduct.food_type)
     : false;
   
-  // Check if product is allowed for this meal
+  // Check if product is allowed for this meal type
   const isAllowedForMeal = selectedProduct 
     ? isProductAllowedForMeal(selectedProduct, mealType)
     : true;
+  
+  // Check if product is allowed for this day of the week
+  const isAllowedForDay = selectedProduct && planDate
+    ? isProductAllowedForDay(selectedProduct, planDate)
+    : true;
+  
+  const isFullyAllowed = isAllowedForMeal && isAllowedForDay;
 
   // Get portioning settings from user settings
   const portioningSettings: PortioningSettings = useMemo(() => ({
@@ -152,8 +161,8 @@ export function MealItemDialog({
   const handleSubmit = async () => {
     if (!selectedProductId) return;
     
-    // Block if product not allowed for this meal
-    if (!isAllowedForMeal) return;
+    // Block if product not allowed for this meal or day
+    if (!isFullyAllowed) return;
 
     // In target mode, allow 0g (will be calculated via Generate)
     // In manual mode, require > 0
@@ -183,13 +192,17 @@ export function MealItemDialog({
   // Filter and sort products - show eligible first
   const sortedProducts = useMemo(() => {
     return [...products].sort((a, b) => {
-      const aAllowed = isProductAllowedForMeal(a, mealType);
-      const bAllowed = isProductAllowedForMeal(b, mealType);
+      const aAllowedMeal = isProductAllowedForMeal(a, mealType);
+      const bAllowedMeal = isProductAllowedForMeal(b, mealType);
+      const aAllowedDay = planDate ? isProductAllowedForDay(a, planDate) : true;
+      const bAllowedDay = planDate ? isProductAllowedForDay(b, planDate) : true;
+      const aAllowed = aAllowedMeal && aAllowedDay;
+      const bAllowed = bAllowedMeal && bAllowedDay;
       if (aAllowed && !bAllowed) return -1;
       if (!aAllowed && bAllowed) return 1;
       return a.name.localeCompare(b.name);
     });
-  }, [products, mealType]);
+  }, [products, mealType, planDate]);
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -220,7 +233,14 @@ export function MealItemDialog({
                   </div>
                 ) : (
                   sortedProducts.map(product => {
-                    const allowed = isProductAllowedForMeal(product, mealType);
+                    const allowedMeal = isProductAllowedForMeal(product, mealType);
+                    const allowedDay = planDate ? isProductAllowedForDay(product, planDate) : true;
+                    const allowed = allowedMeal && allowedDay;
+                    const disabledLabel = !allowedMeal
+                      ? `Not for ${mealLabels[mealType]}`
+                      : !allowedDay && planDate
+                      ? `${((product as any).day_eligibility as string[])?.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(", ")} only`
+                      : null;
                     return (
                       <SelectItem 
                         key={product.id} 
@@ -237,9 +257,9 @@ export function MealItemDialog({
                           <span className="text-muted-foreground">
                             ({product.calories_per_100g} kcal/100g)
                           </span>
-                          {!allowed && (
+                          {disabledLabel && (
                             <Badge variant="outline" className="text-xs ml-1">
-                              Not for {mealLabels[mealType]}
+                              {disabledLabel}
                             </Badge>
                           )}
                         </div>
@@ -264,7 +284,19 @@ export function MealItemDialog({
             </Alert>
           )}
 
-          {selectedProduct && isAllowedForMeal && (
+          {/* Show warning if product not allowed for this day */}
+          {selectedProduct && isAllowedForMeal && !isAllowedForDay && planDate && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>{selectedProduct.name}</strong> is only allowed on{" "}
+                {((selectedProduct as any).day_eligibility as string[])?.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")}.
+                {" "}{format(planDate, "EEEE")} is not an allowed day.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {selectedProduct && isFullyAllowed && (
             <>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -367,7 +399,7 @@ export function MealItemDialog({
               disabled={
                 !selectedProductId || 
                 addItem.isPending || 
-                !isAllowedForMeal ||
+                !isFullyAllowed ||
                 (!isTargetMode && effectiveQuantity <= 0)
               }
             >

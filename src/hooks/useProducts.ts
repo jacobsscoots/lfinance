@@ -47,6 +47,7 @@ export interface Product {
   storage_notes: string | null;
   // Meal planning fields
   meal_eligibility: MealEligibility[];
+  day_eligibility: string[] | null;
   food_type: FoodType;
   // Inventory tracking
   quantity_on_hand: number | null;
@@ -111,6 +112,7 @@ export interface ProductFormData {
   storage_notes?: string | null;
   // Meal planning fields
   meal_eligibility?: MealEligibility[];
+  day_eligibility?: string[] | null;
   food_type?: FoodType;
   // Portioning engine fields (V2)
   editable_mode?: EditableMode;

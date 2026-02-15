@@ -2614,6 +2614,7 @@ export type Database = {
           carbs_per_100g: number
           created_at: string
           current_weight_grams: number | null
+          day_eligibility: string[] | null
           default_discount_type: string | null
           default_unit_type: string
           eaten_factor: number
@@ -2665,6 +2666,7 @@ export type Database = {
           carbs_per_100g?: number
           created_at?: string
           current_weight_grams?: number | null
+          day_eligibility?: string[] | null
           default_discount_type?: string | null
           default_unit_type?: string
           eaten_factor?: number
@@ -2716,6 +2718,7 @@ export type Database = {
           carbs_per_100g?: number
           created_at?: string
           current_weight_grams?: number | null
+          day_eligibility?: string[] | null
           default_discount_type?: string | null
           default_unit_type?: string
           eaten_factor?: number
