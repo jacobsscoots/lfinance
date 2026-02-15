@@ -103,8 +103,8 @@ export function MealItemMultiSelectDialog({
         if (product.product_type === "fixed" && product.fixed_portion_grams) {
           quantity = product.fixed_portion_grams;
         } else if (isSeasoning) {
-          // Seasonings always get fallback grams (Fix B3)
-          quantity = DEFAULT_SEASONING_FALLBACK_GRAMS;
+          // Seasonings default to 0 — solver calculates proportionally to protein
+          quantity = 0;
         } else if (isTargetMode) {
           quantity = 0;
         }

@@ -325,8 +325,8 @@ describe('validateProductNutrition', () => {
 });
 
 describe('DEFAULT_SEASONING_FALLBACK_GRAMS', () => {
-  it('is a sensible small value', () => {
-    expect(DEFAULT_SEASONING_FALLBACK_GRAMS).toBe(5);
+  it('is zero so solver calculates proportionally', () => {
+    expect(DEFAULT_SEASONING_FALLBACK_GRAMS).toBe(0);
     expect(DEFAULT_SEASONING_FALLBACK_GRAMS).toBeLessThanOrEqual(DEFAULT_SEASONING_MAX_GRAMS);
   });
 });
