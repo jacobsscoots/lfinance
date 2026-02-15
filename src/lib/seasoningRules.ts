@@ -15,7 +15,7 @@
 export const DEFAULT_SEASONING_MAX_GRAMS = 15;
 
 // Default grams for seasonings without a paired protein
-export const DEFAULT_SEASONING_FALLBACK_GRAMS = 5;
+export const DEFAULT_SEASONING_FALLBACK_GRAMS = 10;
 
 export interface SeasoningCapOptions {
   maxGrams?: number; // Default: 15g
