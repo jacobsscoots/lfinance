@@ -1244,6 +1244,27 @@ export type Database = {
           },
         ]
       }
+      easysaver_balance: {
+        Row: {
+          card_balance: number
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          card_balance?: number
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          card_balance?: number
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_tracking_extractions: {
         Row: {
           created_at: string
