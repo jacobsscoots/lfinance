@@ -1196,9 +1196,36 @@ export function ProductSettings() {
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {product.calories_per_100g} kcal | P: {product.protein_per_100g}g | C: {product.carbs_per_100g}g | F: {product.fat_per_100g}g
-                    {product.pack_size_grams && ` | Pack: ${product.pack_size_grams}g`}
-                    {product.price > 0 && ` | £${product.price.toFixed(2)}`}
+                    {(() => {
+                      const isFixed = product.product_type === "fixed";
+                      const servingGrams = isFixed
+                        ? product.pack_size_grams || product.fixed_portion_grams
+                        : product.serving_size_grams || product.fixed_portion_grams;
+                      
+                      if (!servingGrams) {
+                        // Fallback: per 100g
+                        return (
+                          <>
+                            <span className="text-muted-foreground/70">per 100g</span>
+                            {" · "}{Math.round(product.calories_per_100g)} kcal · P: {product.protein_per_100g.toFixed(1)}g · C: {product.carbs_per_100g.toFixed(1)}g · F: {product.fat_per_100g.toFixed(1)}g
+                          </>
+                        );
+                      }
+                      
+                      const factor = servingGrams / 100;
+                      const cal = Math.round(product.calories_per_100g * factor);
+                      const pro = (product.protein_per_100g * factor).toFixed(1);
+                      const carb = (product.carbs_per_100g * factor).toFixed(1);
+                      const fat = (product.fat_per_100g * factor).toFixed(1);
+                      
+                      return (
+                        <>
+                          {servingGrams}g · {cal} kcal · P: {pro}g · C: {carb}g · F: {fat}g
+                        </>
+                      );
+                    })()}
+                    {product.pack_size_grams && ` · Pack: ${product.pack_size_grams}g`}
+                    {product.price > 0 && ` · £${product.price.toFixed(2)}`}
                     {product.offer_price && (
                       <span className="text-primary"> (£{product.offer_price.toFixed(2)} offer)</span>
                     )}
