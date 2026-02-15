@@ -55,6 +55,7 @@ const productSchema = z.object({
   storage_notes: z.string().max(500).optional().nullable(),
   // Meal planning
   meal_eligibility: z.array(z.enum(["breakfast", "lunch", "dinner", "snack"])),
+  day_eligibility: z.array(z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])),
   food_type: z.enum(["protein", "carb", "fat", "veg", "fruit", "dairy", "sauce", "treat", "other"]),
   // V2 Portioning fields
   editable_mode: z.enum(["LOCKED", "BOUNDED", "FREE"]),
@@ -107,6 +108,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
     image_url: "",
     storage_notes: "",
     meal_eligibility: ["breakfast", "lunch", "dinner", "snack"] as MealEligibility[],
+    day_eligibility: [] as ("monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday")[],
     food_type: "other" as FoodType,
     // V2 Portioning defaults
     editable_mode: "FREE" as const,
@@ -154,6 +156,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
         image_url: product.image_url || "",
         storage_notes: product.storage_notes || "",
         meal_eligibility: product.meal_eligibility || ["breakfast", "lunch", "dinner", "snack"],
+        day_eligibility: (product.day_eligibility || []) as ("monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday")[],
         food_type: (product.food_type as FoodType) || "other",
         // V2 Portioning fields
         editable_mode: (product.editable_mode as "LOCKED" | "BOUNDED" | "FREE") || "FREE",
@@ -284,6 +287,7 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
       image_url: values.image_url || null,
       storage_notes: values.storage_notes || null,
       meal_eligibility: values.meal_eligibility,
+      day_eligibility: values.day_eligibility.length > 0 ? values.day_eligibility : null,
       food_type: values.food_type,
       // V2 Portioning fields
       editable_mode: values.editable_mode,
@@ -881,6 +885,39 @@ function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogPro
                               }}
                             />
                             <span className="text-sm capitalize">{meal}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="day_eligibility"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Allowed Days</FormLabel>
+                      <FormDescription>
+                        Restrict to specific days? Leave all unchecked for every day.
+                      </FormDescription>
+                      <div className="grid grid-cols-4 gap-2 mt-2">
+                        {(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const).map((day) => (
+                          <label 
+                            key={day}
+                            className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:bg-accent"
+                          >
+                            <Checkbox
+                              checked={field.value?.includes(day)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  field.onChange([...field.value, day]);
+                                } else {
+                                  field.onChange(field.value.filter((d: string) => d !== day));
+                                }
+                              }}
+                            />
+                            <span className="text-sm capitalize">{day.slice(0, 3)}</span>
                           </label>
                         ))}
                       </div>

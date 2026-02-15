@@ -97,6 +97,22 @@ export function isProductAllowedForMeal(product: Product, mealType: MealType): b
 }
 
 /**
+ * Day-of-week names matching JS getDay() index.
+ */
+const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/**
+ * Check if a product is allowed on a specific date based on day_eligibility.
+ * If day_eligibility is null/empty, product is allowed every day.
+ */
+export function isProductAllowedForDay(product: Product, date: Date): boolean {
+  const dayEligibility = (product as any).day_eligibility as string[] | null | undefined;
+  if (!dayEligibility || dayEligibility.length === 0) return true;
+  const dayName = DAY_NAMES[date.getDay()];
+  return dayEligibility.includes(dayName);
+}
+
+/**
  * Get products that are not allowed for a specific meal.
  */
 export function getIneligibleProducts(products: Product[], mealType: MealType): Product[] {

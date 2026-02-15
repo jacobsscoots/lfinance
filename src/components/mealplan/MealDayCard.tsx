@@ -618,6 +618,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
         products={products}
         weekStart={weekStart}
         existingItems={items}
+        planDate={parse(plan.meal_date, "yyyy-MM-dd", new Date())}
       />
 
       <EatingOutDialog

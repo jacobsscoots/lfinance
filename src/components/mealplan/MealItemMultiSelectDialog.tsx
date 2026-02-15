@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ import { Package, Scale, Target, ChevronDown, Check } from "lucide-react";
 import { Product } from "@/hooks/useProducts";
 import { MealType, MealPlanItem, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
-import { isProductAllowedForMeal } from "@/lib/autoPortioning";
+import { isProductAllowedForMeal, isProductAllowedForDay } from "@/lib/autoPortioning";
 import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ interface MealItemMultiSelectDialogProps {
   products: Product[];
   weekStart: Date;
   existingItems?: MealPlanItem[];
+  planDate?: Date;
 }
 
 const MEAL_LABELS: Record<MealType, string> = {
@@ -45,6 +47,7 @@ export function MealItemMultiSelectDialog({
   products,
   weekStart,
   existingItems = [],
+  planDate,
 }: MealItemMultiSelectDialogProps) {
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -56,13 +59,17 @@ export function MealItemMultiSelectDialog({
   // Filter and sort products - show eligible first, then by name
   const sortedProducts = useMemo(() => {
     return [...products].sort((a, b) => {
-      const aAllowed = isProductAllowedForMeal(a, mealType);
-      const bAllowed = isProductAllowedForMeal(b, mealType);
+      const aAllowedMeal = isProductAllowedForMeal(a, mealType);
+      const bAllowedMeal = isProductAllowedForMeal(b, mealType);
+      const aAllowedDay = planDate ? isProductAllowedForDay(a, planDate) : true;
+      const bAllowedDay = planDate ? isProductAllowedForDay(b, planDate) : true;
+      const aAllowed = aAllowedMeal && aAllowedDay;
+      const bAllowed = bAllowedMeal && bAllowedDay;
       if (aAllowed && !bAllowed) return -1;
       if (!aAllowed && bAllowed) return 1;
       return a.name.localeCompare(b.name);
     });
-  }, [products, mealType]);
+  }, [products, mealType, planDate]);
 
   // Get IDs of products already in this meal
   const existingProductIds = useMemo(() => {
@@ -175,9 +182,17 @@ export function MealItemMultiSelectDialog({
                     <CommandEmpty>No products found.</CommandEmpty>
                     <CommandGroup>
                       {sortedProducts.map(product => {
-                        const isAllowed = isProductAllowedForMeal(product, mealType);
+                        const isAllowedMeal = isProductAllowedForMeal(product, mealType);
+                        const isAllowedDay = planDate ? isProductAllowedForDay(product, planDate) : true;
+                        const isAllowed = isAllowedMeal && isAllowedDay;
                         const isSelected = selectedProductIds.has(product.id);
                         const alreadyExists = existingProductIds.has(product.id);
+
+                        const disabledReason = !isAllowedMeal
+                          ? `Not for ${MEAL_LABELS[mealType]}`
+                          : !isAllowedDay && planDate
+                          ? `${((product as any).day_eligibility as string[])?.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} only`
+                          : null;
 
                         return (
                           <CommandItem
@@ -214,9 +229,9 @@ export function MealItemMultiSelectDialog({
                                 Added
                               </Badge>
                             )}
-                            {!isAllowed && !alreadyExists && (
+                            {disabledReason && !alreadyExists && (
                               <Badge variant="outline" className="text-[10px] shrink-0">
-                                Not for {MEAL_LABELS[mealType]}
+                                {disabledReason}
                               </Badge>
                             )}
                           </CommandItem>
