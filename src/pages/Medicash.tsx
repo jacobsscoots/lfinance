@@ -67,7 +67,7 @@ export default function Medicash() {
     <AppLayout>
       <div className="space-y-6 pb-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <HeartPulse className="h-6 w-6 text-primary" />
