@@ -2967,6 +2967,38 @@ export type Database = {
           },
         ]
       }
+      shop_list_collected: {
+        Row: {
+          collected_at: string
+          id: string
+          product_id: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          collected_at?: string
+          id?: string
+          product_id: string
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          collected_at?: string
+          id?: string
+          product_id?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_list_collected_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       toiletry_items: {
         Row: {
           brand: string | null
