@@ -1,15 +1,17 @@
+import { useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   Landmark, Mail, Zap, Search, TrendingUp, 
-  RefreshCw, ExternalLink, CheckCircle2, XCircle, AlertTriangle, Clock 
+  RefreshCw, CheckCircle2, XCircle, AlertTriangle, Clock 
 } from "lucide-react";
 import { useBankConnections } from "@/hooks/useBankConnections";
 import { useGmailConnection } from "@/hooks/useGmailConnection";
 import { useBrightConnection } from "@/hooks/useBrightConnection";
 import { useTrackedServices } from "@/hooks/useTrackedServices";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 type ServiceStatus = "connected" | "disconnected" | "error" | "expired";
 
@@ -21,6 +23,7 @@ interface ServiceInfo {
   details?: string;
   lastSync?: string | null;
   action?: { label: string; onClick: () => void; loading?: boolean };
+  syncKey?: string;
 }
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
@@ -38,13 +41,84 @@ function StatusBadge({ status }: { status: ServiceStatus }) {
   );
 }
 
+const COOLDOWN_SECONDS = 60;
+
 export function ServiceStatusSettings() {
   const { connections, isLoading: bankLoading, autoSync, isAutoSyncing } = useBankConnections();
   const { connection: gmail, isConnected: gmailConnected, connect: connectGmail, sync: syncGmail, isConnecting: gmailConnecting, isSyncing: gmailSyncing } = useGmailConnection();
   const { connection: bright, isConnected: brightConnected, isExpired: brightExpired, sync: syncBright, isSyncing: brightSyncing } = useBrightConnection();
   const { services: trackedServices } = useTrackedServices();
 
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const connectedBanks = connections.filter((c) => c.status === "connected");
+
+  const startCooldown = useCallback(() => {
+    setCooldownRemaining(COOLDOWN_SECONDS);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldownRemaining((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const handleRefreshAll = useCallback(async () => {
+    setIsRefreshingAll(true);
+    const results: { name: string; ok: boolean }[] = [];
+
+    // Bank sync
+    if (connectedBanks.length > 0) {
+      try {
+        await autoSync();
+        results.push({ name: "Bank Connections", ok: true });
+      } catch {
+        results.push({ name: "Bank Connections", ok: false });
+      }
+    }
+
+    // Gmail sync
+    if (gmailConnected) {
+      try {
+        await syncGmail();
+        results.push({ name: "Gmail Receipts", ok: true });
+      } catch {
+        results.push({ name: "Gmail Receipts", ok: false });
+      }
+    }
+
+    // Smart Meter sync
+    if (brightConnected && !brightExpired) {
+      try {
+        await syncBright(undefined as any);
+        results.push({ name: "Smart Meter", ok: true });
+      } catch {
+        results.push({ name: "Smart Meter", ok: false });
+      }
+    }
+
+    setIsRefreshingAll(false);
+    startCooldown();
+
+    const succeeded = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok);
+
+    if (results.length === 0) {
+      toast.info("No syncable services connected");
+    } else if (failed.length === 0) {
+      toast.success(`All ${succeeded} service${succeeded > 1 ? "s" : ""} refreshed successfully`);
+    } else {
+      toast.warning(
+        `${succeeded}/${results.length} services refreshed — ${failed.map((f) => f.name).join(", ")} failed. Try again.`
+      );
+    }
+  }, [connectedBanks.length, gmailConnected, brightConnected, brightExpired, autoSync, syncGmail, syncBright, startCooldown]);
 
   const services: ServiceInfo[] = [
     {
@@ -91,8 +165,37 @@ export function ServiceStatusSettings() {
     },
   ];
 
+  const isCoolingDown = cooldownRemaining > 0;
+  const isAnySyncing = isAutoSyncing || gmailSyncing || brightSyncing;
+
   return (
     <div className="space-y-4">
+      {/* Refresh All Button */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-medium text-sm">Refresh All Services</h3>
+              <p className="text-xs text-muted-foreground">
+                Sync all connected services in one go
+              </p>
+            </div>
+            <Button
+              onClick={handleRefreshAll}
+              disabled={isRefreshingAll || isCoolingDown || isAnySyncing}
+              className="shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshingAll ? "animate-spin" : ""}`} />
+              {isRefreshingAll
+                ? "Refreshing…"
+                : isCoolingDown
+                ? `Wait ${cooldownRemaining}s`
+                : "Refresh All"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Service Status</CardTitle>
@@ -115,7 +218,7 @@ export function ServiceStatusSettings() {
                 )}
               </div>
               {s.action && (
-                <Button variant="outline" size="sm" onClick={s.action.onClick} disabled={s.action.loading} className="shrink-0">
+                <Button variant="outline" size="sm" onClick={s.action.onClick} disabled={s.action.loading || isRefreshingAll} className="shrink-0">
                   {s.action.loading ? <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                   {s.action.label}
                 </Button>
