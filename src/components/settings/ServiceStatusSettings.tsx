@@ -96,7 +96,7 @@ export function ServiceStatusSettings() {
     // Smart Meter sync
     if (brightConnected && !brightExpired) {
       try {
-        await syncBright(undefined as any);
+        await syncBright(undefined);
         results.push({ name: "Smart Meter", ok: true });
       } catch {
         results.push({ name: "Smart Meter", ok: false });
@@ -147,7 +147,7 @@ export function ServiceStatusSettings() {
       icon: <Zap className="h-5 w-5" />,
       status: brightExpired ? "expired" : brightConnected ? "connected" : "disconnected",
       lastSync: bright?.last_synced_at,
-      action: brightConnected ? { label: "Sync", onClick: () => syncBright(undefined as any), loading: brightSyncing } : undefined,
+      action: brightConnected ? { label: "Sync", onClick: () => syncBright(undefined), loading: brightSyncing } : undefined,
     },
     {
       name: "Bill Comparison",
