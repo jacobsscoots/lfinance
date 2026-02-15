@@ -105,12 +105,31 @@ export default function Settings() {
           </p>
         </div>
 
-        <Tabs defaultValue="services" className="space-y-4">
+        <Tabs defaultValue="account" className="space-y-4">
           <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
             <TabsList className="inline-flex w-auto h-auto gap-0.5 sm:gap-1">
+              {/* ── General ── */}
+              <TabsTrigger value="account" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Account</span>
+              </TabsTrigger>
               <TabsTrigger value="services" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
                 <Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Services</span>
+              </TabsTrigger>
+              {/* ── Finance ── */}
+              <TabsTrigger value="payday" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Payday</span>
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Categories</span>
+              </TabsTrigger>
+              {/* ── Groceries ── */}
+              <TabsTrigger value="products" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
+                <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Products</span>
               </TabsTrigger>
               <TabsTrigger value="nutrition" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
                 <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
@@ -120,18 +139,7 @@ export default function Settings() {
                 <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Weekly Plan</span>
               </TabsTrigger>
-              <TabsTrigger value="products" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
-                <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Products</span>
-              </TabsTrigger>
-              <TabsTrigger value="categories" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
-                <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Categories</span>
-              </TabsTrigger>
-              <TabsTrigger value="payday" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
-                <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Payday</span>
-              </TabsTrigger>
+              {/* ── Data ── */}
               <TabsTrigger value="payslips" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
                 <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Payslips</span>
@@ -147,10 +155,6 @@ export default function Settings() {
               <TabsTrigger value="import" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
                 <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Import</span>
-              </TabsTrigger>
-              <TabsTrigger value="account" className="flex items-center gap-1.5 px-2 sm:px-3 whitespace-nowrap">
-                <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Account</span>
               </TabsTrigger>
             </TabsList>
           </div>
