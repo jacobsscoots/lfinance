@@ -76,28 +76,30 @@ describe("buildFlatSchedule", () => {
 describe("buildZigzagSchedule", () => {
   const tdee = 2500;
 
-  describe("schedule_1 (high weekend = maintenance)", () => {
-    it("has weekend at maintenance and weekdays lower", () => {
-      const schedule = buildZigzagSchedule(tdee, "mild_loss", "schedule_1");
-      // Weekend should be maintenance TDEE
-      expect(schedule.saturday).toBe(tdee);
-      expect(schedule.sunday).toBe(tdee);
-      // Weekdays should be lower
-      expect(schedule.monday).toBeLessThan(tdee);
-    });
-
-    it("maintains weekly average close to target", () => {
-      const schedule = buildZigzagSchedule(tdee, "mild_loss", "schedule_1");
-      const avg = getWeeklyAverage(schedule);
-      const target = tdee + PLAN_MODES.mild_loss.dailyCalorieAdjustment; // 2250
-      expect(Math.abs(avg - target)).toBeLessThanOrEqual(5);
-    });
-
+  describe("schedule_1 (high weekend)", () => {
     it("matches calculator.net mild loss schedule for TDEE 2086", () => {
       const schedule = buildZigzagSchedule(2086, "mild_loss", "schedule_1");
-      expect(schedule.sunday).toBe(2086);
       expect(schedule.monday).toBe(1736);
+      expect(schedule.friday).toBe(1736);
       expect(schedule.saturday).toBe(2086);
+      expect(schedule.sunday).toBe(2086);
+      expect(getWeeklyAverage(schedule)).toBe(1836);
+    });
+
+    it("matches calculator.net weight loss schedule for TDEE 2086", () => {
+      const schedule = buildZigzagSchedule(2086, "loss", "schedule_1");
+      expect(schedule.monday).toBe(1500);
+      expect(schedule.friday).toBe(1500);
+      expect(schedule.saturday).toBe(1801);
+      expect(schedule.sunday).toBe(1801);
+      expect(getWeeklyAverage(schedule)).toBe(1586);
+    });
+
+    it("maintains weekly average close to target for any TDEE", () => {
+      const schedule = buildZigzagSchedule(tdee, "mild_loss", "schedule_1");
+      const avg = getWeeklyAverage(schedule);
+      const target = tdee + PLAN_MODES.mild_loss.dailyCalorieAdjustment;
+      expect(Math.abs(avg - target)).toBeLessThanOrEqual(1);
     });
   });
 
