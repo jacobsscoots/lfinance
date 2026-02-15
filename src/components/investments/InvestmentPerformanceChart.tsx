@@ -117,7 +117,7 @@ export function InvestmentPerformanceChart({
     }
 
     // Combine historical and projection data
-    const combined = historicalValues.map(hv => ({
+    const combined: Array<{ date: string; value?: number; contributions?: number; isManual: boolean; projected?: number }> = historicalValues.map(hv => ({
       date: hv.date,
       value: hv.value,
       contributions: hv.contributions,
@@ -128,11 +128,11 @@ export function InvestmentPerformanceChart({
     projectionData.forEach(pd => {
       combined.push({
         date: pd.date,
-        value: undefined as any,
-        contributions: undefined as any,
+        value: undefined,
+        contributions: undefined,
         isManual: false,
         projected: pd.projected,
-      } as any);
+      });
     });
 
     return combined;
