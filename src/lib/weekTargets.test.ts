@@ -77,22 +77,22 @@ describe("buildZigzagSchedule", () => {
   const tdee = 2500;
 
   describe("schedule_1 (high weekend)", () => {
-    it("matches calculator.net mild loss schedule for TDEE 2086", () => {
-      const schedule = buildZigzagSchedule(2086, "mild_loss", "schedule_1");
-      expect(schedule.monday).toBe(1736);
-      expect(schedule.friday).toBe(1736);
-      expect(schedule.saturday).toBe(2086);
-      expect(schedule.sunday).toBe(2086);
-      expect(getWeeklyAverage(schedule)).toBe(1836);
+    it("matches calculator.net mild loss schedule for TDEE 2391", () => {
+      const schedule = buildZigzagSchedule(2391, "mild_loss", "schedule_1");
+      expect(schedule.monday).toBe(2041);
+      expect(schedule.friday).toBe(2041);
+      expect(schedule.saturday).toBe(2391);
+      expect(schedule.sunday).toBe(2391);
+      expect(getWeeklyAverage(schedule)).toBe(2141);
     });
 
-    it("matches calculator.net weight loss schedule for TDEE 2086", () => {
-      const schedule = buildZigzagSchedule(2086, "loss", "schedule_1");
-      expect(schedule.monday).toBe(1500);
-      expect(schedule.friday).toBe(1500);
-      expect(schedule.saturday).toBe(1801);
-      expect(schedule.sunday).toBe(1801);
-      expect(getWeeklyAverage(schedule)).toBe(1586);
+    it("matches calculator.net weight loss schedule for TDEE 2391", () => {
+      const schedule = buildZigzagSchedule(2391, "loss", "schedule_1");
+      expect(schedule.monday).toBe(1691);
+      expect(schedule.friday).toBe(1691);
+      expect(schedule.saturday).toBe(2391);
+      expect(schedule.sunday).toBe(2391);
+      expect(getWeeklyAverage(schedule)).toBe(1891);
     });
 
     it("maintains weekly average close to target for any TDEE", () => {
