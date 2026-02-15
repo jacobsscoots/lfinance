@@ -77,7 +77,7 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
       for (const { id, weight } of weightUpdates) {
         const { error } = await supabase
           .from("products")
-          .update({ current_weight_grams: weight })
+          .update({ current_weight_grams: Math.round(weight) })
           .eq("id", id);
         if (error) throw error;
         updateCount++;
@@ -107,7 +107,7 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
         const { error } = await supabase
           .from("products")
           .update({
-            quantity_on_hand: packsOnHand,
+            quantity_on_hand: Math.round(packsOnHand),
             current_weight_grams: null, // ensure pack-based calc is used
           })
           .eq("id", id);
