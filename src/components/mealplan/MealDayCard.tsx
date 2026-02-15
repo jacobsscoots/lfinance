@@ -279,42 +279,42 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
         isToday && "ring-2 ring-primary"
       )}>
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between text-sm">
-            <div>
-              <div className="font-semibold">{format(date, "EEEE")}</div>
+          <CardTitle className="flex items-center justify-between text-sm gap-1">
+            <div className="min-w-0">
+              <div className="font-semibold truncate">{format(date, "EEEE")}</div>
               <div className="text-xs font-normal text-muted-foreground">
                 {format(date, "d MMM")}
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 flex-shrink-0">
               {isTargetMode && hasItems && (
                 <>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7"
+                    className="h-6 w-6 min-w-[24px]"
                     onClick={handleAiPlan}
                     disabled={aiPlanDay.isPending}
                     title="AI Plan portions"
                   >
                     {aiPlanDay.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Sparkles className="h-4 w-4" />
+                      <Sparkles className="h-3.5 w-3.5" />
                     )}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7"
+                    className="h-6 w-6 min-w-[24px]"
                     onClick={handleGenerate}
                     disabled={recalculateDay.isPending}
                     title="Generate portions (solver)"
                   >
                     {recalculateDay.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <RefreshCw className="h-4 w-4" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                     )}
                   </Button>
                 </>
@@ -322,16 +322,16 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-6 w-6 min-w-[24px]"
                 onClick={() => setDetailModalOpen(true)}
                 title="View day details"
               >
-                <Eye className="h-4 w-4" />
+                <Eye className="h-3.5 w-3.5" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                    <MoreVertical className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="h-6 w-6 min-w-[24px]">
+                    <MoreVertical className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
