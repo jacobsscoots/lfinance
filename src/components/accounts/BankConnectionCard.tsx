@@ -130,9 +130,9 @@ export function BankConnectionCard() {
                       })()}
                       <div className="flex flex-wrap items-center gap-2 mt-1">
                         <Badge
-                          variant={connection.status === "connected" ? "default" : "secondary"}
+                          variant={connection.status === "expired" ? "destructive" : connection.status === "connected" ? "default" : "secondary"}
                         >
-                          {connection.status}
+                          {connection.status === "expired" ? "Reconnect required" : connection.status}
                         </Badge>
                         {connection.last_synced_at && (
                           <span className="text-xs text-muted-foreground">
@@ -140,6 +140,11 @@ export function BankConnectionCard() {
                           </span>
                         )}
                       </div>
+                      {connection.status === "expired" && (
+                        <p className="text-xs text-destructive mt-1">
+                          Your bank session has expired. Please reconnect to resume automatic syncing.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
