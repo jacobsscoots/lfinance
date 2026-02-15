@@ -35,10 +35,9 @@ export function NotificationSettingsCard() {
       },
       {
         onSettled: () => {
-          // Allow useEffect to sync again after mutation completes
           setHasTouched(false);
         },
-      } as any,
+      },
     );
   };
 
