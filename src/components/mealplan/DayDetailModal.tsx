@@ -95,16 +95,18 @@ export function DayDetailModal({
   const carbDiff = Math.abs(uiTotals.carbs - targets.carbs);
   const fatDiff = Math.abs(uiTotals.fat - targets.fat);
   
-  // Success = all macros within tolerance (±1g for P/C/F, <5 kcal for calories)
-  const macrosWithinTolerance = calDiff < 5 && proDiff <= 1 && carbDiff <= 1 && fatDiff <= 1;
+  // Success = all macros within realistic portioning tolerance (±3g for P/C/F, ±50 kcal for calories)
+  const CAL_TOLERANCE = 50;
+  const MACRO_TOLERANCE = 3;
+  const macrosWithinTolerance = calDiff <= CAL_TOLERANCE && proDiff <= MACRO_TOLERANCE && carbDiff <= MACRO_TOLERANCE && fatDiff <= MACRO_TOLERANCE;
   const hasItems = items.length > 0;
   
   // Build specific failure messages for clarity
   const failedMacros: string[] = [];
-  if (proDiff > 1) failedMacros.push(`Protein: ${Math.round(uiTotals.protein - targets.protein) >= 0 ? '+' : ''}${Math.round(uiTotals.protein - targets.protein)}g`);
-  if (carbDiff > 1) failedMacros.push(`Carbs: ${Math.round(uiTotals.carbs - targets.carbs) >= 0 ? '+' : ''}${Math.round(uiTotals.carbs - targets.carbs)}g`);
-  if (fatDiff > 1) failedMacros.push(`Fat: ${Math.round(uiTotals.fat - targets.fat) >= 0 ? '+' : ''}${Math.round(uiTotals.fat - targets.fat)}g`);
-  if (calDiff >= 5) failedMacros.push(`Calories: ${Math.round(uiTotals.calories - targets.calories) >= 0 ? '+' : ''}${Math.round(uiTotals.calories - targets.calories)}`);
+  if (proDiff > MACRO_TOLERANCE) failedMacros.push(`Protein: ${Math.round(uiTotals.protein - targets.protein) >= 0 ? '+' : ''}${Math.round(uiTotals.protein - targets.protein)}g`);
+  if (carbDiff > MACRO_TOLERANCE) failedMacros.push(`Carbs: ${Math.round(uiTotals.carbs - targets.carbs) >= 0 ? '+' : ''}${Math.round(uiTotals.carbs - targets.carbs)}g`);
+  if (fatDiff > MACRO_TOLERANCE) failedMacros.push(`Fat: ${Math.round(uiTotals.fat - targets.fat) >= 0 ? '+' : ''}${Math.round(uiTotals.fat - targets.fat)}g`);
+  if (calDiff > CAL_TOLERANCE) failedMacros.push(`Calories: ${Math.round(uiTotals.calories - targets.calories) >= 0 ? '+' : ''}${Math.round(uiTotals.calories - targets.calories)}`);
 
   // Portioning settings info (not used in UI but kept for future)
   const portioningSettings = {
@@ -310,7 +312,7 @@ export function DayDetailModal({
                   {macrosWithinTolerance ? (
                     <span className="flex items-center gap-2">
                       <span className="font-semibold">✓ Targets achieved</span>
-                      <span className="text-muted-foreground">— all macros within ±1g tolerance</span>
+                      <span className="text-muted-foreground">— all macros within tolerance (±{MACRO_TOLERANCE}g / ±{CAL_TOLERANCE} kcal)</span>
                     </span>
                   ) : (
                     <div className="space-y-1">
