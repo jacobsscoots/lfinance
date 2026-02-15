@@ -209,6 +209,14 @@ export default function Groceries() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
+            <TabsTrigger value="toiletries" className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">Toiletries</span>
+            </TabsTrigger>
+            <TabsTrigger value="laundry" className="flex items-center gap-2">
+              <WashingMachine className="h-4 w-4" />
+              <span className="hidden sm:inline">Laundry</span>
+            </TabsTrigger>
             <TabsTrigger value="shop-list" className="flex items-center gap-2">
               <ShoppingCart className="h-4 w-4" />
               <span className="hidden sm:inline">Shop List</span>
@@ -220,14 +228,6 @@ export default function Groceries() {
             <TabsTrigger value="summary" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Summary</span>
-            </TabsTrigger>
-            <TabsTrigger value="toiletries" className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
-              <span className="hidden sm:inline">Toiletries</span>
-            </TabsTrigger>
-            <TabsTrigger value="laundry" className="flex items-center gap-2">
-              <WashingMachine className="h-4 w-4" />
-              <span className="hidden sm:inline">Laundry</span>
             </TabsTrigger>
           </TabsList>
 
