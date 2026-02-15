@@ -176,10 +176,10 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
                 return (
                   <div
                     key={product.id}
-                    className="flex items-center gap-3 rounded-lg border p-3"
+                    className="rounded-lg border p-3 space-y-2"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate text-sm">{product.name}</div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm leading-tight">{product.name}</div>
                       <div className="text-xs text-muted-foreground">
                         {portionG}g per {unitLabel}
                         {currentUnits > 0 && (
@@ -187,25 +187,26 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2">
                       <div className="relative w-20">
                         <Input
                           type="number"
                           min="0"
                           step="1"
+                          inputMode="numeric"
                           placeholder="Qty"
                           value={inputVal}
                           onChange={(e) => handleUnitChange(product.id, e.target.value)}
                           className="text-sm h-9"
                         />
                       </div>
-                      <span className="text-xs text-muted-foreground w-14 truncate">
+                      <span className="text-xs text-muted-foreground">
                         {unitLabel}s
                       </span>
                       {totalGrams != null && (
                         <Badge
                           variant="default"
-                          className="min-w-[60px] justify-center text-xs"
+                          className="min-w-[50px] justify-center text-xs"
                         >
                           {Math.round(totalGrams)}g
                         </Badge>
@@ -235,10 +236,10 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
                 return (
                   <div
                     key={product.id}
-                    className="flex items-center gap-3 rounded-lg border p-3"
+                    className="rounded-lg border p-3 space-y-2"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate text-sm">{product.name}</div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm leading-tight">{product.name}</div>
                       <div className="text-xs text-muted-foreground">
                         Packaging: {product.packaging_weight_grams}g
                         {product.current_weight_grams != null && (
@@ -246,12 +247,13 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2">
                       <div className="relative w-24">
                         <Input
                           type="number"
                           min="0"
                           step="1"
+                          inputMode="numeric"
                           placeholder="Weight"
                           value={inputVal}
                           onChange={(e) => handleWeightChange(product.id, e.target.value)}
@@ -264,7 +266,7 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
                       {usable != null && (
                         <Badge
                           variant={usable > 0 ? "default" : "secondary"}
-                          className="min-w-[60px] justify-center text-xs"
+                          className="min-w-[50px] justify-center text-xs"
                         >
                           {usable}g left
                         </Badge>
