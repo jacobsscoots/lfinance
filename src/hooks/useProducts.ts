@@ -189,6 +189,8 @@ export function useProducts() {
         fibre_per_100g: convertToPerHundredGrams(formData.fibre_per_100g || 0, basis, servingSize),
         protein_per_100g: convertToPerHundredGrams(formData.protein_per_100g, basis, servingSize),
         salt_per_100g: convertToPerHundredGrams(formData.salt_per_100g || 0, basis, servingSize),
+        // After conversion, values are per-100g — store basis as per_100g to prevent double-conversion on re-edit
+        serving_basis: "per_100g" as ServingBasis,
       };
 
       const { data, error } = await supabase
@@ -228,6 +230,8 @@ export function useProducts() {
         fibre_per_100g: convertToPerHundredGrams(formData.fibre_per_100g || 0, basis, servingSize),
         protein_per_100g: convertToPerHundredGrams(formData.protein_per_100g, basis, servingSize),
         salt_per_100g: convertToPerHundredGrams(formData.salt_per_100g || 0, basis, servingSize),
+        // After conversion, values are per-100g — store basis as per_100g to prevent double-conversion on re-edit
+        serving_basis: "per_100g" as ServingBasis,
       };
 
       const { data, error } = await supabase
