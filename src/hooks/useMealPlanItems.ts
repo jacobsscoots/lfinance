@@ -10,7 +10,7 @@ import { getDailyTargets, WeeklyTargetsOverride } from "@/lib/dailyTargets";
 // Legacy import for fallback (deprecated)
 import { PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
 // V2 portioning engine (new)
-import { solve, productToSolverItem } from "@/lib/portioningEngine";
+import { solve, productToSolverItem, generateFixSuggestions } from "@/lib/portioningEngine";
 import { SolverItem, SolverTargets, DEFAULT_SOLVER_OPTIONS, MealType as SolverMealType, SolverFailed } from "@/lib/portioningTypes";
 import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
 
@@ -761,39 +761,76 @@ export function useMealPlanItems(weekStart: Date) {
       });
 
       // ==============================================================
-      // STRICT MODE: On failure, return diagnostics. Do NOT write to DB.
+      // BEST-EFFORT MODE: On failure, save best-effort portions and
+      // return actionable diagnostics + suggestions.
       // ==============================================================
       if (!result.success) {
         const failedResult = result as SolverFailed;
         const failure = failedResult.failure;
         const t = failure.closestTotals;
         const d = failure.targetDelta;
+        const bestEffortPortions = failedResult.bestEffortPortions;
+
+        // Generate actionable fix suggestions
+        const suggestions = bestEffortPortions 
+          ? generateFixSuggestions(solverItems, bestEffortPortions, solverTargets, DEFAULT_SOLVER_OPTIONS.tolerances)
+          : [];
 
         const diagnostics: string[] = [];
         if (failure.reason === 'impossible_targets') {
-          diagnostics.push("Can't solve with current foods: targets are impossible with these items and constraints.");
+          diagnostics.push("Targets not achievable with current food selection.");
         } else if (failure.reason === 'no_adjustable_items') {
-          diagnostics.push("Can't solve: all items are fixed/locked — no adjustable portions.");
+          diagnostics.push("All items are fixed/locked — no adjustable portions.");
         } else {
-          diagnostics.push("Can't solve: could not find portions within tolerance (P/C ≥target +2g, fat -1/+2g, cal ±50).");
+          diagnostics.push("Could not find portions within tolerance.");
         }
         diagnostics.push(
-          `Closest achievable: ${t.calories}kcal, ${t.protein}g P, ${t.carbs}g C, ${t.fat}g F`
+          `Closest: ${t.calories}kcal (${d.calories > 0 ? '+' : ''}${d.calories}), ` +
+          `${t.protein}g P, ${t.carbs}g C, ${t.fat}g F`
         );
-        diagnostics.push(
-          `Off by: P ${d.protein > 0 ? '+' : ''}${d.protein}g, C ${d.carbs > 0 ? '+' : ''}${d.carbs}g, F ${d.fat > 0 ? '+' : ''}${d.fat}g, Cal ${d.calories > 0 ? '+' : ''}${d.calories}`
-        );
-        if (failure.blockers.length > 0) {
-          diagnostics.push(
-            "Blockers: " + failure.blockers.slice(0, 3).map(b => b.detail || `${b.itemName}: ${b.constraint}`).join("; ")
-          );
+
+        // Save best-effort portions to DB so the user sees something useful
+        let updated = 0;
+        const removedItems: string[] = [];
+        if (bestEffortPortions) {
+          for (const item of items) {
+            if (item.is_locked) continue;
+            if (item.product?.product_type === "fixed") continue;
+
+            const newGrams = bestEffortPortions.get(item.id);
+            
+            // Auto-remove 0g items (solver couldn't use them)
+            if (newGrams !== undefined && newGrams === 0 && item.product?.product_type === "editable") {
+              const { error } = await supabase
+                .from("meal_plan_items")
+                .delete()
+                .eq("id", item.id)
+                .eq("user_id", user.id);
+              if (!error) removedItems.push(item.product?.name ?? item.id);
+              continue;
+            }
+            
+            if (newGrams !== undefined && newGrams > 0) {
+              const { error } = await supabase
+                .from("meal_plan_items")
+                .update({ quantity_grams: newGrams })
+                .eq("id", item.id)
+                .eq("user_id", user.id);
+              if (!error) updated++;
+            }
+          }
         }
 
-        // Return failure WITHOUT writing anything to DB.
+        if (removedItems.length > 0) {
+          diagnostics.push(`Removed ${removedItems.length} unused item(s): ${removedItems.join(", ")}`);
+        }
+
         return {
           success: false as const,
-          updated: 0,
+          bestEffort: true,
+          updated,
           warnings: diagnostics,
+          suggestions: suggestions.map(s => s.message),
         };
       }
 
@@ -804,6 +841,17 @@ export function useMealPlanItems(weekStart: Date) {
         if (item.product?.product_type === "fixed") continue;
 
         const newGrams = result.portions.get(item.id);
+        
+        // Auto-remove 0g items
+        if (newGrams !== undefined && newGrams === 0 && item.product?.product_type === "editable") {
+          await supabase
+            .from("meal_plan_items")
+            .delete()
+            .eq("id", item.id)
+            .eq("user_id", user.id);
+          continue;
+        }
+        
         if (newGrams !== undefined && newGrams > 0) {
           const { error } = await supabase
             .from("meal_plan_items")
@@ -818,20 +866,22 @@ export function useMealPlanItems(weekStart: Date) {
 
       return {
         success: true as const,
+        bestEffort: false,
         updated,
         warnings: result.warnings ?? [],
+        suggestions: [] as string[],
       };
     },
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
+      setLastCalculated(new Date());
+      
       if (result.success) {
-        queryClient.invalidateQueries({ queryKey: ["meal-plans"] });
-        setLastCalculated(new Date());
         toast.success(`Generated portions (${result.updated} items within tolerance)`);
-      } else {
-        // FAIL: Nothing was written to DB. Show clear error.
-        toast.error(result.warnings?.[0] ?? "Can't solve with current foods.");
-        if (result.warnings && result.warnings.length > 1) {
-          toast.info(result.warnings.slice(1, 3).join(" | "), { duration: 8000 });
+      } else if (result.bestEffort) {
+        toast.warning("Best-effort plan saved — targets not fully achievable with current items.", { duration: 5000 });
+        if (result.warnings && result.warnings.length > 0) {
+          toast.info(result.warnings[0], { duration: 8000 });
         }
       }
     },
@@ -888,17 +938,38 @@ export function useMealPlanItems(weekStart: Date) {
         });
 
         // ==============================================================
-        // STRICT MODE: On failure, skip DB write for this day.
+        // BEST-EFFORT MODE: On failure, save best-effort and continue.
         // ==============================================================
         if (!result.success) {
-          failedCount++;
-          const failure = (result as SolverFailed).failure;
+          const failedResult = result as SolverFailed;
+          const failure = failedResult.failure;
           const t = failure.closestTotals;
           const d = failure.targetDelta;
+          const bestEffortPortions = failedResult.bestEffortPortions;
+          
+          // Save best-effort portions
+          if (bestEffortPortions) {
+            for (const item of items) {
+              if (item.is_locked) continue;
+              if (item.product?.product_type === 'fixed') continue;
+              const newGrams = bestEffortPortions.get(item.id);
+              // Auto-remove 0g items
+              if (newGrams !== undefined && newGrams === 0 && item.product?.product_type === "editable") {
+                await supabase.from("meal_plan_items").delete().eq("id", item.id).eq("user_id", user.id);
+                continue;
+              }
+              if (newGrams !== undefined && newGrams > 0) {
+                await supabase.from("meal_plan_items").update({ quantity_grams: newGrams }).eq("id", item.id).eq("user_id", user.id);
+                totalUpdated++;
+              }
+            }
+          }
+          
+          failedCount++;
           dayWarnings.push({
             date: plan.meal_date,
             warnings: [
-              `Can't solve: P ${d.protein > 0 ? '+' : ''}${d.protein}g, ` +
+              `Best-effort: P ${d.protein > 0 ? '+' : ''}${d.protein}g, ` +
               `C ${d.carbs > 0 ? '+' : ''}${d.carbs}g, ` +
               `F ${d.fat > 0 ? '+' : ''}${d.fat}g, ` +
               `Cal ${d.calories > 0 ? '+' : ''}${d.calories}`,
@@ -906,7 +977,7 @@ export function useMealPlanItems(weekStart: Date) {
             ],
             failed: true,
           });
-          continue; // SKIP DB write for failed days
+          continue;
         }
 
         // SUCCESS: write solver portions to DB (skip fixed/locked — they are constants)
@@ -916,6 +987,11 @@ export function useMealPlanItems(weekStart: Date) {
           if (item.product?.product_type === 'fixed') continue;
 
           const newGrams = result.portions.get(item.id);
+          // Auto-remove 0g items
+          if (newGrams !== undefined && newGrams === 0 && item.product?.product_type === "editable") {
+            await supabase.from("meal_plan_items").delete().eq("id", item.id).eq("user_id", user.id);
+            continue;
+          }
           if (newGrams !== undefined && newGrams > 0) {
             const { error } = await supabase
               .from("meal_plan_items")

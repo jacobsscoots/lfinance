@@ -240,7 +240,21 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
       tolerancePercent: settings.target_tolerance_percent || DEFAULT_PORTIONING_SETTINGS.tolerancePercent,
     };
     
-    recalculateDay.mutate({ planId: plan.id, settings, portioningSettings, weeklyOverride, previousWeekOverride });
+    recalculateDay.mutate(
+      { planId: plan.id, settings, portioningSettings, weeklyOverride, previousWeekOverride },
+      {
+        onSuccess: (result) => {
+          if (result.bestEffort) {
+            setAiFailInfo({
+              failed: false,
+              bestEffort: true,
+              message: result.warnings?.join(". ") || "Closest achievable plan saved",
+              suggestions: result.suggestions?.filter((s: string) => !!s) || [],
+            });
+          }
+        },
+      }
+    );
   };
 
   const handleAiPlan = () => {

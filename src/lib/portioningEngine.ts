@@ -542,6 +542,122 @@ function collectBlockers(
 }
 
 // ============================================================================
+// ACTIONABLE FIX SUGGESTIONS
+// ============================================================================
+
+export interface SolverSuggestion {
+  type: 'swap' | 'add' | 'remove' | 'info';
+  message: string;
+}
+
+/**
+ * Generate actionable fix suggestions when the solver can't hit targets.
+ * Analyses fixed item budget, 0g items, and macro gaps to provide specific advice.
+ */
+export function generateFixSuggestions(
+  items: SolverItem[],
+  portions: Map<string, number>,
+  targets: SolverTargets,
+  tolerances: ToleranceConfig
+): SolverSuggestion[] {
+  const suggestions: SolverSuggestion[] = [];
+  const totals = sumMacros(items, portions, true);
+  const delta = calculateDelta(totals, targets);
+
+  // 1. Fixed/locked item budget analysis
+  const fixedItems = items.filter(i => i.editableMode === 'LOCKED' && i.category !== 'seasoning');
+  let fixedCalories = 0;
+  for (const item of fixedItems) {
+    const grams = portions.get(item.id) ?? item.currentGrams;
+    if (grams > 0) {
+      fixedCalories += calculateMacros(item, grams).calories;
+    }
+  }
+  
+  const fixedPct = targets.calories > 0 ? Math.round((fixedCalories / targets.calories) * 100) : 0;
+  const remainingCal = targets.calories - fixedCalories;
+  
+  if (fixedPct > 40) {
+    suggestions.push({
+      type: 'info',
+      message: `Fixed items total ${Math.round(fixedCalories)} kcal (${fixedPct}% of ${targets.calories} target), leaving only ${Math.round(remainingCal)} kcal for variable items`,
+    });
+    
+    // Find the biggest fixed item and suggest swapping it
+    let biggestFixed: { name: string; cal: number } | null = null;
+    for (const item of fixedItems) {
+      const grams = portions.get(item.id) ?? item.currentGrams;
+      const cal = calculateMacros(item, grams).calories;
+      if (!biggestFixed || cal > biggestFixed.cal) {
+        biggestFixed = { name: item.name, cal: Math.round(cal) };
+      }
+    }
+    if (biggestFixed && biggestFixed.cal > targets.calories * 0.3) {
+      suggestions.push({
+        type: 'swap',
+        message: `Swap ${biggestFixed.name} (${biggestFixed.cal} kcal) for a lower-calorie fixed meal on low-calorie days`,
+      });
+    }
+  }
+
+  // 2. Items the solver set to 0g — suggest removing
+  const zeroItems = items.filter(i => {
+    const grams = portions.get(i.id) ?? 0;
+    return grams === 0 && i.editableMode !== 'LOCKED' && i.category !== 'seasoning';
+  });
+  for (const item of zeroItems) {
+    suggestions.push({
+      type: 'remove',
+      message: `Remove ${item.name} (0g portion — not being used)`,
+    });
+  }
+
+  // 3. Macro-specific suggestions
+  if (delta.carbs < -10) {
+    // Under on carbs
+    suggestions.push({
+      type: 'add',
+      message: `Add a high-carb, low-fat item (e.g. rice, oats, fruit) to help reach carb target (${Math.abs(Math.round(delta.carbs))}g short)`,
+    });
+  }
+  
+  if (delta.protein < -10) {
+    suggestions.push({
+      type: 'add',
+      message: `Add a leaner protein source to help reach protein target (${Math.abs(Math.round(delta.protein))}g short)`,
+    });
+  }
+  
+  if (delta.fat > 10) {
+    suggestions.push({
+      type: 'swap',
+      message: `Swap a high-fat item for a leaner alternative to reduce fat (${Math.round(delta.fat)}g over target)`,
+    });
+  }
+  
+  if (delta.calories > 100) {
+    suggestions.push({
+      type: 'info',
+      message: `${Math.round(delta.calories)} kcal over target — reduce portion sizes or swap calorie-dense items for lighter alternatives`,
+    });
+  }
+
+  // 4. Items at their max portion cap that are limiting progress
+  for (const item of items) {
+    if (item.editableMode === 'LOCKED') continue;
+    const grams = portions.get(item.id) ?? 0;
+    if (item.maxPortionGrams > 0 && grams >= item.maxPortionGrams && item.nutritionPer100g.carbs > 30) {
+      suggestions.push({
+        type: 'info',
+        message: `${item.name} hit max portion (${item.maxPortionGrams}g cap from ${Math.round(item.nutritionPer100g.carbs)}g carbs/100g). Increase max_portion_grams to add more carbs`,
+      });
+    }
+  }
+
+  return suggestions;
+}
+
+// ============================================================================
 // FEASIBILITY PRE-CHECK (Fix A1)
 // ============================================================================
 

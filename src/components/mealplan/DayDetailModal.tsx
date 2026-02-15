@@ -328,13 +328,26 @@ export function DayDetailModal({
               )}
               
               <ul className="text-xs text-muted-foreground space-y-1 pl-4 list-disc">
-                <li>Calories split evenly across breakfast/lunch/dinner</li>
+                <li>Solver optimises all items simultaneously to hit day targets</li>
                 {items.some(i => i.is_locked) && (
                   <li>Locked items are not adjusted during generation</li>
                 )}
                 {items.some(i => i.product?.product_type === "fixed") && (
                   <li>Fixed-portion items use their preset gram amount</li>
                 )}
+                {(() => {
+                  const fixedItems = items.filter(i => i.is_locked || i.product?.product_type === "fixed");
+                  if (fixedItems.length === 0) return null;
+                  const fixedCals = fixedItems.reduce((sum, i) => {
+                    const cal = i.product ? (i.product.calories_per_100g * i.quantity_grams / 100) : (i.custom_calories ?? 0);
+                    return sum + cal;
+                  }, 0);
+                  const pct = targets.calories > 0 ? Math.round((fixedCals / targets.calories) * 100) : 0;
+                  if (pct > 30) {
+                    return <li className="text-amber-600 dark:text-amber-400">Fixed items use {Math.round(fixedCals)} kcal ({pct}% of {targets.calories} target)</li>;
+                  }
+                  return null;
+                })()}
               </ul>
             </div>
           </>
