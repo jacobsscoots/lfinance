@@ -28,17 +28,17 @@ export const PLAN_MODES: Record<PlanMode, PlanModeConfig> = {
   mild_loss: {
     label: "Mild Weight Loss",
     weeklyDeficitKg: 0.25,
-    dailyCalorieAdjustment: -275, // ~0.25kg/week = ~1925 kcal/week deficit ≈ 275/day
+    dailyCalorieAdjustment: -250, // 0.25kg/week ≈ 250 kcal/day deficit (matches calculator.net)
   },
   loss: {
     label: "Weight Loss",
     weeklyDeficitKg: 0.5,
-    dailyCalorieAdjustment: -550, // ~0.5kg/week = ~3850 kcal/week deficit ≈ 550/day
+    dailyCalorieAdjustment: -500, // 0.5kg/week ≈ 500 kcal/day deficit (matches calculator.net)
   },
   extreme_loss: {
     label: "Extreme Weight Loss",
     weeklyDeficitKg: 1.0,
-    dailyCalorieAdjustment: -1100, // ~1kg/week = ~7700 kcal/week deficit ≈ 1100/day
+    dailyCalorieAdjustment: -1000, // 1kg/week ≈ 1000 kcal/day deficit
   },
 };
 
@@ -104,12 +104,11 @@ export function buildZigzagSchedule(
   const weeklyTotal = targetDaily * 7;
 
   if (scheduleType === "schedule_1") {
-    // High Weekend: Sat/Sun get +15%, Mon-Fri get adjusted down
-    // Weekend total = 2 * (targetDaily * 1.15) = 2.3 * targetDaily
-    // Weekday total = weeklyTotal - weekendTotal = 7*target - 2.3*target = 4.7*target
-    // Per weekday = 4.7*target / 5 = 0.94*target
-    const highDay = Math.round(targetDaily * 1.15);
-    const lowDay = Math.round((weeklyTotal - highDay * 2) / 5);
+    // Calculator.net Schedule 1: Weekend days = maintenance TDEE,
+    // Weekdays absorb the full weekly deficit.
+    const highDay = Math.round(tdee); // maintenance on Sat + Sun
+    const weekdayTotal = weeklyTotal - highDay * 2;
+    const lowDay = Math.round(weekdayTotal / 5);
     
     return {
       monday: lowDay,
@@ -122,9 +121,6 @@ export function buildZigzagSchedule(
     };
   } else {
     // Schedule 2: Varied pattern - alternating high/low throughout week
-    // Pattern: Low, Med, Low, Med, High, High, Med
-    // Distribute: Low = target * 0.9, Med = target, High = target * 1.15
-    // Total = 2*0.9 + 3*1 + 2*1.15 = 1.8 + 3 + 2.3 = 7.1... adjust
     const low = Math.round(targetDaily * 0.85);
     const med = targetDaily;
     const high = Math.round(targetDaily * 1.15);

@@ -1,0 +1,2 @@
+ALTER TABLE user_nutrition_settings DROP CONSTRAINT IF EXISTS user_nutrition_settings_goal_type_check;
+ALTER TABLE user_nutrition_settings ADD CONSTRAINT user_nutrition_settings_goal_type_check CHECK (goal_type IN ('maintain', 'mild_loss', 'cut', 'bulk'));

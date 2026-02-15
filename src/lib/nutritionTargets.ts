@@ -9,7 +9,7 @@
 export type Sex = "male" | "female";
 export type ActivityLevel = "sedentary" | "lightly_active" | "moderately_active" | "very_active" | "extremely_active";
 export type Formula = "mifflin_st_jeor" | "harris_benedict" | "katch_mcardle";
-export type GoalType = "maintain" | "cut" | "bulk";
+export type GoalType = "maintain" | "mild_loss" | "cut" | "bulk";
 
 export interface CalculatorInput {
   age: number;            // years
@@ -55,13 +55,15 @@ export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
 
 export const GOAL_ADJUSTMENTS: Record<GoalType, number> = {
   maintain: 0,
-  cut: -300,    // 300 kcal deficit
-  bulk: 200,    // 200 kcal surplus
+  mild_loss: -250,  // 0.25 kg/week ≈ 250 kcal/day deficit
+  cut: -500,        // 0.5 kg/week ≈ 500 kcal/day deficit
+  bulk: 200,        // 200 kcal surplus
 };
 
 export const GOAL_LABELS: Record<GoalType, string> = {
   maintain: "Maintain Weight",
-  cut: "Cut (−300 kcal)",
+  mild_loss: "Mild Weight Loss (−250 kcal)",
+  cut: "Weight Loss (−500 kcal)",
   bulk: "Lean Bulk (+200 kcal)",
 };
 
