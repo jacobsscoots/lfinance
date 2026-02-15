@@ -279,14 +279,16 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
         isToday && "ring-2 ring-primary"
       )}>
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between text-sm gap-1">
-            <div className="min-w-0">
-              <div className="font-semibold truncate">{format(date, "EEEE")}</div>
-              <div className="text-xs font-normal text-muted-foreground">
-                {format(date, "d MMM")}
+          <CardTitle className="text-sm space-y-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold">{format(date, "EEEE")}</div>
+                <div className="text-xs font-normal text-muted-foreground">
+                  {format(date, "d MMM")}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-0.5 flex-shrink-0">
+            <div className="flex items-center gap-0.5 flex-wrap">
               {isTargetMode && hasItems && (
                 <>
                   <Button
