@@ -84,6 +84,7 @@ interface ToiletryFormDialogProps {
   onSubmit: (values: any) => void;
   initialData?: ToiletryItem | null;
   isLoading?: boolean;
+  section?: "toiletry" | "laundry";
 }
 
 export function ToiletryFormDialog({
@@ -92,6 +93,7 @@ export function ToiletryFormDialog({
   onSubmit,
   initialData,
   isLoading = false,
+  section = "toiletry",
 }: ToiletryFormDialogProps) {
   const isEditing = !!initialData;
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -234,6 +236,7 @@ export function ToiletryFormDialog({
     onSubmit({
       ...values,
       category: "other",
+      section,
       usage_rate_per_day,
       current_remaining,
       retailer: values.retailer === "none" ? null : values.retailer,
@@ -261,7 +264,7 @@ export function ToiletryFormDialog({
           <ResponsiveDialogHeader className="pr-8">
             <div className="flex items-center justify-between gap-4">
               <ResponsiveDialogTitle>
-                {isEditing ? "Edit Item" : "Add Toiletry Item"}
+                {isEditing ? "Edit Item" : section === "laundry" ? "Add Laundry Item" : "Add Toiletry Item"}
               </ResponsiveDialogTitle>
               <Button 
                 type="button" 

@@ -12,6 +12,7 @@ export interface ToiletryItem {
   name: string;
   brand: string | null;
   category: string;
+  section: string; // 'toiletry' | 'laundry'
   total_size: number;
   size_unit: string;
   cost_per_item: number;
@@ -78,6 +79,14 @@ export const TOILETRY_CATEGORIES = [
   { value: "oral", label: "Oral" },
   { value: "household", label: "Household" },
   { value: "cleaning", label: "Cleaning" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const LAUNDRY_CATEGORIES = [
+  { value: "detergent", label: "Detergent" },
+  { value: "fabric_care", label: "Fabric Care" },
+  { value: "stain_removal", label: "Stain Removal" },
+  { value: "ironing", label: "Ironing" },
   { value: "other", label: "Other" },
 ] as const;
 

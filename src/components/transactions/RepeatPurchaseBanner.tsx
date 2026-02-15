@@ -76,6 +76,7 @@ export function RepeatPurchaseBanner() {
         name: repeat.merchant,
         brand: repeat.merchant,
         category: "supplements",
+        section: "toiletry",
         total_size: 1,
         size_unit: "pack",
         cost_per_item: repeat.averageAmount,

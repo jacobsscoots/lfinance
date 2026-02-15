@@ -3049,6 +3049,7 @@ export type Database = {
           reorder_threshold: number | null
           retailer: string | null
           safety_buffer_days: number
+          section: string
           size_unit: string
           source_url: string | null
           status: string
@@ -3086,6 +3087,7 @@ export type Database = {
           reorder_threshold?: number | null
           retailer?: string | null
           safety_buffer_days?: number
+          section?: string
           size_unit?: string
           source_url?: string | null
           status?: string
@@ -3123,6 +3125,7 @@ export type Database = {
           reorder_threshold?: number | null
           retailer?: string | null
           safety_buffer_days?: number
+          section?: string
           size_unit?: string
           source_url?: string | null
           status?: string

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Package, BarChart3, Scale, Sparkles, Plus } from "lucide-react";
+import { ShoppingCart, Package, BarChart3, Scale, Sparkles, Plus, WashingMachine } from "lucide-react";
 import { ShopReadyListView } from "@/components/groceries/ShopReadyList";
 import { GroceryOrdersTab } from "@/components/groceries/GroceryOrdersTab";
 import { GrocerySummaryTab } from "@/components/groceries/GrocerySummaryTab";
@@ -23,9 +23,7 @@ import { DeleteToiletryDialog } from "@/components/toiletries/DeleteToiletryDial
 import { LogWeightDialog } from "@/components/toiletries/LogWeightDialog";
 import { LinkPurchaseDialog } from "@/components/toiletries/LinkPurchaseDialog";
 import { PriceComparisonDialog } from "@/components/toiletries/PriceComparisonDialog";
-import { OrdersTab } from "@/components/toiletries/OrdersTab";
 import { OrdersPanel } from "@/components/toiletries/OrdersPanel";
-import { ToiletrySummaryTab } from "@/components/toiletries/ToiletrySummaryTab";
 import { WeighToiletriesDialog } from "@/components/toiletries/WeighToiletriesDialog";
 import { OnHandPanel } from "@/components/toiletries/OnHandPanel";
 import type { ToiletryItem } from "@/lib/toiletryCalculations";
@@ -36,9 +34,9 @@ export default function Groceries() {
   const [weighDialogOpen, setWeighDialogOpen] = useState(false);
   const { products } = useProducts();
 
-  // ── Toiletries state ──
+  // ── Shared toiletries/laundry state ──
   const {
-    toiletries,
+    toiletries: allItems,
     isLoading: toilLoading,
     createToiletry,
     updateToiletry,
@@ -50,9 +48,13 @@ export default function Groceries() {
   const { logs: allUsageLogs } = useToiletryUsageLogs();
   const { profiles } = useRetailerProfiles();
 
+  // Split by section
+  const toiletries = useMemo(() => allItems.filter(i => (i.section || "toiletry") === "toiletry"), [allItems]);
+  const laundryItems = useMemo(() => allItems.filter(i => i.section === "laundry"), [allItems]);
+
   const usageRates = useMemo(() => {
     const rates: Record<string, number | null> = {};
-    for (const item of toiletries) {
+    for (const item of allItems) {
       const itemLogs = allUsageLogs.filter((l) => l.toiletry_item_id === item.id);
       const result = calculateDailyUsageFromLogs(
         itemLogs.map((l) => ({ logged_date: l.logged_date, amount_used: l.amount_used }))
@@ -60,7 +62,7 @@ export default function Groceries() {
       rates[item.id] = result.dailyUsage;
     }
     return rates;
-  }, [toiletries, allUsageLogs]);
+  }, [allItems, allUsageLogs]);
 
   const shippingProfiles = useMemo(() => {
     const map: Record<string, ShippingProfile | null> = {};
@@ -78,8 +80,11 @@ export default function Groceries() {
     return map;
   }, [profiles]);
 
+  // ── Shared dialog state ──
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [laundryCategory, setLaundryCategory] = useState<string | null>(null);
   const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [formSection, setFormSection] = useState<"toiletry" | "laundry">("toiletry");
   const [editingItem, setEditingItem] = useState<ToiletryItem | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingItem, setDeletingItem] = useState<ToiletryItem | null>(null);
@@ -91,14 +96,27 @@ export default function Groceries() {
   const [pricingItem, setPricingItem] = useState<ToiletryItem | null>(null);
   const [weighToiletriesOpen, setWeighToiletriesOpen] = useState(false);
 
-  const filteredItems = useMemo(() => {
+  const filteredToiletries = useMemo(() => {
     if (!selectedCategory) return toiletries;
     return toiletries.filter((item) => item.category === selectedCategory);
   }, [toiletries, selectedCategory]);
 
-  const handleToiletryAdd = () => { setEditingItem(null); setFormDialogOpen(true); };
-  const handleToiletryEdit = (item: ToiletryItem) => { setEditingItem(item); setFormDialogOpen(true); };
-  const handleToiletryDelete = (item: ToiletryItem) => { setDeletingItem(item); setDeleteDialogOpen(true); };
+  const filteredLaundry = useMemo(() => {
+    if (!laundryCategory) return laundryItems;
+    return laundryItems.filter((item) => item.category === laundryCategory);
+  }, [laundryItems, laundryCategory]);
+
+  const openAddForm = (section: "toiletry" | "laundry") => {
+    setEditingItem(null);
+    setFormSection(section);
+    setFormDialogOpen(true);
+  };
+  const handleEdit = (item: ToiletryItem) => {
+    setEditingItem(item);
+    setFormSection((item.section as "toiletry" | "laundry") || "toiletry");
+    setFormDialogOpen(true);
+  };
+  const handleDelete = (item: ToiletryItem) => { setDeletingItem(item); setDeleteDialogOpen(true); };
   const handleRestock = (item: ToiletryItem) => { restockToiletry.mutate({ id: item.id, totalSize: item.total_size }); };
   const handleLogWeight = (item: ToiletryItem) => { setWeighingItem(item); setWeightDialogOpen(true); };
   const handleLinkPurchase = (item: ToiletryItem) => { setLinkingItem(item); setPurchaseDialogOpen(true); };
@@ -144,7 +162,21 @@ export default function Groceries() {
             <Scale className="mr-2 h-4 w-4" />
             Weigh What I Have
           </Button>
-          <Button onClick={handleToiletryAdd}>
+          <Button onClick={() => openAddForm("toiletry")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Item
+          </Button>
+        </div>
+      );
+    }
+    if (activeTab === "laundry") {
+      return (
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setWeighToiletriesOpen(true)}>
+            <Scale className="mr-2 h-4 w-4" />
+            Weigh What I Have
+          </Button>
+          <Button onClick={() => openAddForm("laundry")}>
             <Plus className="mr-2 h-4 w-4" />
             Add Item
           </Button>
@@ -158,6 +190,9 @@ export default function Groceries() {
       </Button>
     );
   };
+
+  // Items for weigh dialog — scoped to active section
+  const weighItems = activeTab === "laundry" ? laundryItems : toiletries;
 
   return (
     <AppLayout>
@@ -190,6 +225,10 @@ export default function Groceries() {
               <Sparkles className="h-4 w-4" />
               <span className="hidden sm:inline">Toiletries</span>
             </TabsTrigger>
+            <TabsTrigger value="laundry" className="flex items-center gap-2">
+              <WashingMachine className="h-4 w-4" />
+              <span className="hidden sm:inline">Laundry</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="shop-list" className="mt-4">
@@ -209,14 +248,37 @@ export default function Groceries() {
               <OrdersPanel />
               <OnHandPanel items={toiletries} usageRates={usageRates} shippingProfiles={shippingProfiles} />
               <ToiletrySummaryCards items={toiletries} />
-              <ToiletryCategoryFilter selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
+              <ToiletryCategoryFilter selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} section="toiletry" />
               {toilLoading ? (
                 <div className="text-center py-12 text-muted-foreground">Loading items...</div>
               ) : (
                 <ToiletryTable
-                  items={filteredItems}
-                  onEdit={handleToiletryEdit}
-                  onDelete={handleToiletryDelete}
+                  items={filteredToiletries}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onRestock={handleRestock}
+                  onLogWeight={handleLogWeight}
+                  onLinkPurchase={handleLinkPurchase}
+                  onFindPrices={handleFindPrices}
+                  usageRates={usageRates}
+                  shippingProfiles={shippingProfiles}
+                />
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="laundry" className="mt-4">
+            <div className="space-y-6">
+              <OnHandPanel items={laundryItems} usageRates={usageRates} shippingProfiles={shippingProfiles} />
+              <ToiletrySummaryCards items={laundryItems} />
+              <ToiletryCategoryFilter selectedCategory={laundryCategory} onCategoryChange={setLaundryCategory} section="laundry" />
+              {toilLoading ? (
+                <div className="text-center py-12 text-muted-foreground">Loading items...</div>
+              ) : (
+                <ToiletryTable
+                  items={filteredLaundry}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
                   onRestock={handleRestock}
                   onLogWeight={handleLogWeight}
                   onLinkPurchase={handleLinkPurchase}
@@ -232,13 +294,14 @@ export default function Groceries() {
         {/* Grocery dialogs */}
         <WeighStockDialog open={weighDialogOpen} onOpenChange={setWeighDialogOpen} products={products} />
 
-        {/* Toiletry dialogs */}
+        {/* Shared toiletry/laundry dialogs */}
         <ToiletryFormDialog
           open={formDialogOpen}
           onOpenChange={setFormDialogOpen}
           onSubmit={handleFormSubmit}
           initialData={editingItem}
           isLoading={createToiletry.isPending || updateToiletry.isPending}
+          section={formSection}
         />
         <DeleteToiletryDialog
           open={deleteDialogOpen}
@@ -269,7 +332,7 @@ export default function Groceries() {
         <WeighToiletriesDialog
           open={weighToiletriesOpen}
           onOpenChange={setWeighToiletriesOpen}
-          items={toiletries}
+          items={weighItems}
         />
       </div>
     </AppLayout>
