@@ -131,20 +131,19 @@ describe("getDailyTargets", () => {
     });
   });
 
-  it("derives fat from remaining calories (not stored value)", () => {
+  it("uses explicit fat from settings when provided", () => {
     const date = new Date("2026-02-10"); // Tuesday
     const settings = createSettings({
       daily_calorie_target: 2000,
       protein_target_grams: 150,
       carbs_target_grams: 200,
-      fat_target_grams: 999, // This should be IGNORED
+      fat_target_grams: 42,
     });
     
     const targets = getDailyTargets(date, settings);
     
-    // Fat should be derived: (2000 - 600 - 800) / 9 = 67
-    expect(targets.fat).toBe(67);
-    expect(targets.fat).not.toBe(999);
+    // Fat should use the explicit value, not derived
+    expect(targets.fat).toBe(42);
   });
 
   it("handles weekend targets when enabled", () => {
@@ -153,10 +152,12 @@ describe("getDailyTargets", () => {
       daily_calorie_target: 2000,
       protein_target_grams: 150,
       carbs_target_grams: 200,
+      fat_target_grams: 42,
       weekend_targets_enabled: true,
       weekend_calorie_target: 2200,
       weekend_protein_target_grams: 160,
       weekend_carbs_target_grams: 220,
+      weekend_fat_target_grams: 53,
     });
     
     const targets = getDailyTargets(saturday, settings);
@@ -164,8 +165,7 @@ describe("getDailyTargets", () => {
     expect(targets.calories).toBe(2200);
     expect(targets.protein).toBe(160);
     expect(targets.carbs).toBe(220);
-    // Fat derived: (2200 - 640 - 880) / 9 = 75.5 → 76
-    expect(targets.fat).toBe(76);
+    expect(targets.fat).toBe(53);
   });
 
   it("uses weekday targets on weekdays even when weekend enabled", () => {
@@ -205,7 +205,7 @@ describe("getDailyTargets", () => {
       },
       protein: 145,
       carbs: 190,
-      fat: 999, // Should be ignored
+      fat: 51,
     };
     
     const targets = getDailyTargets(date, settings, weeklyOverride);
@@ -213,7 +213,6 @@ describe("getDailyTargets", () => {
     expect(targets.calories).toBe(1800); // Monday from schedule
     expect(targets.protein).toBe(145);
     expect(targets.carbs).toBe(190);
-    // Fat derived: (1800 - 580 - 760) / 9 = 51.1 → 51
     expect(targets.fat).toBe(51);
   });
 
@@ -373,75 +372,55 @@ describe("getMacroDifferences", () => {
   });
 });
 
-describe("regression: +200cal/-20g fat scenario cannot happen", () => {
-  it("targets are always calorie-consistent when fat is derived", () => {
+describe("regression: explicit fat targets are used correctly", () => {
+  it("weekday uses explicit fat from settings", () => {
     const settings = createSettings({
       daily_calorie_target: 2000,
       protein_target_grams: 150,
       carbs_target_grams: 200,
+      fat_target_grams: 42,
     });
     
     const targets = getDailyTargets(new Date("2026-02-10"), settings);
-    
-    // Verify internal consistency:
-    // calories = protein×4 + carbs×4 + fat×9
-    const calculatedCalories = 
-      targets.protein * 4 + 
-      targets.carbs * 4 + 
-      targets.fat * 9;
-    
-    // Should match within rounding error (max 8 kcal due to fat rounding)
-    expect(Math.abs(targets.calories - calculatedCalories)).toBeLessThanOrEqual(8);
+    expect(targets.fat).toBe(42);
   });
 
-  it("weekly override calories are consistent with derived macros", () => {
+  it("weekend uses explicit weekend fat from settings", () => {
     const settings = createSettings({
       daily_calorie_target: 2000,
       protein_target_grams: 150,
       carbs_target_grams: 200,
+      fat_target_grams: 42,
+      weekend_targets_enabled: true,
+      weekend_calorie_target: 2391,
+      weekend_protein_target_grams: 209,
+      weekend_carbs_target_grams: 269,
+      weekend_fat_target_grams: 53,
     });
-    
+
     const weeklyOverride: WeeklyTargetsOverride = {
-      weekStartDate: "2026-02-09", // Monday
+      weekStartDate: "2026-02-09",
       schedule: {
-        monday: 1800, // Lower than base
-        tuesday: 1900,
-        wednesday: 1850,
-        thursday: 1900,
-        friday: 2000,
-        saturday: 2200, // Higher than base
-        sunday: 2100,
+        monday: 1891, tuesday: 1891, wednesday: 1891,
+        thursday: 1891, friday: 1891, saturday: 2391, sunday: 2391,
       },
-      protein: 150,
-      carbs: 200,
+      protein: 165,
+      carbs: 213,
+      fat: 42,
     };
-    
-    // Check Monday (lower calories) - Feb 9, 2026 is Monday
-    const mondayTargets = getDailyTargets(
-      new Date("2026-02-09"), 
-      settings, 
-      weeklyOverride
-    );
-    
-    const mondayCalc = 
-      mondayTargets.protein * 4 + 
-      mondayTargets.carbs * 4 + 
-      mondayTargets.fat * 9;
-    
-    expect(Math.abs(mondayTargets.calories - mondayCalc)).toBeLessThanOrEqual(8);
-    
-    // Check Saturday (higher calories) - Feb 14, 2026 is Saturday
-    const saturdayTargets = getDailyTargets(
-      new Date("2026-02-14"),
-      settings,
-      weeklyOverride
-    );
-    
-    const saturdayCalc = 
-      saturdayTargets.protein * 4 + 
-      saturdayTargets.carbs * 4 + 
-      saturdayTargets.fat * 9;
-    
-    expect(Math.abs(saturdayTargets.calories - saturdayCalc)).toBeLessThanOrEqual(8);
+
+    // Saturday should use weekend macros from globalSettings
+    const satTargets = getDailyTargets(new Date("2026-02-14"), settings, weeklyOverride);
+    expect(satTargets.calories).toBe(2391);
+    expect(satTargets.protein).toBe(209);
+    expect(satTargets.carbs).toBe(269);
+    expect(satTargets.fat).toBe(53);
+
+    // Monday should use weekly override macros
+    const monTargets = getDailyTargets(new Date("2026-02-09"), settings, weeklyOverride);
+    expect(monTargets.calories).toBe(1891);
+    expect(monTargets.protein).toBe(165);
+    expect(monTargets.carbs).toBe(213);
+    expect(monTargets.fat).toBe(42);
   });
 });
