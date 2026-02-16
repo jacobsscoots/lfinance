@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { optimiseImage } from "./imageOptimiser";
 
 // Assumptions (locked):
 // 1. One receipt per transaction (v1)
@@ -70,11 +71,14 @@ export async function uploadTransactionReceipt(
     throw new Error(validation.error);
   }
 
-  const filePath = getReceiptStoragePath(userId, transactionId, file.name);
+  // Optimise images to WebP before uploading
+  const optimised = await optimiseImage(file);
+
+  const filePath = getReceiptStoragePath(userId, transactionId, optimised.name);
 
   const { error } = await supabase.storage
     .from(BUCKET_NAME)
-    .upload(filePath, file, { upsert: true });
+    .upload(filePath, optimised, { upsert: true });
 
   if (error) {
     throw new Error(`Failed to upload receipt: ${error.message}`);

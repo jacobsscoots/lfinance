@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { Virtuoso } from "react-virtuoso";
 
 const APPLE_TAGS = [
   { label: "iCloud Storage", amount: null },
@@ -49,10 +50,16 @@ interface TransactionListProps {
   onDelete: (transaction: Transaction) => void;
 }
 
+interface FlatItem {
+  type: "header" | "transaction";
+  date?: string;
+  transaction?: Transaction;
+  gmailReceipt?: any;
+}
+
 export function TransactionList({ transactions, onEdit, onDelete }: TransactionListProps) {
   const { user } = useAuth();
 
-  // Fetch gmail receipts matched to transactions so we can show indicators
   const { data: gmailMatches } = useQuery({
     queryKey: ["gmail-receipt-matches", user?.id],
     queryFn: async () => {
@@ -68,44 +75,111 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
     enabled: !!user,
   });
 
-  const gmailMatchMap = new Map(
-    (gmailMatches || []).map(r => [r.matched_transaction_id, r])
+  const gmailMatchMap = useMemo(
+    () => new Map((gmailMatches || []).map(r => [r.matched_transaction_id, r])),
+    [gmailMatches]
   );
 
-  const groupedTransactions = transactions.reduce((groups, transaction) => {
-    const date = transaction.transaction_date;
-    if (!groups[date]) {
-      groups[date] = [];
+  // Flatten grouped transactions into a single list for virtualisation
+  const flatItems = useMemo<FlatItem[]>(() => {
+    const grouped = transactions.reduce((groups, transaction) => {
+      const date = transaction.transaction_date;
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(transaction);
+      return groups;
+    }, {} as Record<string, Transaction[]>);
+
+    const sortedDates = Object.keys(grouped).sort((a, b) =>
+      new Date(b).getTime() - new Date(a).getTime()
+    );
+
+    const items: FlatItem[] = [];
+    for (const date of sortedDates) {
+      items.push({ type: "header", date });
+      for (const tx of grouped[date]) {
+        items.push({
+          type: "transaction",
+          transaction: tx,
+          gmailReceipt: gmailMatchMap.get(tx.id) || null,
+        });
+      }
     }
-    groups[date].push(transaction);
-    return groups;
-  }, {} as Record<string, Transaction[]>);
+    return items;
+  }, [transactions, gmailMatchMap]);
 
-  const sortedDates = Object.keys(groupedTransactions).sort((a, b) => 
-    new Date(b).getTime() - new Date(a).getTime()
+  const renderItem = useCallback(
+    (index: number) => {
+      const item = flatItems[index];
+      if (item.type === "header") {
+        return (
+          <h3 className="text-sm font-medium text-muted-foreground mb-3 mt-6 first:mt-0 px-1">
+            {format(new Date(item.date!), "EEEE, d MMMM yyyy")}
+          </h3>
+        );
+      }
+      return (
+        <div className="mb-2">
+          <TransactionRow
+            transaction={item.transaction!}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            gmailReceipt={item.gmailReceipt}
+          />
+        </div>
+      );
+    },
+    [flatItems, onEdit, onDelete]
   );
 
+  // Use virtualisation only for large lists (>50 items)
+  if (flatItems.length > 50) {
+    return (
+      <TooltipProvider>
+        <Virtuoso
+          style={{ height: "calc(100vh - 280px)" }}
+          totalCount={flatItems.length}
+          overscan={20}
+          itemContent={renderItem}
+        />
+      </TooltipProvider>
+    );
+  }
+
+  // Small lists render normally
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        {sortedDates.map((date) => (
-          <div key={date}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-3">
-              {format(new Date(date), "EEEE, d MMMM yyyy")}
-            </h3>
-            <div className="space-y-2">
-              {groupedTransactions[date].map((transaction) => (
-                <TransactionRow
-                  key={transaction.id}
-                  transaction={transaction}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  gmailReceipt={gmailMatchMap.get(transaction.id) || null}
-                />
-              ))}
+        {(() => {
+          const grouped = transactions.reduce((groups, transaction) => {
+            const date = transaction.transaction_date;
+            if (!groups[date]) groups[date] = [];
+            groups[date].push(transaction);
+            return groups;
+          }, {} as Record<string, Transaction[]>);
+
+          const sortedDates = Object.keys(grouped).sort((a, b) =>
+            new Date(b).getTime() - new Date(a).getTime()
+          );
+
+          return sortedDates.map((date) => (
+            <div key={date}>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                {format(new Date(date), "EEEE, d MMMM yyyy")}
+              </h3>
+              <div className="space-y-2">
+                {grouped[date].map((transaction) => (
+                  <TransactionRow
+                    key={transaction.id}
+                    transaction={transaction}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    gmailReceipt={gmailMatchMap.get(transaction.id) || null}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ));
+        })()}
       </div>
     </TooltipProvider>
   );
