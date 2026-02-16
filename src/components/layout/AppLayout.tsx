@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { MobileNav } from "./MobileNav";
+import { OfflineIndicator } from "./OfflineIndicator";
 import { useBackgroundSync } from "@/hooks/useBackgroundSync";
 
 interface AppLayoutProps {
@@ -13,6 +14,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      <OfflineIndicator />
       <AppSidebar />
       <MobileNav />
       

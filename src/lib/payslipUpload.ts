@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { optimiseImage } from "./imageOptimiser";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -36,11 +37,12 @@ export async function uploadPayslipFile(
   userId: string,
   payslipId: string
 ): Promise<string> {
-  const path = getPayslipStoragePath(userId, payslipId, file.name);
+  const optimised = await optimiseImage(file);
+  const path = getPayslipStoragePath(userId, payslipId, optimised.name);
 
   const { error } = await supabase.storage
     .from("payslips")
-    .upload(path, file, {
+    .upload(path, optimised, {
       cacheControl: "3600",
       upsert: false,
     });
