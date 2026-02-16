@@ -28,7 +28,7 @@ export function sheetToGrid(sheet: ExcelJS.Worksheet): string[][] {
     for (let c = 1; c <= colCount; c++) {
       const cell = row.getCell(c);
       const val = cell.value;
-      cells.push(val != null ? String(val).trim() : "");
+      cells.push(val != null ? resolveCellValue(val) : "");
     }
     grid.push(cells);
   });
