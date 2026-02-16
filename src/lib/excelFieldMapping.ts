@@ -128,7 +128,7 @@ export function validateRow(
 
   // Map raw values to target fields
   for (const [header, targetKey] of Object.entries(mapping)) {
-    if (targetKey === "IGNORE" || !row[header]) continue;
+    if (targetKey === "IGNORE" || targetKey === "_skip" || !row[header]) continue;
     data[targetKey] = row[header];
   }
 
