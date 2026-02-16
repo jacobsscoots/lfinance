@@ -145,6 +145,14 @@ export function validateRow(
   return { valid: errors.length === 0, errors, warnings, data };
 }
 
+const VALID_BILL_TYPES = ["fixed", "variable"];
+
+function normaliseBillType(value: any): string | null {
+  if (value == null || value === "") return null;
+  const v = String(value).trim().toLowerCase();
+  return VALID_BILL_TYPES.includes(v) ? v : null;
+}
+
 // --- Normalise a mapped row into DB-ready shape ---
 
 export function normaliseBillRow(data: Record<string, any>): Record<string, any> {
@@ -154,7 +162,7 @@ export function normaliseBillRow(data: Record<string, any>): Record<string, any>
     frequency: normaliseFrequency(data.frequency) ?? "monthly",
     due_day: normaliseDueDay(data.due_day) ?? 1,
     provider: data.provider ? String(data.provider).trim() : null,
-    bill_type: data.bill_type ? String(data.bill_type).trim() : null,
+    bill_type: normaliseBillType(data.bill_type),
     notes: data.notes ? String(data.notes).trim() : null,
     is_active: normaliseBoolean(data.is_active) ?? true,
     due_date_rule: "exact",
