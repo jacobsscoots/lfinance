@@ -384,6 +384,28 @@ export function ExcelImportDialog({
   };
 
   // --- Step 5: Import ---
+
+  // Valid column names for each table to prevent unknown fields from reaching the DB
+  const VALID_BILL_COLS = new Set([
+    "name", "amount", "frequency", "due_day", "provider", "bill_type",
+    "notes", "is_active", "due_date_rule", "is_subscription", "is_variable",
+    "category_id", "account_id", "start_date", "end_date", "next_review_date",
+    "user_id", "import_key",
+  ]);
+  const VALID_DEBT_COLS = new Set([
+    "creditor_name", "debt_type", "starting_balance", "current_balance",
+    "apr", "interest_type", "min_payment", "due_day", "notes", "status",
+    "user_id", "import_key",
+  ]);
+
+  const pickValidCols = (data: Record<string, any>, validCols: Set<string>) => {
+    const clean: Record<string, any> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (validCols.has(k) && v !== undefined) clean[k] = v;
+    }
+    return clean;
+  };
+
   const handleImport = useCallback(async () => {
     if (!user) return;
     setStep("importing");
@@ -394,6 +416,7 @@ export function ExcelImportDialog({
       subs: { added: 0, updated: 0, skipped: 0 },
       debts: { added: 0, updated: 0, skipped: 0 },
     };
+    const importErrors: string[] = [];
 
     const allBillRows = [
       ...(billsData?.rows.filter((r) => r.valid) ?? []).map((r) => ({
@@ -422,12 +445,19 @@ export function ExcelImportDialog({
           continue;
         }
         if (row.duplicateAction === "update") {
+          const updateData = pickValidCols(
+            { ...row.normalised, import_key: row.importKey },
+            VALID_BILL_COLS
+          );
           const { error } = await supabase
             .from("bills")
-            .update({ ...row.normalised, import_key: row.importKey })
+            .update(updateData)
             .eq("id", row.duplicate.existingId);
           if (!error) counter.updated++;
-          else counter.skipped++;
+          else {
+            console.error("Bill update failed:", error.message, error.details, error.hint);
+            counter.skipped++;
+          }
           processed++;
           setImportProgress(Math.round((processed / totalRows) * 100));
           continue;
@@ -435,16 +465,20 @@ export function ExcelImportDialog({
       }
 
       // Insert new
-      const insertData = {
-        ...row.normalised,
-        user_id: user.id,
-        import_key: row.importKey,
-      } as any;
+      const insertData = pickValidCols(
+        { ...row.normalised, user_id: user.id, import_key: row.importKey },
+        VALID_BILL_COLS
+      );
       const { error } = await supabase
         .from("bills")
         .insert([insertData]);
-      if (!error) counter.added++;
-      else counter.skipped++;
+      if (!error) {
+        counter.added++;
+      } else {
+        console.error("Bill insert failed:", error.message, error.details, error.hint, "Data:", insertData);
+        if (importErrors.length < 3) importErrors.push(`Bill "${row.normalised?.name}": ${error.message}`);
+        counter.skipped++;
+      }
       processed++;
       setImportProgress(Math.round((processed / totalRows) * 100));
     }
@@ -459,30 +493,45 @@ export function ExcelImportDialog({
           continue;
         }
         if (row.duplicateAction === "update") {
+          const updateData = pickValidCols(
+            { ...row.normalised, import_key: row.importKey },
+            VALID_DEBT_COLS
+          );
           const { error } = await supabase
             .from("debts")
-            .update({ ...row.normalised, import_key: row.importKey })
+            .update(updateData)
             .eq("id", row.duplicate.existingId);
           if (!error) res.debts.updated++;
-          else res.debts.skipped++;
+          else {
+            console.error("Debt update failed:", error.message, error.details, error.hint);
+            res.debts.skipped++;
+          }
           processed++;
           setImportProgress(Math.round((processed / totalRows) * 100));
           continue;
         }
       }
 
-      const debtInsertData = {
-        ...row.normalised,
-        user_id: user.id,
-        import_key: row.importKey,
-      } as any;
+      const debtInsertData = pickValidCols(
+        { ...row.normalised, user_id: user.id, import_key: row.importKey },
+        VALID_DEBT_COLS
+      );
       const { error } = await supabase
         .from("debts")
         .insert([debtInsertData]);
-      if (!error) res.debts.added++;
-      else res.debts.skipped++;
+      if (!error) {
+        res.debts.added++;
+      } else {
+        console.error("Debt insert failed:", error.message, error.details, error.hint, "Data:", debtInsertData);
+        if (importErrors.length < 3) importErrors.push(`Debt "${row.normalised?.creditor_name}": ${error.message}`);
+        res.debts.skipped++;
+      }
       processed++;
       setImportProgress(Math.round((processed / totalRows) * 100));
+    }
+
+    if (importErrors.length > 0) {
+      toast.error(importErrors.join("\n"), { duration: 10000 });
     }
 
     setResults(res);
