@@ -40,6 +40,7 @@ export interface TransactionFilters {
   type?: "income" | "expense";
   accountId?: string;
   search?: string;
+  tagIds?: string[];
 }
 
 export function useTransactions(filters?: TransactionFilters) {

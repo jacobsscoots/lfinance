@@ -32,7 +32,7 @@ export function DailyBudgetCard() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">
-                Daily Budget · £{dailyBudget}/day · Day {metrics.daysPassed}/{metrics.daysTotal}
+                Daily Spending Allowance · £{dailyBudget}/day · Day {metrics.daysPassed}/{metrics.daysTotal}
               </p>
               <div className="flex items-center gap-2">
                 {isOver ? (

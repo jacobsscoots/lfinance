@@ -3616,6 +3616,72 @@ export type Database = {
         }
         Relationships: []
       }
+      transaction_tag_assignments: {
+        Row: {
+          created_at: string
+          id: string
+          tag_id: string
+          transaction_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          tag_id: string
+          transaction_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          tag_id?: string
+          transaction_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_tag_assignments_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "transaction_tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_tag_assignments_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transaction_tags: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account_id: string
