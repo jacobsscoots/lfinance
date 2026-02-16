@@ -40,20 +40,10 @@ export function sheetToGrid(sheet: ExcelJS.Worksheet): string[][] {
 export type LayoutType = "CATEGORY_TABLE" | "SECTION_TABLES" | "UNKNOWN";
 
 const SECTION_KEYWORDS = ["bills", "subscriptions", "debts", "bill", "subscription", "debt"];
-const CATEGORY_KEYWORDS = ["category", "type", "section"];
+const CATEGORY_KEYWORDS = ["category", "section"];
 
 export function detectLayout(grid: string[][]): LayoutType {
-  // Check for a Category column in the first potential header row
-  for (let r = 0; r < Math.min(5, grid.length); r++) {
-    const row = grid[r];
-    const hasCategory = row.some((cell) =>
-      CATEGORY_KEYWORDS.includes(cell.toLowerCase())
-    );
-    const hasMultipleHeaders = row.filter((c) => c.length > 0).length >= 3;
-    if (hasCategory && hasMultipleHeaders) return "CATEGORY_TABLE";
-  }
-
-  // Check for section headings
+  // Check for section headings first (more specific signal)
   for (const row of grid) {
     const nonEmpty = row.filter((c) => c.length > 0);
     if (
@@ -62,6 +52,16 @@ export function detectLayout(grid: string[][]): LayoutType {
     ) {
       return "SECTION_TABLES";
     }
+  }
+
+  // Check for a Category column in the first potential header row
+  for (let r = 0; r < Math.min(5, grid.length); r++) {
+    const row = grid[r];
+    const hasCategory = row.some((cell) =>
+      CATEGORY_KEYWORDS.includes(cell.toLowerCase())
+    );
+    const hasMultipleHeaders = row.filter((c) => c.length > 0).length >= 3;
+    if (hasCategory && hasMultipleHeaders) return "CATEGORY_TABLE";
   }
 
   return "UNKNOWN";
