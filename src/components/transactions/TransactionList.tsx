@@ -21,11 +21,13 @@ import { Transaction } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
 import { ReceiptPreviewDialog } from "./ReceiptPreviewDialog";
 import { LinkTransactionDialog } from "./LinkTransactionDialog";
+import { TagAssignPopover, TransactionTagBadges } from "./TagAssignPopover";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useTransactionTags, useTagAssignments } from "@/hooks/useTransactionTags";
 import { Virtuoso } from "react-virtuoso";
 
 const APPLE_TAGS = [
@@ -59,6 +61,10 @@ interface FlatItem {
 
 export function TransactionList({ transactions, onEdit, onDelete }: TransactionListProps) {
   const { user } = useAuth();
+  const { tags } = useTransactionTags();
+
+  const transactionIds = useMemo(() => transactions.map(t => t.id), [transactions]);
+  const { assignmentMap, assign, unassign } = useTagAssignments(transactionIds);
 
   const { data: gmailMatches } = useQuery({
     queryKey: ["gmail-receipt-matches", user?.id],
@@ -80,7 +86,6 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
     [gmailMatches]
   );
 
-  // Flatten grouped transactions into a single list for virtualisation
   const flatItems = useMemo<FlatItem[]>(() => {
     const grouped = transactions.reduce((groups, transaction) => {
       const date = transaction.transaction_date;
@@ -107,6 +112,14 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
     return items;
   }, [transactions, gmailMatchMap]);
 
+  const handleAssign = useCallback((transactionId: string, tagId: string) => {
+    assign.mutate({ transactionId, tagId });
+  }, [assign]);
+
+  const handleUnassign = useCallback((transactionId: string, tagId: string) => {
+    unassign.mutate({ transactionId, tagId });
+  }, [unassign]);
+
   const renderItem = useCallback(
     (index: number) => {
       const item = flatItems[index];
@@ -124,14 +137,17 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
             onEdit={onEdit}
             onDelete={onDelete}
             gmailReceipt={item.gmailReceipt}
+            allTags={tags}
+            assignedTagIds={assignmentMap.get(item.transaction!.id) || []}
+            onAssignTag={(tagId) => handleAssign(item.transaction!.id, tagId)}
+            onUnassignTag={(tagId) => handleUnassign(item.transaction!.id, tagId)}
           />
         </div>
       );
     },
-    [flatItems, onEdit, onDelete]
+    [flatItems, onEdit, onDelete, tags, assignmentMap, handleAssign, handleUnassign]
   );
 
-  // Use virtualisation only for large lists (>50 items)
   if (flatItems.length > 50) {
     return (
       <TooltipProvider>
@@ -145,41 +161,43 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
     );
   }
 
-  // Small lists render normally
+  // Small list — render normally
+  const grouped = transactions.reduce((groups, transaction) => {
+    const date = transaction.transaction_date;
+    if (!groups[date]) groups[date] = [];
+    groups[date].push(transaction);
+    return groups;
+  }, {} as Record<string, Transaction[]>);
+
+  const sortedDates = Object.keys(grouped).sort((a, b) =>
+    new Date(b).getTime() - new Date(a).getTime()
+  );
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        {(() => {
-          const grouped = transactions.reduce((groups, transaction) => {
-            const date = transaction.transaction_date;
-            if (!groups[date]) groups[date] = [];
-            groups[date].push(transaction);
-            return groups;
-          }, {} as Record<string, Transaction[]>);
-
-          const sortedDates = Object.keys(grouped).sort((a, b) =>
-            new Date(b).getTime() - new Date(a).getTime()
-          );
-
-          return sortedDates.map((date) => (
-            <div key={date}>
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                {format(new Date(date), "EEEE, d MMMM yyyy")}
-              </h3>
-              <div className="space-y-2">
-                {grouped[date].map((transaction) => (
-                  <TransactionRow
-                    key={transaction.id}
-                    transaction={transaction}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    gmailReceipt={gmailMatchMap.get(transaction.id) || null}
-                  />
-                ))}
-              </div>
+        {sortedDates.map((date) => (
+          <div key={date}>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">
+              {format(new Date(date), "EEEE, d MMMM yyyy")}
+            </h3>
+            <div className="space-y-2">
+              {grouped[date].map((transaction) => (
+                <TransactionRow
+                  key={transaction.id}
+                  transaction={transaction}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  gmailReceipt={gmailMatchMap.get(transaction.id) || null}
+                  allTags={tags}
+                  assignedTagIds={assignmentMap.get(transaction.id) || []}
+                  onAssignTag={(tagId) => handleAssign(transaction.id, tagId)}
+                  onUnassignTag={(tagId) => handleUnassign(transaction.id, tagId)}
+                />
+              ))}
             </div>
-          ));
-        })()}
+          </div>
+        ))}
       </div>
     </TooltipProvider>
   );
@@ -190,9 +208,13 @@ interface TransactionRowProps {
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
   gmailReceipt: { merchant_name: string | null; amount: number | null; match_confidence: string | null; subject: string | null; from_email: string | null; received_at: string | null; order_reference: string | null } | null;
+  allTags: { id: string; name: string; color: string }[];
+  assignedTagIds: string[];
+  onAssignTag: (tagId: string) => void;
+  onUnassignTag: (tagId: string) => void;
 }
 
-function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: TransactionRowProps) {
+function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt, allTags, assignedTagIds, onAssignTag, onUnassignTag }: TransactionRowProps) {
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [gmailReceiptOpen, setGmailReceiptOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -202,10 +224,8 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
   const isIncome = transaction.type === "income";
   const hasReceipt = !!transaction.receipt_path;
   const hasGmailReceipt = !!gmailReceipt;
-  const hasLinks = !!(transaction.bill || transaction.investment);
   const isApple = isAppleTransaction(transaction);
 
-  // Check if already tagged with an Apple sub-category via merchant field
   const appleTag = isApple && transaction.merchant ? 
     APPLE_TAGS.find(t => transaction.merchant?.includes(`[${t.label}]`))?.label : null;
 
@@ -280,6 +300,13 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
                   </TooltipContent>
                 </Tooltip>
               )}
+              <TagAssignPopover
+                transactionId={transaction.id}
+                allTags={allTags}
+                assignedTagIds={assignedTagIds}
+                onAssign={onAssignTag}
+                onUnassign={onUnassignTag}
+              />
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
               {transaction.merchant && <span className="truncate max-w-[120px] sm:max-w-none">{transaction.merchant}</span>}
@@ -328,6 +355,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt }: Transac
                   {transaction.category.name}
                 </Badge>
               )}
+              <TransactionTagBadges tagIds={assignedTagIds} allTags={allTags} />
               {transaction.account && (
                 <span className="hidden sm:inline">• {transaction.account.name}</span>
               )}

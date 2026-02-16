@@ -3,13 +3,14 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Receipt, Filter } from "lucide-react";
+import { Plus, Receipt, Filter, Tags } from "lucide-react";
 import { RepeatPurchaseBanner } from "@/components/transactions/RepeatPurchaseBanner";
 import { useTransactions, Transaction, TransactionFilters as FilterType } from "@/hooks/useTransactions";
 import { TransactionList } from "@/components/transactions/TransactionList";
 import { TransactionFilters } from "@/components/transactions/TransactionFilters";
 import { TransactionFormDialog } from "@/components/transactions/TransactionFormDialog";
 import { DeleteTransactionDialog } from "@/components/transactions/DeleteTransactionDialog";
+import { ManageTagsDialog } from "@/components/transactions/ManageTagsDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { getPayCycleForDate, toPaydaySettings } from "@/lib/payCycle";
@@ -39,6 +40,7 @@ export default function Transactions() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [manageTagsOpen, setManageTagsOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const totalIncome = transactions
@@ -77,10 +79,16 @@ export default function Transactions() {
               View and manage your transactions
             </p>
           </div>
-          <Button onClick={handleAddNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Transaction
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setManageTagsOpen(true)}>
+              <Tags className="h-4 w-4 mr-2" />
+              Manage Tags
+            </Button>
+            <Button onClick={handleAddNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Transaction
+            </Button>
+          </div>
         </div>
 
         {/* Repeat Purchase Suggestions */}
@@ -261,6 +269,7 @@ export default function Transactions() {
 
       <TransactionFormDialog open={formOpen} onOpenChange={setFormOpen} transaction={selectedTransaction} />
       <DeleteTransactionDialog open={deleteOpen} onOpenChange={setDeleteOpen} transaction={selectedTransaction} />
+      <ManageTagsDialog open={manageTagsOpen} onOpenChange={setManageTagsOpen} />
     </AppLayout>
   );
 }

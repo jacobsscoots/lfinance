@@ -19,6 +19,7 @@ import {
 import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet, Mail, RefreshCw, CheckCircle } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useTransactionTags } from "@/hooks/useTransactionTags";
 import { useGmailConnection } from "@/hooks/useGmailConnection";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { TransactionFilters as FilterType } from "@/hooks/useTransactions";
@@ -45,6 +46,7 @@ type ViewMode = "paycycle" | "month";
 export function TransactionFilters({ filters, onFiltersChange }: TransactionFiltersProps) {
   const { data: categories = [] } = useCategories();
   const { accounts } = useAccounts();
+  const { tags } = useTransactionTags();
   const { effectiveSettings } = usePaydaySettings();
   const isMobile = useIsMobile();
   const { isConnected, connection, sync, connect, isSyncing, isConnecting } = useGmailConnection();
@@ -161,7 +163,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
     }
   };
 
-  const hasActiveFilters = filters.categoryId || filters.type || filters.accountId || filters.search;
+  const hasActiveFilters = filters.categoryId || filters.type || filters.accountId || filters.search || (filters.tagIds && filters.tagIds.length > 0);
 
   return (
     <Card>
@@ -240,7 +242,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
         </div>
 
         {/* Filter Selects */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Select
             value={filters.type || "all"}
             onValueChange={(value) =>
@@ -299,6 +301,31 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
               {accounts.map((acc) => (
                 <SelectItem key={acc.id} value={acc.id}>
                   {acc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.tagIds?.[0] || "all"}
+            onValueChange={(value) =>
+              onFiltersChange({
+                ...filters,
+                tagIds: value === "all" ? undefined : [value],
+              })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Tag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tags</SelectItem>
+              {tags.map((tag) => (
+                <SelectItem key={tag.id} value={tag.id}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full inline-block" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
