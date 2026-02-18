@@ -200,9 +200,18 @@ serve(async (req) => {
       });
 
       if (!tokenResponse.ok) {
-        const errText = await tokenResponse.text();
+        const errBody = await tokenResponse.json().catch(() => ({}));
         await supabase.from('gmail_connections').update({ status: 'error' }).eq('id', connection.id);
-        throw new Error(`Failed to refresh Gmail token: ${errText}`);
+
+        // invalid_grant = token revoked or expired — user must reconnect
+        if (errBody?.error === 'invalid_grant') {
+          return new Response(
+            JSON.stringify({ error: 'gmail_token_revoked', message: 'Your Gmail access has been revoked. Please reconnect your Gmail account in Settings.' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        throw new Error(`Failed to refresh Gmail token: ${JSON.stringify(errBody)}`);
       }
 
       const tokens = await tokenResponse.json();
