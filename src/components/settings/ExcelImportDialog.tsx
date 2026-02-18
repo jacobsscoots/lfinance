@@ -471,7 +471,8 @@ export function ExcelImportDialog({
       );
       const { error } = await supabase
         .from("bills")
-        .insert([insertData]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert([insertData as any]);
       if (!error) {
         counter.added++;
       } else {
@@ -518,7 +519,8 @@ export function ExcelImportDialog({
       );
       const { error } = await supabase
         .from("debts")
-        .insert([debtInsertData]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert([debtInsertData as any]);
       if (!error) {
         res.debts.added++;
       } else {
