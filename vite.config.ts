@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => ({
     dedupe: [
       "react",
       "react-dom",
+      "react-dom/client",
       "react/jsx-runtime",
       "react/jsx-dev-runtime",
       "@tanstack/react-query",
@@ -28,7 +29,11 @@ export default defineConfig(({ mode }) => ({
     ],
   },
   optimizeDeps: {
-    include: ["@tanstack/react-query", "@tanstack/query-core"],
-    force: true, // Force re-optimization to clear stale cache
+    include: [
+      "@tanstack/react-query",
+      "@tanstack/query-core",
+      "@lovable.dev/cloud-auth-js",
+    ],
+    force: true,
   },
 }));
