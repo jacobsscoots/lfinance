@@ -150,17 +150,7 @@ export function useGmailConnection() {
       }
     },
     onError: (error) => {
-      const msg = error.message || '';
-      if (msg.includes('gmail_token_revoked') || msg.includes('401') || msg.includes('reconnect')) {
-        toast.error('Gmail access revoked — please reconnect your Gmail account in Settings → Gmail.', {
-          duration: 8000,
-          action: { label: 'Settings', onClick: () => window.location.href = '/settings' },
-        });
-        // Invalidate connection so UI reflects the error state
-        queryClient.invalidateQueries({ queryKey: ['gmail-connection'] });
-      } else {
-        toast.error(`Sync failed: ${msg}`);
-      }
+      toast.error(`Sync failed: ${error.message}`);
     },
   });
 

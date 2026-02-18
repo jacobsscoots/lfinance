@@ -519,24 +519,23 @@ serve(async (req) => {
         );
         break;
       case 'broadband':
-        comparisons = scanBroadbandDeals(currentMonthlyCost ?? 0, savingsThreshold, currentSpeedMbps, preferredContractMonths);
+        comparisons = scanBroadbandDeals(currentMonthlyCost, savingsThreshold, currentSpeedMbps, preferredContractMonths);
         break;
       case 'mobile':
-        comparisons = scanMobileDeals(currentMonthlyCost ?? 0, savingsThreshold, currentDataGb);
+        comparisons = scanMobileDeals(currentMonthlyCost, savingsThreshold, currentDataGb);
         break;
-      default: {
-        const fallbackCost = currentMonthlyCost ?? 0;
+      default:
+        // Generic comparison based on monthly cost
         comparisons = [{
           provider: 'Market Average',
           planName: 'Comparison',
-          monthlyCost: fallbackCost * 0.9,
-          annualCost: fallbackCost * 0.9 * 12,
-          savings: fallbackCost * 0.1 * 12,
-          recommend: fallbackCost * 0.1 * 12 >= savingsThreshold,
+          monthlyCost: currentMonthlyCost * 0.9,
+          annualCost: currentMonthlyCost * 0.9 * 12,
+          savings: currentMonthlyCost * 0.1 * 12,
+          recommend: currentMonthlyCost * 0.1 * 12 >= savingsThreshold,
           reason: 'Review market for potential 10% savings',
           source: 'estimate',
         }];
-      }
     }
 
     // Store top results in database with proper error handling

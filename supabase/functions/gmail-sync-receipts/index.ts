@@ -176,57 +176,21 @@ serve(async (req) => {
 
     if (connError || !connection) throw new Error('No Gmail connection found');
 
-    // Refresh token if expired or about to expire (within 5 minutes)
-    const tokenExpiresAt = connection.token_expires_at ? new Date(connection.token_expires_at) : null;
-    const needsRefresh = !tokenExpiresAt || tokenExpiresAt < new Date(Date.now() + 5 * 60 * 1000);
-
-    if (needsRefresh && connection.refresh_token) {
-      const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
-      const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
-
-      if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-        throw new Error('Gmail OAuth credentials not configured');
-      }
-
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    // Refresh token if expired
+    if (connection.token_expires_at && new Date(connection.token_expires_at) < new Date()) {
+      const refreshResponse = await fetch(`${SUPABASE_URL}/functions/v1/gmail-oauth`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: GOOGLE_CLIENT_ID,
-          client_secret: GOOGLE_CLIENT_SECRET,
-          refresh_token: connection.refresh_token,
-          grant_type: 'refresh_token',
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+        body: JSON.stringify({ action: 'refresh_token' }),
       });
+      if (!refreshResponse.ok) throw new Error('Failed to refresh Gmail token');
 
-      if (!tokenResponse.ok) {
-        const errBody = await tokenResponse.json().catch(() => ({}));
-        await supabase.from('gmail_connections').update({ status: 'error' }).eq('id', connection.id);
-
-        // invalid_grant = token revoked or expired — user must reconnect
-        if (errBody?.error === 'invalid_grant') {
-          return new Response(
-            JSON.stringify({ error: 'gmail_token_revoked', message: 'Your Gmail access has been revoked. Please reconnect your Gmail account in Settings.' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        throw new Error(`Failed to refresh Gmail token: ${JSON.stringify(errBody)}`);
-      }
-
-      const tokens = await tokenResponse.json();
-      const newAccessToken = tokens.access_token;
-      const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-
-      await supabase
+      const { data: updatedConnection } = await supabase
         .from('gmail_connections')
-        .update({ access_token: newAccessToken, token_expires_at: expiresAt, status: 'active' })
-        .eq('id', connection.id);
-
-      connection.access_token = newAccessToken;
-    } else if (needsRefresh && !connection.refresh_token) {
-      await supabase.from('gmail_connections').update({ status: 'error' }).eq('id', connection.id);
-      throw new Error('No refresh token available — please reconnect Gmail');
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      if (updatedConnection) connection.access_token = updatedConnection.access_token;
     }
 
     // Get sync settings
@@ -455,7 +419,7 @@ serve(async (req) => {
                 // Word overlap (handles "MyProtein Manchester" matching "Myprotein")
                 const mWords = merchantLower.split(/\s+/);
                 const dWords = descLower.split(/\s+/);
-                const overlap = mWords.filter((w: string) => w.length >= 3 && dWords.some((d: string) => d.includes(w) || w.includes(d)));
+                const overlap = mWords.filter(w => w.length >= 3 && dWords.some(d => d.includes(w) || w.includes(d)));
                 if (overlap.length > 0) { score += 20; reasons.push('Partial merchant match'); }
               }
             }

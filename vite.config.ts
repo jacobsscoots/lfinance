@@ -16,16 +16,9 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Force ALL react imports to the exact same file path — prevents duplicate React instances
-      "react": path.resolve(__dirname, "node_modules/react"),
-      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
-      "react/jsx-runtime": path.resolve(__dirname, "node_modules/react/jsx-runtime"),
-      "react/jsx-dev-runtime": path.resolve(__dirname, "node_modules/react/jsx-dev-runtime"),
     },
-    dedupe: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
-  },
-  optimizeDeps: {
-    include: [
+    // Prevent duplicate React instances that cause useMutation/useQuery errors
+    dedupe: [
       "react",
       "react-dom",
       "react/jsx-runtime",
@@ -33,6 +26,9 @@ export default defineConfig(({ mode }) => ({
       "@tanstack/react-query",
       "@tanstack/query-core",
     ],
-    force: true,
+  },
+  optimizeDeps: {
+    include: ["@tanstack/react-query", "@tanstack/query-core"],
+    force: true, // Force re-optimization to clear stale cache
   },
 }));
