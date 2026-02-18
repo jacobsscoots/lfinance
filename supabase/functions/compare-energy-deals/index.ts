@@ -505,6 +505,7 @@ serve(async (req) => {
     }
 
     let comparisons: TariffComparison[] = [];
+    const monthlyCost = currentMonthlyCost ?? 0;
 
     switch (serviceType) {
       case 'energy':
@@ -519,20 +520,20 @@ serve(async (req) => {
         );
         break;
       case 'broadband':
-        comparisons = scanBroadbandDeals(currentMonthlyCost, savingsThreshold, currentSpeedMbps, preferredContractMonths);
+        comparisons = scanBroadbandDeals(monthlyCost, savingsThreshold, currentSpeedMbps, preferredContractMonths);
         break;
       case 'mobile':
-        comparisons = scanMobileDeals(currentMonthlyCost, savingsThreshold, currentDataGb);
+        comparisons = scanMobileDeals(monthlyCost, savingsThreshold, currentDataGb);
         break;
       default:
         // Generic comparison based on monthly cost
         comparisons = [{
           provider: 'Market Average',
           planName: 'Comparison',
-          monthlyCost: currentMonthlyCost * 0.9,
-          annualCost: currentMonthlyCost * 0.9 * 12,
-          savings: currentMonthlyCost * 0.1 * 12,
-          recommend: currentMonthlyCost * 0.1 * 12 >= savingsThreshold,
+          monthlyCost: monthlyCost * 0.9,
+          annualCost: monthlyCost * 0.9 * 12,
+          savings: monthlyCost * 0.1 * 12,
+          recommend: monthlyCost * 0.1 * 12 >= savingsThreshold,
           reason: 'Review market for potential 10% savings',
           source: 'estimate',
         }];
