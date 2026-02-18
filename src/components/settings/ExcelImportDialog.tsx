@@ -471,7 +471,7 @@ export function ExcelImportDialog({
       );
       const { error } = await supabase
         .from("bills")
-        .insert([insertData]);
+        .insert([insertData] as any);
       if (!error) {
         counter.added++;
       } else {
@@ -518,7 +518,7 @@ export function ExcelImportDialog({
       );
       const { error } = await supabase
         .from("debts")
-        .insert([debtInsertData]);
+        .insert([debtInsertData] as any);
       if (!error) {
         res.debts.added++;
       } else {

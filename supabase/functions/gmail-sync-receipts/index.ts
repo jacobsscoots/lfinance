@@ -419,7 +419,7 @@ serve(async (req) => {
                 // Word overlap (handles "MyProtein Manchester" matching "Myprotein")
                 const mWords = merchantLower.split(/\s+/);
                 const dWords = descLower.split(/\s+/);
-                const overlap = mWords.filter(w => w.length >= 3 && dWords.some(d => d.includes(w) || w.includes(d)));
+                const overlap = mWords.filter((w: string) => w.length >= 3 && dWords.some((d: string) => d.includes(w) || w.includes(d)));
                 if (overlap.length > 0) { score += 20; reasons.push('Partial merchant match'); }
               }
             }
