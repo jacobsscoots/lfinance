@@ -176,21 +176,48 @@ serve(async (req) => {
 
     if (connError || !connection) throw new Error('No Gmail connection found');
 
-    // Refresh token if expired
-    if (connection.token_expires_at && new Date(connection.token_expires_at) < new Date()) {
-      const refreshResponse = await fetch(`${SUPABASE_URL}/functions/v1/gmail-oauth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
-        body: JSON.stringify({ action: 'refresh_token' }),
-      });
-      if (!refreshResponse.ok) throw new Error('Failed to refresh Gmail token');
+    // Refresh token if expired or about to expire (within 5 minutes)
+    const tokenExpiresAt = connection.token_expires_at ? new Date(connection.token_expires_at) : null;
+    const needsRefresh = !tokenExpiresAt || tokenExpiresAt < new Date(Date.now() + 5 * 60 * 1000);
 
-      const { data: updatedConnection } = await supabase
+    if (needsRefresh && connection.refresh_token) {
+      const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
+      const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
+
+      if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+        throw new Error('Gmail OAuth credentials not configured');
+      }
+
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: GOOGLE_CLIENT_ID,
+          client_secret: GOOGLE_CLIENT_SECRET,
+          refresh_token: connection.refresh_token,
+          grant_type: 'refresh_token',
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        const errText = await tokenResponse.text();
+        await supabase.from('gmail_connections').update({ status: 'error' }).eq('id', connection.id);
+        throw new Error(`Failed to refresh Gmail token: ${errText}`);
+      }
+
+      const tokens = await tokenResponse.json();
+      const newAccessToken = tokens.access_token;
+      const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+      await supabase
         .from('gmail_connections')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-      if (updatedConnection) connection.access_token = updatedConnection.access_token;
+        .update({ access_token: newAccessToken, token_expires_at: expiresAt, status: 'active' })
+        .eq('id', connection.id);
+
+      connection.access_token = newAccessToken;
+    } else if (needsRefresh && !connection.refresh_token) {
+      await supabase.from('gmail_connections').update({ status: 'error' }).eq('id', connection.id);
+      throw new Error('No refresh token available — please reconnect Gmail');
     }
 
     // Get sync settings
@@ -419,7 +446,7 @@ serve(async (req) => {
                 // Word overlap (handles "MyProtein Manchester" matching "Myprotein")
                 const mWords = merchantLower.split(/\s+/);
                 const dWords = descLower.split(/\s+/);
-                const overlap = mWords.filter(w => w.length >= 3 && dWords.some(d => d.includes(w) || w.includes(d)));
+                const overlap = mWords.filter((w: string) => w.length >= 3 && dWords.some((d: string) => d.includes(w) || w.includes(d)));
                 if (overlap.length > 0) { score += 20; reasons.push('Partial merchant match'); }
               }
             }

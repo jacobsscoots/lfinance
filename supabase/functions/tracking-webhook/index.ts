@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const mappedStatus = mapStatus(rawStatus);
+    const mappedStatus = mapStatus(rawStatus ?? '');
     const now = new Date().toISOString();
 
     // Find shipment by trackingmore_id first, then tracking_number
