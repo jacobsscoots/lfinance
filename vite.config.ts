@@ -30,6 +30,10 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     include: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
       "@tanstack/react-query",
       "@tanstack/query-core",
       "@lovable.dev/cloud-auth-js",
