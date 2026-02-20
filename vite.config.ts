@@ -25,10 +25,18 @@ export default defineConfig(({ mode }) => ({
       "react/jsx-dev-runtime",
       "@tanstack/react-query",
       "@tanstack/query-core",
+      "@supabase/supabase-js",
     ],
   },
   optimizeDeps: {
-    include: ["@tanstack/react-query", "@tanstack/query-core"],
-    force: true, // Force re-optimization to clear stale cache
+    include: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@tanstack/react-query",
+      "@tanstack/query-core",
+    ],
+    force: true,
   },
 }));
