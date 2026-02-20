@@ -52,9 +52,12 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
   const { isConnected, connection, sync, connect, isSyncing, isConnecting } = useGmailConnection();
   const [searchValue, setSearchValue] = useState(filters.search || "");
   const [viewMode, setViewMode] = useState<ViewMode>("paycycle");
-  const [currentPayCycle, setCurrentPayCycle] = useState<PayCycle | null>(null);
+  const [currentPayCycle, setCurrentPayCycle] = useState<PayCycle>(() => {
+    const paydaySettings = toPaydaySettings(effectiveSettings);
+    return getPayCycleForDate(new Date(), paydaySettings);
+  });
 
-  // Initialize pay cycle on mount
+  // Re-sync pay cycle when settings change
   useEffect(() => {
     const paydaySettings = toPaydaySettings(effectiveSettings);
     const cycle = getPayCycleForDate(new Date(), paydaySettings);
@@ -91,7 +94,6 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
   };
 
   const goToPreviousPayCycle = () => {
-    if (!currentPayCycle) return;
     const paydaySettings = toPaydaySettings(effectiveSettings);
     const prevCycle = getPrevPayCycle(currentPayCycle, paydaySettings);
     setCurrentPayCycle(prevCycle);
@@ -103,7 +105,6 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
   };
 
   const goToNextPayCycle = () => {
-    if (!currentPayCycle) return;
     const paydaySettings = toPaydaySettings(effectiveSettings);
     const nextCycle = getNextPayCycle(currentPayCycle, paydaySettings);
     setCurrentPayCycle(nextCycle);
@@ -200,11 +201,9 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="font-medium text-sm text-center flex-1 truncate">
-              {currentPayCycle 
-                ? (isMobile 
-                    ? formatPayCycleLabelShort(currentPayCycle) 
-                    : formatPayCycleLabel(currentPayCycle))
-                : "Loading..."}
+              {isMobile 
+                ? formatPayCycleLabelShort(currentPayCycle) 
+                : formatPayCycleLabel(currentPayCycle)}
             </span>
             <Button variant="outline" size="icon" onClick={goToNextPayCycle}>
               <ChevronRight className="h-4 w-4" />
