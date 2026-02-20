@@ -16,8 +16,12 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Force single React instance to prevent "Cannot read properties of null (reading 'useState')"
+      "react": path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+      "react/jsx-runtime": path.resolve(__dirname, "node_modules/react/jsx-runtime"),
+      "react/jsx-dev-runtime": path.resolve(__dirname, "node_modules/react/jsx-dev-runtime"),
     },
-    // Prevent duplicate React instances that cause useMutation/useQuery errors
     dedupe: [
       "react",
       "react-dom",
@@ -26,6 +30,7 @@ export default defineConfig(({ mode }) => ({
       "@tanstack/react-query",
       "@tanstack/query-core",
       "@supabase/supabase-js",
+      "@lovable.dev/cloud-auth-js",
     ],
   },
   optimizeDeps: {
