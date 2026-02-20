@@ -211,15 +211,23 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const totalSpent = realExpenses
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
+  // Identify the Monzo current account for safe-to-spend calculations
+  const monzoCurrentAccount = allAccounts.find(
+    a => !a.is_hidden && a.provider === 'ob-monzo' && a.account_type === 'current'
+  );
+
   // Get credit card account IDs to exclude from discretionary calc
   const creditAccountIds = new Set(
     allAccounts.filter(a => a.account_type === 'credit').map(a => a.id)
   );
 
   // Split actual spending into bill-linked vs discretionary
-  // Only count transactions from non-credit accounts for discretionary budget tracking
+  // Only count transactions from the Monzo current account for discretionary budget tracking
+  const spendingAccountIds = monzoCurrentAccount 
+    ? new Set([monzoCurrentAccount.id])
+    : new Set(allAccounts.filter(a => !a.is_hidden && a.account_type !== 'credit').map(a => a.id));
   const nonCreditExpenses = realExpenses.filter(
-    t => !creditAccountIds.has(t.account_id)
+    t => spendingAccountIds.has(t.account_id)
   );
   const billLinkedSpent = nonCreditExpenses
     .filter(t => t.bill_id)
@@ -256,10 +264,11 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
   const totalRestOfCycle = billsRestOfCycle.reduce((sum, b) => sum + Number(b.amount), 0);
   const committedRemaining = totalNext7Days + totalRestOfCycle;
   
-  // Calculate balance excluding credit card accounts
-  const nonCreditBalance = allAccounts
-    .filter(a => !a.is_hidden && a.account_type !== 'credit')
-    .reduce((sum, a) => sum + Number(a.balance), 0);
+  // Calculate balance using only the Monzo current account for safe-to-spend
+  const nonCreditBalance = monzoCurrentAccount ? Number(monzoCurrentAccount.balance) : 
+    allAccounts
+      .filter(a => !a.is_hidden && a.account_type !== 'credit')
+      .reduce((sum, a) => sum + Number(a.balance), 0);
   
   // "Restart from today" runway calculation
   // Today's spend from non-credit accounts (local timezone)
