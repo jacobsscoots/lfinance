@@ -22,7 +22,9 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           display_name: string | null
+          display_name_encrypted: string | null
           external_id: string | null
+          external_id_encrypted: string | null
           id: string
           is_hidden: boolean
           is_primary: boolean | null
@@ -39,7 +41,9 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           display_name?: string | null
+          display_name_encrypted?: string | null
           external_id?: string | null
+          external_id_encrypted?: string | null
           id?: string
           is_hidden?: boolean
           is_primary?: boolean | null
@@ -56,7 +60,9 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           display_name?: string | null
+          display_name_encrypted?: string | null
           external_id?: string | null
+          external_id_encrypted?: string | null
           id?: string
           is_hidden?: boolean
           is_primary?: boolean | null
@@ -1146,8 +1152,10 @@ export type Database = {
           amount: number
           created_at: string
           description: string
+          description_encrypted: string | null
           id: string
           reference: string | null
+          reference_encrypted: string | null
           transaction_date: string
           user_id: string
         }
@@ -1156,8 +1164,10 @@ export type Database = {
           amount: number
           created_at?: string
           description: string
+          description_encrypted?: string | null
           id?: string
           reference?: string | null
+          reference_encrypted?: string | null
           transaction_date: string
           user_id: string
         }
@@ -1166,8 +1176,10 @@ export type Database = {
           amount?: number
           created_at?: string
           description?: string
+          description_encrypted?: string | null
           id?: string
           reference?: string | null
+          reference_encrypted?: string | null
           transaction_date?: string
           user_id?: string
         }
@@ -1533,6 +1545,7 @@ export type Database = {
           access_token: string | null
           created_at: string
           email: string
+          email_encrypted: string | null
           id: string
           last_synced_at: string | null
           refresh_token: string | null
@@ -1545,6 +1558,7 @@ export type Database = {
           access_token?: string | null
           created_at?: string
           email: string
+          email_encrypted?: string | null
           id?: string
           last_synced_at?: string | null
           refresh_token?: string | null
@@ -1557,6 +1571,7 @@ export type Database = {
           access_token?: string | null
           created_at?: string
           email?: string
+          email_encrypted?: string | null
           id?: string
           last_synced_at?: string | null
           refresh_token?: string | null
@@ -1764,6 +1779,7 @@ export type Database = {
           notes: string | null
           order_date: string
           order_reference: string | null
+          order_reference_encrypted: string | null
           retailer: string
           subtotal: number
           total_amount: number
@@ -1781,6 +1797,7 @@ export type Database = {
           notes?: string | null
           order_date: string
           order_reference?: string | null
+          order_reference_encrypted?: string | null
           retailer: string
           subtotal: number
           total_amount: number
@@ -1798,6 +1815,7 @@ export type Database = {
           notes?: string | null
           order_date?: string
           order_reference?: string | null
+          order_reference_encrypted?: string | null
           retailer?: string
           subtotal?: number
           total_amount?: number
@@ -4057,6 +4075,26 @@ export type Database = {
     Functions: {
       decrypt_token: { Args: { encrypted_data: string }; Returns: string }
       encrypt_token: { Args: { plain_text: string }; Returns: string }
+      get_bank_accounts_decrypted: {
+        Args: never
+        Returns: {
+          account_type: string
+          balance: number
+          connection_id: string
+          created_at: string
+          deleted_at: string
+          display_name: string
+          external_id: string
+          id: string
+          is_hidden: boolean
+          is_primary: boolean
+          last_synced_at: string
+          name: string
+          provider: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
       get_bank_connection_tokens: {
         Args: { p_connection_id: string }
         Returns: {
@@ -4087,6 +4125,31 @@ export type Database = {
           created_at: string
           electricity_resource_id: string
           gas_resource_id: string
+          id: string
+          last_synced_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      get_debt_transactions_decrypted: {
+        Args: never
+        Returns: {
+          account_name: string
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          reference: string
+          transaction_date: string
+          user_id: string
+        }[]
+      }
+      get_gmail_connections_decrypted: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
           id: string
           last_synced_at: string
           status: string

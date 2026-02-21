@@ -47,14 +47,18 @@ export function useAccounts() {
     queryKey: ['accounts', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('bank_accounts')
-        .select('*')
-        .is('deleted_at', null)
-        .order('is_primary', { ascending: false })
-        .order('name');
+        .rpc('get_bank_accounts_decrypted');
 
       if (error) throw error;
-      return (data || []) as BankAccount[];
+      // Filter out deleted and sort: primary first, then by name
+      const accounts = (data || []) as BankAccount[];
+      return accounts
+        .filter(a => !a.deleted_at)
+        .sort((a, b) => {
+          if (a.is_primary && !b.is_primary) return -1;
+          if (!a.is_primary && b.is_primary) return 1;
+          return a.name.localeCompare(b.name);
+        });
     },
     enabled: !!user,
     // Auto-refresh every 5 minutes (matches bank connection auto-sync interval)

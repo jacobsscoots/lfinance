@@ -44,13 +44,12 @@ export function useDebtTransactions() {
       if (!user?.id) return [];
       
       const { data, error } = await supabase
-        .from("debt_transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("transaction_date", { ascending: false });
+        .rpc("get_debt_transactions_decrypted");
       
       if (error) throw error;
-      return data as DebtTransaction[];
+      // Sort by date descending (RPC doesn't support order)
+      const txns = (data || []) as DebtTransaction[];
+      return txns.sort((a, b) => b.transaction_date.localeCompare(a.transaction_date));
     },
     enabled: !!user?.id,
   });

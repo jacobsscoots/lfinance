@@ -33,7 +33,7 @@ export function useGmailConnection() {
       if (!user) return null;
       
       const { data, error } = await supabase
-        .rpc("get_gmail_connections_safe");
+        .rpc("get_gmail_connections_decrypted");
 
       if (error) throw error;
       const rows = data as GmailConnection[] | null;
