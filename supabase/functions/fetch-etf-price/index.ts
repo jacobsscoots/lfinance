@@ -103,11 +103,33 @@ Deno.serve(async (req) => {
       prevCloseGBP = previousClose ? previousClose / 100 : null;
     }
 
-    // Upsert the valuation using the service role to bypass RLS
+    // Calculate position value: share price × total units held
     const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
+    // Get total units held for this investment
+    const { data: txns } = await serviceClient
+      .from('investment_transactions')
+      .select('type, units, amount')
+      .eq('investment_account_id', investment_account_id)
+      .eq('user_id', user.id);
+
+    let totalUnits = 0;
+    if (txns) {
+      for (const tx of txns) {
+        const u = tx.units ? Number(tx.units) : 0;
+        if (tx.type === 'deposit' || tx.type === 'dividend') {
+          totalUnits += u;
+        } else if (tx.type === 'withdrawal') {
+          totalUnits -= u;
+        }
+      }
+    }
+
+    // Position value = share price × units held
+    const positionValue = totalUnits > 0 ? priceGBP * totalUnits : priceGBP;
 
     const { error: upsertError } = await serviceClient
       .from('investment_valuations')
@@ -115,7 +137,7 @@ Deno.serve(async (req) => {
         user_id: user.id,
         investment_account_id,
         valuation_date: latestDate,
-        value: priceGBP,
+        value: positionValue,
         source: 'live',
       }, {
         onConflict: 'investment_account_id,valuation_date',
@@ -125,13 +147,17 @@ Deno.serve(async (req) => {
       console.error('Upsert error:', upsertError);
     }
 
-    const dailyChange = prevCloseGBP
+    const dailyChange = prevCloseGBP && totalUnits > 0
+      ? { amount: (priceGBP - prevCloseGBP) * totalUnits, percentage: ((priceGBP - prevCloseGBP) / prevCloseGBP) * 100 }
+      : prevCloseGBP
       ? { amount: priceGBP - prevCloseGBP, percentage: ((priceGBP - prevCloseGBP) / prevCloseGBP) * 100 }
       : null;
 
     return new Response(JSON.stringify({
       ticker,
       price: priceGBP,
+      positionValue,
+      totalUnits,
       previousClose: prevCloseGBP,
       date: latestDate,
       currency: 'GBP',
