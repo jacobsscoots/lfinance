@@ -173,7 +173,7 @@ export function InvestmentCard({
               </div>
             )}
             {investment.ticker_symbol && (
-              <Badge variant="secondary" className="text-xs py-0">{investment.ticker_symbol}</Badge>
+              <Badge variant="secondary" className="text-xs py-0">{investment.ticker_symbol.replace(/\.L$/i, '')}</Badge>
             )}
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3 flex-shrink-0" />
