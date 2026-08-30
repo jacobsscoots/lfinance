@@ -24,7 +24,7 @@ function parseDate(dateStr: string): string | null {
   ];
 
   for (const format of formats) {
-    const match = dateStr.match(format);
+    const match = format.exec(dateStr);
     if (match) {
       let year: string, month: string, day: string;
 

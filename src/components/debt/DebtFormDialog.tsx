@@ -37,7 +37,7 @@ interface DebtFormDialogProps {
   debt?: Debt;
 }
 
-export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps) {
+export function DebtFormDialog({ open, onOpenChange, debt }: Readonly<DebtFormDialogProps>) {
   const { createDebt, updateDebt } = useDebts();
   const { allAccounts } = useAccounts();
   const isEditing = !!debt;

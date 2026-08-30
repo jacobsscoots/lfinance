@@ -24,7 +24,7 @@ export function InvestmentPerformanceChart({
   startDate,
   expectedAnnualReturn,
   showProjections = true,
-}: InvestmentPerformanceChartProps) {
+}: Readonly<InvestmentPerformanceChartProps>) {
   const [timeRange, setTimeRange] = useState<TimeRange>("3M");
 
   const chartData = useMemo(() => {

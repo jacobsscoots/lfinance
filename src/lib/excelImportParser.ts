@@ -250,7 +250,7 @@ export function normaliseDate(value: any): string | null {
   }
 
   // UK format DD/MM/YYYY
-  const ukMatch = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  const ukMatch = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(str);
   if (ukMatch) {
     const day = Number.parseInt(ukMatch[1]);
     const month = Number.parseInt(ukMatch[2]) - 1;
@@ -462,7 +462,7 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
           value = Number(rawVal);
         }
 
-        const colMatch = ref.match(/^([A-Z]+)/);
+        const colMatch = /^([A-Z]+)/.exec(ref);
         if (colMatch) {
           const colIdx = colLetterToIndex(colMatch[1]);
           rowMap.set(colIdx, value);

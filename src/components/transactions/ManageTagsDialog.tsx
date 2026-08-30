@@ -16,7 +16,7 @@ const TAG_COLORS = [
   "#64748b", "#10b981",
 ];
 
-export function ManageTagsDialog({ open, onOpenChange }: ManageTagsDialogProps) {
+export function ManageTagsDialog({ open, onOpenChange }: Readonly<ManageTagsDialogProps>) {
   const { tags, createTag, updateTag, deleteTag, seedDefaults } = useTransactionTags();
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(TAG_COLORS[0]);

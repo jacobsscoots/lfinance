@@ -248,7 +248,7 @@ export function extractAmountFromText(text: string): number | null {
   ];
   
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = pattern.exec(text);
     if (match) {
       const amount = Number.parseFloat(match[1].replace(',', ''));
       if (!Number.isNaN(amount) && amount > 0) {

@@ -55,7 +55,7 @@ export function TariffFormDialog({
   isLoading,
   defaultValues,
   mode = "create",
-}: TariffFormDialogProps) {
+}: Readonly<TariffFormDialogProps>) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {

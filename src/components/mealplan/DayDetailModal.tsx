@@ -48,7 +48,7 @@ export function DayDetailModal({
   onEdit,
   weeklyOverride,
   previousWeekOverride
-}: DayDetailModalProps) {
+}: Readonly<DayDetailModalProps>) {
   // State for debug panel
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
   const [solverDebug, setSolverDebug] = useState<PortioningSolverDebugPayload | null>(null);

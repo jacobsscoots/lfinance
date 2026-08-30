@@ -16,7 +16,7 @@ function getSourceBreakdown(readings: EnergyReading[]) {
   return { smartMeter, manual };
 }
 
-export function EnergyUsageChart({ readings, days = 30 }: EnergyUsageChartProps) {
+export function EnergyUsageChart({ readings, days = 30 }: Readonly<EnergyUsageChartProps>) {
   const chartData = useMemo(() => {
     // Sort readings by date ascending to calculate consumption differences
     const sortedReadings = [...readings].sort(

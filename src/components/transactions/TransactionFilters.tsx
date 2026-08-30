@@ -20,7 +20,7 @@ import { useIsMobile } from "@/hooks/use-mobile";interface TransactionFiltersPro
 
 type ViewMode = "paycycle" | "month";
 
-export function TransactionFilters({ filters, onFiltersChange }: TransactionFiltersProps) {
+export function TransactionFilters({ filters, onFiltersChange }: Readonly<TransactionFiltersProps>) {
   const { data: categories = [] } = useCategories();
   const { accounts } = useAccounts();
   const { tags } = useTransactionTags();

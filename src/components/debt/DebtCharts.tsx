@@ -16,7 +16,7 @@ interface DebtChartsProps {
 
 type DateRange = '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
-export function DebtCharts({ debts, payments, snapshots }: DebtChartsProps) {
+export function DebtCharts({ debts, payments, snapshots }: Readonly<DebtChartsProps>) {
   const [dateRange, setDateRange] = useState<DateRange>('6M');
 
   const getStartDate = () => {

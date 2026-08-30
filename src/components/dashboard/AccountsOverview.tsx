@@ -17,7 +17,7 @@ interface AccountsOverviewProps {
   isLoading?: boolean;
 }
 
-function AccountRow({ account }: { account: Account }) {
+function AccountRow({ account }: Readonly<{ account: Account }>) {
   const displayName = account.displayName || account.name;
   const needsSync = account.lastSyncedAt && 
     new Date(account.lastSyncedAt) < new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -50,7 +50,7 @@ function AccountRow({ account }: { account: Account }) {
   );
 }
 
-export function AccountsOverview({ accounts, isLoading }: AccountsOverviewProps) {
+export function AccountsOverview({ accounts, isLoading }: Readonly<AccountsOverviewProps>) {
   if (isLoading) {
     return (
       <Card>

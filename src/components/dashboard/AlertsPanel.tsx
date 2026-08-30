@@ -36,7 +36,7 @@ const alertStyles = {
   },
 };
 
-function AlertItem({ alert }: { alert: Alert }) {
+function AlertItem({ alert }: Readonly<{ alert: Alert }>) {
   const style = alertStyles[alert.type];
   const Icon = style.icon;
   
@@ -65,7 +65,7 @@ function AlertItem({ alert }: { alert: Alert }) {
   );
 }
 
-export function AlertsPanel({ alerts, isLoading }: AlertsPanelProps) {
+export function AlertsPanel({ alerts, isLoading }: Readonly<AlertsPanelProps>) {
   if (isLoading) {
     return (
       <Card>

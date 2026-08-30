@@ -32,7 +32,7 @@ function getOrdinalSuffix(day: number): string {
   }
 }
 
-export function BillListItem({ bill, onEdit, onDelete }: BillListItemProps) {
+export function BillListItem({ bill, onEdit, onDelete }: Readonly<BillListItemProps>) {
   const amount = Number(bill.amount);
   const isVariable = (bill as any).bill_type === "variable" || (bill as any).is_variable;
 

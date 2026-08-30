@@ -175,7 +175,7 @@ interface PaymentCardProps {
   formatCurrency: (amount: number) => string;
 }
 
-function PaymentCard({ payment, isLinked, isSuggested, onToggle, formatCurrency }: PaymentCardProps) {
+function PaymentCard({ payment, isLinked, isSuggested, onToggle, formatCurrency }: Readonly<PaymentCardProps>) {
   return (
     <Card className={`${isLinked ? 'border-green-500/50 bg-green-500/5' : isSuggested ? 'border-amber-500/50' : ''}`}>
       <CardContent className="p-3 flex items-center justify-between gap-3">

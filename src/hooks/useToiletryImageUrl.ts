@@ -17,7 +17,7 @@ export function useToiletryImageUrl(imageUrl: string | null | undefined): string
     // Legacy: already a full URL (from when bucket was public)
     if (imageUrl.startsWith("http")) {
       // Try to extract the path from the old public URL and create a signed URL
-      const match = imageUrl.match(/\/toiletry-images\/(.+)$/);
+      const match = /\/toiletry-images\/(.+)$/.exec(imageUrl);
       if (match) {
         supabase.storage
           .from("toiletry-images")

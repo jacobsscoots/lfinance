@@ -78,7 +78,7 @@ export function parseMultiBuyOffer(offerLabel: string | null | undefined): Multi
   
   // Pattern: "X for Y" (e.g., "4 for 3", "3 for 2")
   const forPattern = /(\d{1,6})\s{0,20}for\s{0,20}(?:the\s{0,20}price\s{0,20}of\s{0,20})?(\d{1,6})/i;
-  const forMatch = normalized.match(forPattern);
+  const forMatch = forPattern.exec(normalized);
   if (forMatch) {
     const buyQty = Number.parseInt(forMatch[1], 10);
     const payQty = Number.parseInt(forMatch[2], 10);
@@ -89,7 +89,7 @@ export function parseMultiBuyOffer(offerLabel: string | null | undefined): Multi
   
   // Pattern: "Buy X Get Y Free" (e.g., "Buy 2 Get 1 Free", "Buy 3 Get 1 Free")
   const bogofPattern = /buy\s*(\d+)\s*get\s*(\d+)\s*free/i;
-  const bogofMatch = normalized.match(bogofPattern);
+  const bogofMatch = bogofPattern.exec(normalized);
   if (bogofMatch) {
     const buyQty = Number.parseInt(bogofMatch[1], 10);
     const freeQty = Number.parseInt(bogofMatch[2], 10);

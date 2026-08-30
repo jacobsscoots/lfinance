@@ -74,7 +74,7 @@ interface ProductFormDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function ProductFormDialog({ product, open, onOpenChange }: ProductFormDialogProps) {
+function ProductFormDialog({ product, open, onOpenChange }: Readonly<ProductFormDialogProps>) {
   const { createProduct, updateProduct } = useProducts();
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const isEditing = !!product;
