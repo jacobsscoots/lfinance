@@ -1,0 +1,49 @@
+name: Sonar remediation
+
+on:
+  push:
+    branches:
+      - fix/sonar-security-reliability-deps
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply source remediations
+        run: node .github/sonar-remediate.mjs
+      - name: Refresh vulnerable dependencies conservatively
+        run: |
+          npm install --save react-router-dom@6.30.6 pdfjs-dist@4.10.38
+          npm install --save-dev postcss@8.5.26 vitest@3.2.7 vite@6.4.3
+          npm audit fix || true
+      - name: Test
+        run: npm test -- --run
+      - name: Build
+        run: npm run build
+      - name: Report remaining npm audit findings
+        run: |
+          npm audit --json > /tmp/npm-audit.json || true
+          node -e 'const a=require("/tmp/npm-audit.json"); console.log(JSON.stringify(a.metadata?.vulnerabilities ?? {}, null, 2))'
+      - name: Commit remediation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix: clear Sonar security reliability and dependency findings"
+          git push origin HEAD:fix/sonar-security-reliability-deps
