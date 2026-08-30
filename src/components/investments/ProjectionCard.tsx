@@ -45,8 +45,8 @@ export function ProjectionCard({
 
   const projections = useMemo(() => {
     return periods.map((p) => ({
-      months: parseInt(p),
-      data: calculateProjectionScenarios(currentValue, monthlyContribution, expectedAnnualReturn, parseInt(p)),
+      months: Number.parseInt(p),
+      data: calculateProjectionScenarios(currentValue, monthlyContribution, expectedAnnualReturn, Number.parseInt(p)),
     }));
   }, [currentValue, monthlyContribution, expectedAnnualReturn, periods]);
 
@@ -104,7 +104,7 @@ export function ProjectionCard({
               min="0"
               max="50"
               value={expectedAnnualReturn}
-              onChange={(e) => onReturnChange(parseFloat(e.target.value) || 0)}
+              onChange={(e) => onReturnChange(Number.parseFloat(e.target.value) || 0)}
               className="w-24"
             />
             <span className="text-sm text-muted-foreground">% per year</span>
@@ -168,7 +168,7 @@ export function ProjectionCard({
               step="1"
               min="0"
               value={monthlyContribution}
-              onChange={(e) => onContributionChange(parseFloat(e.target.value) || 0)}
+              onChange={(e) => onContributionChange(Number.parseFloat(e.target.value) || 0)}
               className="w-20 h-8 text-right font-medium"
             />
             <span className="text-muted-foreground">/month</span>

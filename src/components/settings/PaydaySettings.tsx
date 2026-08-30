@@ -95,7 +95,7 @@ export function PaydaySettings() {
           <div className="flex items-center gap-2">
             <Select
               value={paydayDate.toString()}
-              onValueChange={(value) => setPaydayDate(parseInt(value))}
+              onValueChange={(value) => setPaydayDate(Number.parseInt(value))}
             >
               <SelectTrigger id="payday-date" className="w-24">
                 <SelectValue />

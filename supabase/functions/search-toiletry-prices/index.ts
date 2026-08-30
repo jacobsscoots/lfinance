@@ -230,7 +230,7 @@ If this doesn't appear to be a product page or you can't find pricing, return {"
         const aiData = await aiResponse.json();
         const aiContent = aiData.choices?.[0]?.message?.content || "";
         
-        const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
+        const jsonMatch = aiContent.match(/\{[\s\S]{0,100000}\}/);
         if (!jsonMatch) continue;
 
         const parsed = JSON.parse(jsonMatch[0]);

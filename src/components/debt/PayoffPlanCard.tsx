@@ -60,7 +60,7 @@ export function PayoffPlanCard({ debts }: PayoffPlanCardProps) {
               type="number"
               placeholder={`Min: ${totalMinPayments}`}
               value={budget || ''}
-              onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
+              onChange={(e) => setBudget(Number.parseFloat(e.target.value) || 0)}
             />
             <p className="text-xs text-muted-foreground">
               Minimum payments total: £{totalMinPayments}
@@ -155,7 +155,7 @@ export function PayoffPlanCard({ debts }: PayoffPlanCardProps) {
                             <p className="font-medium">{item.creditorName}</p>
                             <p className="text-sm text-muted-foreground">
                               {formatCurrency(Number(item.currentBalance))}
-                              {item.apr && ` • ${item.apr}% APR`}
+                              {Boolean(item.apr) && ` • ${item.apr}% APR`}
                             </p>
                           </div>
                         </div>

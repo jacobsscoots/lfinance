@@ -226,7 +226,7 @@ export function generateIcsContent(
   reminder.setDate(reminder.getDate() - reminderDays);
 
   const formatDate = (d: Date) =>
-    d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    d.toISOString().replaceAll(/[-:]/g, '').split('.')[0] + 'Z';
 
   return `BEGIN:VCALENDAR
 VERSION:2.0

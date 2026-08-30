@@ -55,10 +55,10 @@ export function ManualItemDialog({ open, onOpenChange, mealType, onConfirm }: Ma
     }
   }, [open]);
 
-  const parsedCals = parseFloat(calories) || 0;
-  const parsedP = parseFloat(protein) || 0;
-  const parsedC = parseFloat(carbs) || 0;
-  const parsedF = parseFloat(fat) || 0;
+  const parsedCals = Number.parseFloat(calories) || 0;
+  const parsedP = Number.parseFloat(protein) || 0;
+  const parsedC = Number.parseFloat(carbs) || 0;
+  const parsedF = Number.parseFloat(fat) || 0;
 
   // Macro-implied calories
   const impliedCals = Math.round(parsedP * 4 + parsedC * 4 + parsedF * 9);
@@ -70,7 +70,7 @@ export function ManualItemDialog({ open, onOpenChange, mealType, onConfirm }: Ma
   const handleConfirm = () => {
     onConfirm({
       custom_name: name.trim(),
-      quantity_grams: parseFloat(grams) || 0,
+      quantity_grams: Number.parseFloat(grams) || 0,
       custom_calories: parsedCals,
       custom_protein: parsedP,
       custom_carbs: parsedC,

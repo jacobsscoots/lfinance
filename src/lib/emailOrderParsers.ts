@@ -81,10 +81,10 @@ export function classifyEmail(subject: string, bodySnippet?: string): EmailType 
 // --- Order Number Extraction ---
 
 const ORDER_NUMBER_PATTERNS = [
-  /order\s*(?:#|number|no\.?|ref\.?)\s*[:.]?\s*([A-Z0-9-]{4,30})/i,
+  /order\s{0,20}(?:#|number|no\.?|ref\.?)\s{0,20}[:.]?\s{0,20}([A-Z0-9-]{4,30})/i,
   /order\s*([0-9]{3,}-[0-9]{3,}-[0-9]{3,})/i, // Amazon format
   /ref(?:erence)?[:\s]+([A-Z0-9-]{4,30})/i,
-  /confirmation\s*(?:#|number)\s*[:.]?\s*([A-Z0-9-]{4,30})/i,
+  /confirmation\s{0,20}(?:#|number)\s{0,20}[:.]?\s{0,20}([A-Z0-9-]{4,30})/i,
 ];
 
 export function extractOrderNumber(text: string): string | null {
@@ -107,7 +107,7 @@ const TRACKING_PATTERNS = [
   // DHL
   { carrier: "DHL", pattern: /\b(\d{10,11})\b/ },
   // Generic tracking
-  { carrier: null, pattern: /tracking\s*(?:#|number|no\.?|ref\.?)\s*[:.]?\s*([A-Z0-9]{8,30})/i },
+  { carrier: null, pattern: /tracking\s{0,20}(?:#|number|no\.?|ref\.?)\s{0,20}[:.]?\s{0,20}([A-Z0-9]{8,30})/i },
   { carrier: null, pattern: /track(?:ing)?\s*[:]\s*([A-Z0-9-]{8,30})/i },
 ];
 
@@ -131,7 +131,7 @@ export function extractTrackingNumber(text: string): TrackingMatch | null {
 export function extractAmount(text: string): number | null {
   const match = text.match(/(?:£|GBP)\s?([\d,]+\.?\d{0,2})/);
   if (match?.[1]) {
-    return parseFloat(match[1].replace(",", ""));
+    return Number.parseFloat(match[1].replace(",", ""));
   }
   return null;
 }

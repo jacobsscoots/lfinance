@@ -568,12 +568,12 @@ async function handleMealPlanner(
 
       // Perturbation escape every 200 stale iterations
       if (staleCount > 200 && staleCount % 200 === 0) {
-        const shuffled = [...nonSeasoningFoods].sort(() => Math.random() - 0.5);
+        const shuffled = [...nonSeasoningFoods].sort(() => secureRandom() - 0.5);
         const numPerturb = Math.min(3, shuffled.length);
         for (let pi = 0; pi < numPerturb; pi++) {
           const f = shuffled[pi];
           const cur = grams.get(f.id) || 0;
-          const delta = (Math.random() > 0.5 ? 1 : -1) * Math.round(Math.random() * 20 + 5);
+          const delta = (secureRandom() > 0.5 ? 1 : -1) * Math.round(secureRandom() * 20 + 5);
           grams.set(f.id, Math.max(f.minG, Math.min(f.maxG, cur + delta)));
         }
         continue;
@@ -744,10 +744,10 @@ async function handleMealPlanner(
       const rand = new Map<string, number>();
       for (const food of freeFoods) {
         if (food.isSeasoning) {
-          rand.set(food.id, Math.min(5 + Math.round(Math.random() * 10), food.maxG));
+          rand.set(food.id, Math.min(5 + Math.round(secureRandom() * 10), food.maxG));
         } else {
           const range = food.maxG - food.minG;
-          rand.set(food.id, food.minG + Math.round(Math.random() * range));
+          rand.set(food.id, food.minG + Math.round(secureRandom() * range));
         }
       }
       starts.push(rand);
@@ -1225,3 +1225,10 @@ serve(async (req) => {
     );
   }
 });
+
+
+function secureRandom(): number {
+  const values = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(values);
+  return values[0] / 0x1_0000_0000;
+}

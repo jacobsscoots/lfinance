@@ -197,7 +197,7 @@ export function DebtList({ debts, payments, isLoading, onAddDebt, onLogPayment }
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {formatCurrency(Number(debt.current_balance))} / {formatCurrency(Number(debt.starting_balance))}
-                            {debt.apr && <span className="ml-2">• {debt.apr}% APR</span>}
+                            {Boolean(debt.apr) && <span className="ml-2">• {debt.apr}% APR</span>}
                           </p>
                         </div>
 
@@ -233,8 +233,8 @@ export function DebtList({ debts, payments, isLoading, onAddDebt, onLogPayment }
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>{progress.toFixed(1)}% paid</span>
                           <span>
-                            {debt.min_payment && `£${debt.min_payment} min`}
-                            {debt.due_day && ` • Due: ${debt.due_day}${getOrdinalSuffix(debt.due_day)}`}
+                            {Boolean(debt.min_payment) && `£${debt.min_payment} min`}
+                            {Boolean(debt.due_day) && ` • Due: ${debt.due_day}${getOrdinalSuffix(debt.due_day)}`}
                           </span>
                         </div>
                       </div>

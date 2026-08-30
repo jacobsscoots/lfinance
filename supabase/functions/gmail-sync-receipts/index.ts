@@ -71,8 +71,8 @@ function extractMerchant(from: string): string | null {
   }
 
   // Fall back to domain extraction: service@t.myprotein.com → myprotein
-  const domainMatch = from.match(/@(?:[^.]+\.)*([^.]+)\.[a-z]{2,}>/i) 
-    || from.match(/@(?:[^.]+\.)*([^.]+)\.[a-z]{2,}$/i);
+  const domainMatch = from.match(/@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}>/i) 
+    || from.match(/@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}$/i);
   if (domainMatch) {
     const domain = domainMatch[1];
     // Skip generic domains
@@ -91,8 +91,8 @@ function extractMerchant(from: string): string | null {
 function extractAmount(text: string): number | null {
   const patterns = [
     /(?:total|order total|amount|charged|paid)[:\s]*£\s*([\d,]+\.?\d*)/i,
-    /£\s*([\d,]+\.?\d*)\s*(?:total|paid|charged)/i,
-    /(?:total|order total|amount)[:\s]*(?:GBP)?\s*([\d,]+\.?\d*)/i,
+    /£\s{0,20}([\d,]{1,32}\.?\d*)\s{0,20}(?:total|paid|charged)/i,
+    /(?:total|order total|amount)[:\s]*(?:GBP)?\s{0,20}([\d,]{1,32}\.?\d*)/i,
     /£\s*([\d,]+\.?\d*)/g, // fallback: any £ amount
   ];
 
@@ -100,8 +100,8 @@ function extractAmount(text: string): number | null {
   for (let i = 0; i < patterns.length - 1; i++) {
     const match = text.match(patterns[i]);
     if (match) {
-      const amount = parseFloat(match[1].replace(',', ''));
-      if (!isNaN(amount) && amount > 0 && amount < 10000) return amount;
+      const amount = Number.parseFloat(match[1].replace(',', ''));
+      if (!Number.isNaN(amount) && amount > 0 && amount < 10000) return amount;
     }
   }
 
@@ -110,8 +110,8 @@ function extractAmount(text: string): number | null {
   const globalPattern = /£\s*([\d,]+\.?\d*)/g;
   let m;
   while ((m = globalPattern.exec(text)) !== null) {
-    const val = parseFloat(m[1].replace(',', ''));
-    if (!isNaN(val) && val > 0 && val < 10000) allAmounts.push(val);
+    const val = Number.parseFloat(m[1].replace(',', ''));
+    if (!Number.isNaN(val) && val > 0 && val < 10000) allAmounts.push(val);
   }
   if (allAmounts.length > 0) {
     return Math.max(...allAmounts);
@@ -130,7 +130,7 @@ function decodeBody(payload: any): string {
     if (node.body?.data) {
       try {
         // base64url → base64 → decode
-        const b64 = node.body.data.replace(/-/g, '+').replace(/_/g, '/');
+        const b64 = node.body.data.replaceAll(/-/g, '+').replaceAll(/_/g, '/');
         const decoded = atob(b64);
         parts.push(decoded);
       } catch { /* ignore decode errors */ }
@@ -208,7 +208,7 @@ serve(async (req) => {
     // Using broader matching: subject keywords + category:purchases (Gmail's built-in label)
     const subjectPart = RECEIPT_KEYWORDS.map(k => `subject:"${k}"`).join(' OR ');
     const searchParts = [
-      `after:${afterDate.toISOString().split('T')[0].replace(/-/g, '/')}`,
+      `after:${afterDate.toISOString().split('T')[0].replaceAll(/-/g, '/')}`,
       `(${subjectPart} OR category:purchases OR category:updates OR label:receipts)`,
     ];
     if (settings?.allowed_domains?.length > 0) {
@@ -268,9 +268,9 @@ serve(async (req) => {
       // Extract order reference
       let orderReference = null;
       const orderPatterns = [
-        /order\s*(?:number|#|no\.?|ref(?:erence)?)?\s*:?\s*([A-Z0-9][-A-Z0-9]{3,})/i,
-        /reference\s*:?\s*([A-Z0-9][-A-Z0-9]{3,})/i,
-        /invoice\s*#?\s*([A-Z0-9][-A-Z0-9]{3,})/i,
+        /order\s{0,20}(?:number|#|no\.?|ref(?:erence)?)?\s{0,20}:?\s{0,20}([A-Z0-9][-A-Z0-9]{3,})/i,
+        /reference\s{0,20}:?\s{0,20}([A-Z0-9][-A-Z0-9]{3,})/i,
+        /invoice\s{0,20}#?\s{0,20}([A-Z0-9][-A-Z0-9]{3,})/i,
       ];
       for (const pattern of orderPatterns) {
         const match = textToSearch.match(pattern);
@@ -402,9 +402,9 @@ serve(async (req) => {
             const txMerchantLower = (tx.merchant || '').toLowerCase();
 
             // Normalise for comparison: strip whitespace, lowercase
-            const normMerchant = merchantLower.replace(/\s+/g, '');
-            const normDesc = descLower.replace(/\s+/g, '');
-            const normTxMerchant = txMerchantLower.replace(/\s+/g, '');
+            const normMerchant = merchantLower.replaceAll(/\s+/g, '');
+            const normDesc = descLower.replaceAll(/\s+/g, '');
+            const normTxMerchant = txMerchantLower.replaceAll(/\s+/g, '');
 
             if (normMerchant) {
               // Check description
@@ -426,7 +426,7 @@ serve(async (req) => {
 
             // Email domain vs description
             if (receipt.from_email && (descLower || txMerchantLower)) {
-              const domainMatch = receipt.from_email.match(/@(?:[^.]+\.)*([^.]+)\.[a-z]{2,}/i);
+              const domainMatch = receipt.from_email.match(/@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}/i);
               if (domainMatch) {
                 const domain = domainMatch[1].toLowerCase();
                 if ((descLower && descLower.includes(domain)) || (txMerchantLower && txMerchantLower.includes(domain))) {

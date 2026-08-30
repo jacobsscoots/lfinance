@@ -230,7 +230,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt, allTags, 
     APPLE_TAGS.find(t => transaction.merchant?.includes(`[${t.label}]`))?.label : null;
 
   const handleAppleTag = async (label: string) => {
-    const baseMerchant = (transaction.merchant || "APPLE.COM/BILL").replace(/\[.*?\]/g, "").trim();
+    const baseMerchant = (transaction.merchant || "APPLE.COM/BILL").replaceAll(/\[[^\]]{0,500}\]/g, "").trim();
     const newMerchant = `${baseMerchant} [${label}]`;
     
     const { error } = await supabase
@@ -328,7 +328,7 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt, allTags, 
                     {APPLE_TAGS.map(tag => (
                       <DropdownMenuItem key={tag.label} onClick={() => handleAppleTag(tag.label)}>
                         {tag.label}
-                        {tag.amount && <span className="ml-auto text-muted-foreground">£{tag.amount.toFixed(2)}</span>}
+                        {Boolean(tag.amount) && <span className="ml-auto text-muted-foreground">£{tag.amount.toFixed(2)}</span>}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

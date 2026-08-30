@@ -85,7 +85,7 @@ export function RetailerProfileSettings() {
                         className="h-7 w-14"
                         value={p.dispatch_days_min}
                         onChange={(e) =>
-                          handleUpdate(p, "dispatch_days_min", parseInt(e.target.value) || 0)
+                          handleUpdate(p, "dispatch_days_min", Number.parseInt(e.target.value) || 0)
                         }
                       />
                       <span>–</span>
@@ -95,7 +95,7 @@ export function RetailerProfileSettings() {
                         className="h-7 w-14"
                         value={p.dispatch_days_max}
                         onChange={(e) =>
-                          handleUpdate(p, "dispatch_days_max", parseInt(e.target.value) || 0)
+                          handleUpdate(p, "dispatch_days_max", Number.parseInt(e.target.value) || 0)
                         }
                       />
                     </div>
@@ -108,7 +108,7 @@ export function RetailerProfileSettings() {
                         className="h-7 w-14"
                         value={p.delivery_days_min}
                         onChange={(e) =>
-                          handleUpdate(p, "delivery_days_min", parseInt(e.target.value) || 0)
+                          handleUpdate(p, "delivery_days_min", Number.parseInt(e.target.value) || 0)
                         }
                       />
                       <span>–</span>
@@ -118,7 +118,7 @@ export function RetailerProfileSettings() {
                         className="h-7 w-14"
                         value={p.delivery_days_max}
                         onChange={(e) =>
-                          handleUpdate(p, "delivery_days_max", parseInt(e.target.value) || 0)
+                          handleUpdate(p, "delivery_days_max", Number.parseInt(e.target.value) || 0)
                         }
                       />
                     </div>

@@ -219,7 +219,7 @@ export function EnergyProfileCard() {
                 min={1}
                 max={10}
                 value={formData.occupants || 1}
-                onChange={(e) => updateField("occupants", parseInt(e.target.value) || 1)}
+                onChange={(e) => updateField("occupants", Number.parseInt(e.target.value) || 1)}
                 className="h-9"
               />
             </div>
@@ -452,7 +452,7 @@ export function EnergyProfileCard() {
                   <Input
                     type="number" min={0} max={7}
                     value={formData.work_from_home_days || 0}
-                    onChange={(e) => updateField("work_from_home_days", parseInt(e.target.value) || 0)}
+                    onChange={(e) => updateField("work_from_home_days", Number.parseInt(e.target.value) || 0)}
                     className="h-9"
                   />
                 </div>
@@ -461,7 +461,7 @@ export function EnergyProfileCard() {
                   <Input
                     type="number" min={1} max={30} placeholder="e.g. 8"
                     value={formData.shower_minutes_avg || ""}
-                    onChange={(e) => updateField("shower_minutes_avg", e.target.value ? parseInt(e.target.value) : null)}
+                    onChange={(e) => updateField("shower_minutes_avg", e.target.value ? Number.parseInt(e.target.value) : null)}
                     className="h-9"
                   />
                 </div>
@@ -470,7 +470,7 @@ export function EnergyProfileCard() {
                   <Input
                     type="number" min={10} max={30} step={0.5} placeholder="e.g. 20"
                     value={formData.thermostat_temp_c || ""}
-                    onChange={(e) => updateField("thermostat_temp_c", e.target.value ? parseFloat(e.target.value) : null)}
+                    onChange={(e) => updateField("thermostat_temp_c", e.target.value ? Number.parseFloat(e.target.value) : null)}
                     className="h-9"
                   />
                 </div>

@@ -35,7 +35,7 @@ function parseDate(dateStr: string): string | null {
       }
 
       const date = new Date(`${year}-${month}-${day}`);
-      if (!isNaN(date.getTime())) {
+      if (!Number.isNaN(date.getTime())) {
         return `${year}-${month}-${day}`;
       }
     }
@@ -45,9 +45,9 @@ function parseDate(dateStr: string): string | null {
 }
 
 function parseNumber(str: string): number | null {
-  const cleaned = str.replace(/[£$€,\s]/g, '').trim();
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
+  const cleaned = str.replaceAll(/[£$€,\s]/g, '').trim();
+  const num = Number.parseFloat(cleaned);
+  return Number.isNaN(num) ? null : num;
 }
 
 function detectFuelType(headers: string[], row: string[]): 'electricity' | 'gas' | null {
@@ -156,9 +156,7 @@ export function parseEnergyCsv(csvContent: string): ParseResult {
     if (electricCol === -1 && gasCol === -1 && kwhCol !== -1) {
       const consumption = parseNumber(parts[kwhCol]);
       if (consumption !== null && consumption > 0) {
-        let fuelType = fuelTypeCol !== -1 
-          ? detectFuelType(headers, parts)
-          : detectFuelType(headers, parts);
+        const fuelType = detectFuelType(headers, parts);
 
         // Default to electricity if can't determine
         if (!fuelType) {

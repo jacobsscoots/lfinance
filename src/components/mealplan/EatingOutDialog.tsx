@@ -33,10 +33,10 @@ export function EatingOutDialog({ open, onOpenChange, onConfirm }: EatingOutDial
       onConfirm({ calories: 0, protein: 0, carbs: 0, fat: 0, label: label.trim() });
     } else {
       onConfirm({
-        calories: parseFloat(calories) || 0,
-        protein: parseFloat(protein) || 0,
-        carbs: parseFloat(carbs) || 0,
-        fat: parseFloat(fat) || 0,
+        calories: Number.parseFloat(calories) || 0,
+        protein: Number.parseFloat(protein) || 0,
+        carbs: Number.parseFloat(carbs) || 0,
+        fat: Number.parseFloat(fat) || 0,
         label: label.trim(),
       });
     }
@@ -49,10 +49,10 @@ export function EatingOutDialog({ open, onOpenChange, onConfirm }: EatingOutDial
     setExcludeFromTargets(false);
   };
 
-  const calNum = parseFloat(calories) || 0;
-  const pNum = parseFloat(protein) || 0;
-  const cNum = parseFloat(carbs) || 0;
-  const fNum = parseFloat(fat) || 0;
+  const calNum = Number.parseFloat(calories) || 0;
+  const pNum = Number.parseFloat(protein) || 0;
+  const cNum = Number.parseFloat(carbs) || 0;
+  const fNum = Number.parseFloat(fat) || 0;
 
   // Calculate macro-derived calories for comparison
   const macroCals = (pNum * 4) + (cNum * 4) + (fNum * 9);

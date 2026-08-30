@@ -282,7 +282,7 @@ export function ToiletryFormDialog({
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
               {/* Photo */}
               <div>
-                <label className="text-sm font-medium">Photo</label>
+                <div className="text-sm font-medium">Photo</div>
                 <div className="mt-1 flex items-center gap-3">
                   {imagePreview ? (
                     <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-border">

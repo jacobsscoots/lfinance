@@ -100,7 +100,7 @@ function parseDate(dateStr: string): string | null {
       }
       
       const date = new Date(`${year}-${month}-${day}`);
-      if (!isNaN(date.getTime())) {
+      if (!Number.isNaN(date.getTime())) {
         return `${year}-${month}-${day}`;
       }
     }
@@ -116,28 +116,28 @@ function parseNumericValue(value: string | number | null): number | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number") return value;
 
-  let cleaned = value.toString().replace(/\s/g, "").replace(/[£$€]/g, "");
+  let cleaned = value.toString().replaceAll(/\s/g, "").replaceAll(/[£$€]/g, "");
   
   // Remove percentage and parenthetical suffixes like "(0.03%)" or "(-1.59%)"
-  cleaned = cleaned.replace(/\(.*?\)/g, '').trim();
+  cleaned = cleaned.replaceAll(/\([^)]{0,500}\)/g, '').trim();
 
   const lastDot = cleaned.lastIndexOf(".");
   const lastComma = cleaned.lastIndexOf(",");
 
   if (lastDot === -1 && lastComma === -1) {
-    return parseFloat(cleaned) || null;
+    return Number.parseFloat(cleaned) || null;
   }
 
   if (lastDot > lastComma) {
     // UK/US format: 1,234.56
-    cleaned = cleaned.replace(/,/g, "");
+    cleaned = cleaned.replaceAll(/,/g, "");
   } else if (lastComma > lastDot) {
     // European format: 1.234,56
-    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    cleaned = cleaned.replaceAll(/\./g, "").replace(",", ".");
   }
 
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
+  const num = Number.parseFloat(cleaned);
+  return Number.isNaN(num) ? null : num;
 }
 
 function parseType(typeStr: string): 'deposit' | 'withdrawal' | 'fee' | 'dividend' | null {

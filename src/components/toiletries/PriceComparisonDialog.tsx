@@ -82,7 +82,7 @@ export function PriceComparisonDialog({
 
   // Calculate order-by date for each result
   const getOrderByDate = (leadTime: number): { date: Date; urgent: boolean; text: string } => {
-    if (!runOutDate || !isFinite(forecast?.daysRemaining || 0)) {
+    if (!runOutDate || !Number.isFinite(forecast?.daysRemaining || 0)) {
       return { date: new Date(), urgent: false, text: "N/A" };
     }
     
@@ -112,13 +112,13 @@ export function PriceComparisonDialog({
           <ResponsiveDialogTitle>Find Best Price</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
             {item?.brand ? `${item.brand} ` : ""}{item?.name}
-            {item?.total_size && item?.size_unit && ` (${item.total_size}${item.size_unit})`}
+            {Boolean(item?.total_size && item?.size_unit) && ` (${item.total_size}${item.size_unit})`}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
 
         <div className="space-y-4">
           {/* Forecast info */}
-          {forecast && isFinite(forecast.daysRemaining) && (
+          {forecast && Number.isFinite(forecast.daysRemaining) && (
             <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />

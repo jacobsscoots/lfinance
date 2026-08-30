@@ -45,7 +45,7 @@ export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Weekl
               <div className="text-sm text-muted-foreground">Calories</div>
               <div className="text-2xl font-bold">{Math.round(weeklyAverages.calories)}</div>
               <div className="text-xs text-muted-foreground">kcal/day</div>
-              {isTargetMode && settings?.daily_calorie_target && (
+              {Boolean(isTargetMode && settings?.daily_calorie_target) && (
                 <Progress 
                   value={(weeklyAverages.calories / settings.daily_calorie_target) * 100} 
                   className="h-2"
@@ -56,7 +56,7 @@ export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Weekl
               <div className="text-sm text-muted-foreground">Protein</div>
               <div className="text-2xl font-bold">{Math.round(weeklyAverages.protein)}g</div>
               <div className="text-xs text-muted-foreground">per day</div>
-              {isTargetMode && settings?.protein_target_grams && (
+              {Boolean(isTargetMode && settings?.protein_target_grams) && (
                 <Progress 
                   value={(weeklyAverages.protein / settings.protein_target_grams) * 100} 
                   className="h-2"
@@ -67,7 +67,7 @@ export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Weekl
               <div className="text-sm text-muted-foreground">Carbs</div>
               <div className="text-2xl font-bold">{Math.round(weeklyAverages.carbs)}g</div>
               <div className="text-xs text-muted-foreground">per day</div>
-              {isTargetMode && settings?.carbs_target_grams && (
+              {Boolean(isTargetMode && settings?.carbs_target_grams) && (
                 <Progress 
                   value={(weeklyAverages.carbs / settings.carbs_target_grams) * 100} 
                   className="h-2"
@@ -78,7 +78,7 @@ export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Weekl
               <div className="text-sm text-muted-foreground">Fat</div>
               <div className="text-2xl font-bold">{Math.round(weeklyAverages.fat)}g</div>
               <div className="text-xs text-muted-foreground">per day</div>
-              {isTargetMode && settings?.fat_target_grams && (
+              {Boolean(isTargetMode && settings?.fat_target_grams) && (
                 <Progress 
                   value={(weeklyAverages.fat / settings.fat_target_grams) * 100} 
                   className="h-2"

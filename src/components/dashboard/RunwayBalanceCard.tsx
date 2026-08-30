@@ -174,7 +174,7 @@ export function RunwayBalanceCard({ metrics, isLoading }: RunwayBalanceCardProps
           </div>
           <div className="border-t pt-1.5 flex justify-between font-semibold">
             <span className="flex items-center gap-1">
-              Tomorrow starts
+              Tomorrow starts{" "}
               <span className="text-[10px] font-normal text-muted-foreground">(after today's spend)</span>
             </span>
             <span className={cn(

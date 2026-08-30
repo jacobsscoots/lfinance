@@ -234,11 +234,11 @@ export default function Medicash() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Start Month</Label>
-                <Input type="number" min={1} max={12} value={settingsMonth} onChange={e => setSettingsMonth(parseInt(e.target.value) || 1)} />
+                <Input type="number" min={1} max={12} value={settingsMonth} onChange={e => setSettingsMonth(Number.parseInt(e.target.value) || 1)} />
               </div>
               <div className="space-y-2">
                 <Label>Start Day</Label>
-                <Input type="number" min={1} max={31} value={settingsDay} onChange={e => setSettingsDay(parseInt(e.target.value) || 1)} />
+                <Input type="number" min={1} max={31} value={settingsDay} onChange={e => setSettingsDay(Number.parseInt(e.target.value) || 1)} />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">

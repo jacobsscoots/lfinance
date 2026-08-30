@@ -101,21 +101,21 @@ export function DebtReportsTab({
           <table className="w-full text-sm">
             <tbody>
               <tr>
-                <td className="py-1">Total Debts</td>
+                <th scope="row" className="py-1 text-left font-normal">Total Debts</th>
                 <td className="text-right">{debts.length}</td>
               </tr>
               <tr>
-                <td className="py-1">Open Debts</td>
+                <th scope="row" className="py-1 text-left font-normal">Open Debts</th>
                 <td className="text-right">{debts.filter(d => d.status === 'open').length}</td>
               </tr>
               <tr>
-                <td className="py-1">Total Balance</td>
+                <th scope="row" className="py-1 text-left font-normal">Total Balance</th>
                 <td className="text-right">
                   £{debts.filter(d => d.status === 'open').reduce((sum, d) => sum + Number(d.current_balance), 0).toLocaleString()}
                 </td>
               </tr>
               <tr>
-                <td className="py-1">Total Payments</td>
+                <th scope="row" className="py-1 text-left font-normal">Total Payments</th>
                 <td className="text-right">{payments.length}</td>
               </tr>
             </tbody>

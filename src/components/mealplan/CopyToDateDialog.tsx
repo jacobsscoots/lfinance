@@ -103,6 +103,9 @@ export function CopyToDateDialog({
                       : "border-border hover:border-muted-foreground/50"
                   )}
                   onClick={() => setSelectedDate(date)}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <RadioGroupItem value={date} id={date} />
                   <Label

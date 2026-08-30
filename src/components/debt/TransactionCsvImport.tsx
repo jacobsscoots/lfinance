@@ -56,7 +56,7 @@ export function TransactionCsvImport({ open, onOpenChange }: TransactionCsvImpor
       const lines = content.trim().split('\n');
       if (lines.length > 0) {
         const headerLine = lines[0];
-        const parsedHeaders = headerLine.split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        const parsedHeaders = headerLine.split(',').map(h => h.trim().replaceAll(/^"|"$/g, ''));
         setHeaders(parsedHeaders);
         
         // Try to auto-detect mappings

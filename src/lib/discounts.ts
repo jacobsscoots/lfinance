@@ -77,11 +77,11 @@ export function parseMultiBuyOffer(offerLabel: string | null | undefined): Multi
   const normalized = offerLabel.toLowerCase().trim();
   
   // Pattern: "X for Y" (e.g., "4 for 3", "3 for 2")
-  const forPattern = /(\d+)\s*for\s*(?:the\s*price\s*of\s*)?(\d+)/i;
+  const forPattern = /(\d+)\s{0,20}for\s{0,20}(?:the\s{0,20}price\s{0,20}of\s{0,20})?(\d+)/i;
   const forMatch = normalized.match(forPattern);
   if (forMatch) {
-    const buyQty = parseInt(forMatch[1], 10);
-    const payQty = parseInt(forMatch[2], 10);
+    const buyQty = Number.parseInt(forMatch[1], 10);
+    const payQty = Number.parseInt(forMatch[2], 10);
     if (buyQty > payQty && buyQty > 0 && payQty > 0) {
       return { buyQuantity: buyQty, payQuantity: payQty, offerLabel };
     }
@@ -91,8 +91,8 @@ export function parseMultiBuyOffer(offerLabel: string | null | undefined): Multi
   const bogofPattern = /buy\s*(\d+)\s*get\s*(\d+)\s*free/i;
   const bogofMatch = normalized.match(bogofPattern);
   if (bogofMatch) {
-    const buyQty = parseInt(bogofMatch[1], 10);
-    const freeQty = parseInt(bogofMatch[2], 10);
+    const buyQty = Number.parseInt(bogofMatch[1], 10);
+    const freeQty = Number.parseInt(bogofMatch[2], 10);
     if (buyQty > 0 && freeQty > 0) {
       return { buyQuantity: buyQty + freeQty, payQuantity: buyQty, offerLabel };
     }

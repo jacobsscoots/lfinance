@@ -34,8 +34,8 @@ export function EasySaverCalculator({ icelandTotal = 0 }: EasySaverCalculatorPro
     }
   }, [icelandTotal]);
 
-  const cardBalance = parseFloat(cardBalanceInput) || 0;
-  const shopTotal = parseFloat(shopTotalInput) || 0;
+  const cardBalance = Number.parseFloat(cardBalanceInput) || 0;
+  const shopTotal = Number.parseFloat(shopTotalInput) || 0;
 
   const calc = useMemo(() => {
     if (shopTotal <= 0) return null;

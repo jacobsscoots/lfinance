@@ -88,8 +88,8 @@ function EditableCell({
 
   const commitEdit = useCallback(() => {
     if (!editing) return;
-    const parsed = parseFloat(editValue);
-    if (!isNaN(parsed) && parsed >= 0) {
+    const parsed = Number.parseFloat(editValue);
+    if (!Number.isNaN(parsed) && parsed >= 0) {
       onSave(Math.round(parsed * 100) / 100);
     }
     setEditing(false);
@@ -379,7 +379,7 @@ export function DetailedYearlyTable({
             <tr className="border-b border-border bg-success/5">
               <td className={cn(labelClass, "text-success bg-success/5")}>
                 <span className="flex items-center gap-1.5">
-                  Income
+                  Income{" "}
                   <button
                     onClick={() => setShowIncomeBreakdown(!showIncomeBreakdown)}
                     className="text-muted-foreground hover:text-success transition-colors"

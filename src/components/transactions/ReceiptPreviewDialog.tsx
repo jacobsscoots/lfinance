@@ -132,6 +132,9 @@ export function ReceiptPreviewDialog({
                 !hasReceipt && "cursor-pointer hover:border-primary/50 hover:bg-muted"
               )}
               onClick={!hasReceipt ? handleUploadClick : undefined}
+              onKeyDown={!hasReceipt ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } } : undefined}
+              role={!hasReceipt ? "button" : undefined}
+              tabIndex={!hasReceipt ? 0 : undefined}
             >
               {isLoadingUrl ? (
                 <div className="flex flex-col items-center gap-2 text-muted-foreground p-6">

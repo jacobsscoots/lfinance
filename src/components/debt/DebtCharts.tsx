@@ -65,7 +65,7 @@ export function DebtCharts({ debts, payments, snapshots }: DebtChartsProps) {
   
   // Use current balance as endpoint and work backwards with payments
   let runningBalance = openDebts.reduce((sum, d) => sum + Number(d.current_balance), 0);
-  const months = Array.from(paymentsByMonth.keys()).sort().reverse();
+  const months = Array.from(paymentsByMonth.keys()).sort((a, b) => a.localeCompare(b)).reverse();
   
   // Start with current month
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -86,7 +86,7 @@ export function DebtCharts({ debts, payments, snapshots }: DebtChartsProps) {
 
   // Interest vs Principal chart data (if split data exists)
   const interestPrincipalData = Array.from(paymentsByMonth.keys())
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .slice(-12)
     .map(month => {
       const monthPayments = filteredPayments.filter(p => 

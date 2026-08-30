@@ -76,7 +76,7 @@ export function useRepeatPurchases() {
         // Skip already-linked-to-bill transactions
         if (tx.bill_id) continue;
 
-        const key = tx.description.trim().toLowerCase().replace(/\s+/g, " ");
+        const key = tx.description.trim().toLowerCase().replaceAll(/\s+/g, " ");
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(tx);
       }

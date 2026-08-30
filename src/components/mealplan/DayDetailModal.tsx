@@ -433,10 +433,10 @@ export function DayDetailModal({
                 </>
               ) : (
                 <div className="text-xs text-muted-foreground p-3 border rounded-md bg-muted/30">
-                  No solver debug data available. Enable debug mode by running:
+                  No solver debug data available. Enable debug mode by running:{" "}
                   <code className="block mt-1 bg-muted px-2 py-1 rounded text-[10px]">
                     localStorage.setItem('debug_portioning', '1')
-                  </code>
+                  </code>{" "}
                   Then click "Generate Portions" to capture solver output.
                 </div>
               )}

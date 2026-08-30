@@ -47,9 +47,9 @@ export interface StepChangeParseResult {
  * Parse a UK currency string like "£1,821.76" or "£0.00" to a number.
  */
 function parseCurrency(str: string): number {
-  const cleaned = str.replace(/[£,\s]/g, "");
-  const val = parseFloat(cleaned);
-  return isNaN(val) ? 0 : val;
+  const cleaned = str.replaceAll(/[£,\s]/g, "");
+  const val = Number.parseFloat(cleaned);
+  return Number.isNaN(val) ? 0 : val;
 }
 
 /**

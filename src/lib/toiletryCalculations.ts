@@ -142,7 +142,7 @@ export function calculateForecast(
   
   // Run-out date = today + days remaining
   const runOutDate = addDays(new Date(), daysRemaining);
-  const runOutDateFormatted = isFinite(daysRemaining) 
+  const runOutDateFormatted = Number.isFinite(daysRemaining) 
     ? format(runOutDate, "MMM d")
     : "N/A";
   
@@ -175,7 +175,7 @@ export function calculateForecast(
   let orderByFormatted: string | null = null;
   let reorderStatus: ReorderStatus = "no_data";
 
-  if (options?.shippingProfile && isFinite(daysRemaining)) {
+  if (options?.shippingProfile && Number.isFinite(daysRemaining)) {
     const result = calculateOrderByDate(
       runOutDate,
       options.shippingProfile,

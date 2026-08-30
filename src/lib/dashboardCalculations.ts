@@ -177,7 +177,7 @@ export function buildDailySpendingData(
       date: dateKey,
       actual: isPast ? dailySpend : 0,
       expected: dailyBudget,
-      cumulative: isPast ? cumulativeActual : cumulativeActual, // Continue last known value
+      cumulative: cumulativeActual, // Continue last known value
       expectedCumulative: dailyBudget * dayNumber,
     });
   }

@@ -205,10 +205,10 @@ export function PaymentList({ payments, debts, links, isLoading }: PaymentListPr
                         {payment.category === 'fee' ? '+' : payment.category === 'refund' ? '+' : '-'}
                         {formatCurrency(Number(payment.amount))}
                       </p>
-                      {(payment.principal_amount || payment.interest_amount) && (
+                      {Boolean(payment.principal_amount || payment.interest_amount) && (
                         <p className="text-xs text-muted-foreground">
-                          {payment.principal_amount && `P: £${payment.principal_amount}`}
-                          {payment.interest_amount && ` I: £${payment.interest_amount}`}
+                          {Boolean(payment.principal_amount) && `P: £${payment.principal_amount}`}
+                          {Boolean(payment.interest_amount) && ` I: £${payment.interest_amount}`}
                         </p>
                       )}
                     </div>
