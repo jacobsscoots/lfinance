@@ -32,6 +32,10 @@ export function NextContractCard({ service }: Readonly<NextContractCardProps>) {
 
   const daysLeft = daysUntilContractEnd(service.contract_end_date);
   const isUrgent = daysLeft !== null && daysLeft <= 30;
+  let daysLeftLabel = "No end date";
+  if (daysLeft !== null) {
+    daysLeftLabel = daysLeft <= 0 ? "Contract ended" : `${daysLeft} days left`;
+  }
 
   return (
     <Card className={isUrgent ? "border-amber-500/50" : ""}>
@@ -51,11 +55,7 @@ export function NextContractCard({ service }: Readonly<NextContractCardProps>) {
         <div className="flex items-center gap-1 mt-1">
           {isUrgent && <AlertTriangle className="h-3 w-3 text-amber-500" />}
           <p className={`text-sm ${isUrgent ? "text-amber-500 font-medium" : "text-muted-foreground"}`}>
-            {daysLeft !== null
-              ? daysLeft <= 0
-                ? "Contract ended"
-                : `${daysLeft} days left`
-              : "No end date"}
+            {daysLeftLabel}
           </p>
         </div>
         <p className="text-xs text-muted-foreground mt-1">

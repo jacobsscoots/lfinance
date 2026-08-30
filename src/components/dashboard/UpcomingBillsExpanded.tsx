@@ -35,6 +35,10 @@ function BillItem({ bill }: Readonly<{ bill: Bill }>) {
   const daysUntil = differenceInDays(startOfDay(bill.dueDate), startOfDay(new Date()));
   const isUrgent = daysUntil <= 2;
   
+  let dueLabel = `${daysUntil} days`;
+  if (daysUntil === 0) dueLabel = "Today";
+  else if (daysUntil === 1) dueLabel = "Tomorrow";
+
   return (
     <div className="flex items-center justify-between py-2">
       <div className="flex items-center gap-2 min-w-0">
@@ -49,7 +53,7 @@ function BillItem({ bill }: Readonly<{ bill: Bill }>) {
             "text-xs",
             isUrgent ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
           )}>
-            {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`}
+            {dueLabel}
           </p>
         </div>
       </div>

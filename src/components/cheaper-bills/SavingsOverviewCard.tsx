@@ -6,6 +6,11 @@ interface SavingsOverviewCardProps {
 }
 
 export function SavingsOverviewCard({ totalSavings, servicesCount }: Readonly<SavingsOverviewCardProps>) {
+  const serviceLabel = servicesCount === 1 ? "service" : "services";
+  const savingsDescription = servicesCount > 0
+    ? `across ${servicesCount} tracked ${serviceLabel}`
+    : "Add services to see potential savings";
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -19,9 +24,7 @@ export function SavingsOverviewCard({ totalSavings, servicesCount }: Readonly<Sa
           £{totalSavings.toLocaleString("en-GB", { minimumFractionDigits: 0 })}/year
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          {servicesCount > 0
-            ? `across ${servicesCount} tracked service${servicesCount > 1 ? "s" : ""}`
-            : "Add services to see potential savings"}
+          {savingsDescription}
         </p>
       </CardContent>
     </Card>

@@ -18,6 +18,12 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { getProviderLabel } from "@/lib/bankProviders";
 import { format } from "date-fns";
 
+function getConnectionBadgeVariant(status: string): "destructive" | "default" | "secondary" {
+  if (status === "expired") return "destructive";
+  if (status === "connected") return "default";
+  return "secondary";
+}
+
 export function BankConnectionCard() {
   const {
     connections,
@@ -130,7 +136,7 @@ export function BankConnectionCard() {
                       })()}
                       <div className="flex flex-wrap items-center gap-2 mt-1">
                         <Badge
-                          variant={connection.status === "expired" ? "destructive" : connection.status === "connected" ? "default" : "secondary"}
+                          variant={getConnectionBadgeVariant(connection.status)}
                         >
                           {connection.status === "expired" ? "Reconnect required" : connection.status}
                         </Badge>

@@ -132,6 +132,9 @@ export function ServiceFormDialog({
     }
   }, [serviceType]);
 
+  const idleSubmitLabel = mode === "create" ? "Add Service" : "Save";
+  const submitLabel = isLoading ? "Saving..." : idleSubmitLabel;
+
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent className="sm:max-w-[500px]">
@@ -421,7 +424,7 @@ export function ServiceFormDialog({
                 Cancel
               </Button>
               <Button type="submit" className="flex-1" disabled={isLoading}>
-                {isLoading ? "Saving..." : mode === "create" ? "Add Service" : "Save"}
+                {submitLabel}
               </Button>
             </div>
           </form>

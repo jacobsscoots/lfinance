@@ -94,6 +94,19 @@ export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete,
     URL.revokeObjectURL(url);
   };
 
+  const renderRecommendation = () => {
+    if (service.last_recommendation === "switch") {
+      return (
+        <>
+          <TrendingDown className="h-3 w-3 mr-1" />
+          Switch
+        </>
+      );
+    }
+    if (service.last_recommendation === "dont_switch") return "Don't Switch";
+    return "Review";
+  };
+
   return (
     <Card className={isEnding ? "border-amber-500/50" : ""}>
       <CardHeader className="flex flex-col sm:flex-row sm:items-start justify-between pb-2 gap-2">
@@ -186,16 +199,7 @@ export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete,
                   variant={service.last_recommendation === "switch" ? "default" : "secondary"}
                   className="w-fit"
                 >
-                  {service.last_recommendation === "switch" ? (
-                    <>
-                      <TrendingDown className="h-3 w-3 mr-1" />
-                      Switch
-                    </>
-                  ) : service.last_recommendation === "dont_switch" ? (
-                    "Don't Switch"
-                  ) : (
-                    "Review"
-                  )}
+                  {renderRecommendation()}
                 </Badge>
                 {service.last_recommendation === "switch" && (
                   bestOffer ? (
