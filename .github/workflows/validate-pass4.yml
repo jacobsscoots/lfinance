@@ -9,7 +9,20 @@ permissions:
   contents: read
 
 jobs:
-  build-test:
+  baseline-test:
+    name: Baseline main tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: main
+      - name: Install dependencies
+        run: npm ci
+      - name: Test
+        run: npm test
+
+  pass4-build-test:
+    name: Pass 4 build and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
