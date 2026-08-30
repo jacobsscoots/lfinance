@@ -140,7 +140,7 @@ export function parseNutritionText(text: string): ExtractedNutrition {
   }
 
   // Try to extract pack size
-  const packSizeMatch = normalizedText.match(/(\d+)\s{0,20}(?:g|ml)\s{0,20}(?:pack|net|e)/i);
+  const packSizeMatch = normalizedText.match(/(\d{1,6})\s{0,20}(?:g|ml)\s{0,20}(?:pack|net|e)/i);
   if (packSizeMatch) {
     result.pack_size_grams = parseNumber(packSizeMatch[1]);
     result.confidence.pack_size_grams = "medium";

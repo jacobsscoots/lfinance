@@ -61,7 +61,7 @@ export function AccountsOverview({ accounts, isLoading }: AccountsOverviewProps)
           <Skeleton className="h-6 w-28" />
         </CardHeader>
         <CardContent className="space-y-3">
-          {[...Array(3)].map((_, i) => (
+          {[...new Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-8 w-full" />
           ))}
         </CardContent>

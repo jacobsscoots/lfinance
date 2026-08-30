@@ -113,7 +113,7 @@ function decodeEmailBody(payload: any): string {
     if (node.body?.data) {
       try {
         // Gmail base64url encoding
-        const decoded = atob(node.body.data.replaceAll(/-/g, "+").replaceAll(/_/g, "/"));
+        const decoded = atob(node.body.data.replaceAll("-", "+").replaceAll("_", "/"));
         parts.push(decoded);
       } catch (_) { /* ignore decode errors */ }
     }
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
         // Build search query for shipping emails
         const afterDate = new Date();
         afterDate.setDate(afterDate.getDate() - 30); // Look back 30 days
-        const afterStr = afterDate.toISOString().split("T")[0].replaceAll(/-/g, "/");
+        const afterStr = afterDate.toISOString().split("T")[0].replaceAll("-", "/");
 
         const subjectTerms = SHIPPING_KEYWORDS.map((k) => `subject:${k}`).join(" OR ");
         const searchQuery = `after:${afterStr} (${subjectTerms})`;

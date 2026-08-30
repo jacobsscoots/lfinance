@@ -82,7 +82,7 @@ export function AlertsPanel({ alerts, isLoading }: AlertsPanelProps) {
           <Skeleton className="h-6 w-32" />
         </CardHeader>
         <CardContent className="space-y-3">
-          {[...Array(3)].map((_, i) => (
+          {[...new Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-20 w-full" />
           ))}
         </CardContent>
