@@ -1,0 +1,85 @@
+name: Sonar maintainability inventory
+
+on:
+  push:
+    branches:
+      - fix/sonar-maintainability
+    paths:
+      - .github/workflows/sonar-maintainability-inventory.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch and summarize Sonar issues
+        run: |
+          set -euo pipefail
+          mkdir -p .sonar
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request
+          from collections import Counter, defaultdict
+
+          base = 'https://sonarcloud.io/api/issues/search'
+          all_issues = []
+          page = 1
+          while True:
+              params = urllib.parse.urlencode({
+                  'componentKeys': 'jacobsscoots_lfinance',
+                  'issueStatuses': 'OPEN,CONFIRMED',
+                  'ps': 500,
+                  'p': page,
+              })
+              with urllib.request.urlopen(base + '?' + params, timeout=60) as r:
+                  payload = json.load(r)
+              all_issues.extend(payload.get('issues', []))
+              total = payload.get('paging', {}).get('total', len(all_issues))
+              if len(all_issues) >= total:
+                  break
+              page += 1
+
+          with open('.sonar/maintainability-issues.json', 'w', encoding='utf-8') as f:
+              json.dump(all_issues, f, indent=2)
+
+          rule_counts = Counter(i.get('rule') for i in all_issues)
+          file_counts = Counter(i.get('component','').split(':',1)[-1] for i in all_issues)
+          samples = defaultdict(list)
+          for i in all_issues:
+              rule = i.get('rule')
+              if len(samples[rule]) < 8:
+                  samples[rule].append({
+                      'file': i.get('component','').split(':',1)[-1],
+                      'line': i.get('line'),
+                      'message': i.get('message'),
+                      'severity': i.get('severity'),
+                      'cleanCodeAttribute': i.get('cleanCodeAttribute'),
+                  })
+
+          summary = {
+              'total': len(all_issues),
+              'rules': [{'rule': k, 'count': v, 'samples': samples[k]} for k,v in rule_counts.most_common()],
+              'top_files': [{'file': k, 'count': v} for k,v in file_counts.most_common(100)],
+          }
+          with open('.sonar/maintainability-summary.json', 'w', encoding='utf-8') as f:
+              json.dump(summary, f, indent=2)
+          print(json.dumps({'total': len(all_issues), 'top_rules': rule_counts.most_common(20)}, indent=2))
+          PY
+
+      - name: Commit inventory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .sonar/maintainability-issues.json .sonar/maintainability-summary.json
+          if git diff --cached --quiet; then
+            echo "No inventory changes"
+            exit 0
+          fi
+          git commit -m "chore: inventory Sonar maintainability issues"
+          git push origin HEAD:fix/sonar-maintainability
