@@ -19,7 +19,7 @@ interface OnHandItem {
   daysUntilRunOut: number;
 }
 
-export function OnHandPanel({ items, usageRates, shippingProfiles }: OnHandPanelProps) {
+export function OnHandPanel({ items, usageRates, shippingProfiles }: Readonly<OnHandPanelProps>) {
   const onHandItems = useMemo(() => {
     const activeItems = items.filter(i => i.status === "active" && i.quantity_in_use > 0);
     

@@ -31,7 +31,7 @@ interface UpcomingBillsExpandedProps {
   isLoading?: boolean;
 }
 
-function BillItem({ bill }: { bill: Bill }) {
+function BillItem({ bill }: Readonly<{ bill: Bill }>) {
   const daysUntil = differenceInDays(startOfDay(bill.dueDate), startOfDay(new Date()));
   const isUrgent = daysUntil <= 2;
   
@@ -68,12 +68,12 @@ function BillSection({
   bills, 
   icon,
   defaultOpen = true,
-}: { 
+}: Readonly<{ 
   title: string; 
   bills: Bill[]; 
   icon: React.ReactNode;
   defaultOpen?: boolean;
-}) {
+}>) {
   const [open, setOpen] = useState(defaultOpen);
   
   if (bills.length === 0) return null;
@@ -116,7 +116,7 @@ export function UpcomingBillsExpanded({
   totalRestOfCycle,
   discretionaryRemaining,
   isLoading,
-}: UpcomingBillsExpandedProps) {
+}: Readonly<UpcomingBillsExpandedProps>) {
   if (isLoading) {
     return (
       <Card>

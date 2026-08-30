@@ -11,7 +11,7 @@ interface SpendPaceChartProps {
   isLoading?: boolean;
 }
 
-export function SpendPaceChart({ data, isOverPace, isLoading }: SpendPaceChartProps) {
+export function SpendPaceChart({ data, isOverPace, isLoading }: Readonly<SpendPaceChartProps>) {
   if (isLoading) {
     return (
       <Card>

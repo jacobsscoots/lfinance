@@ -40,7 +40,7 @@ export function PaymentFormDialog({
   onOpenChange, 
   debts,
   preselectedDebtId 
-}: PaymentFormDialogProps) {
+}: Readonly<PaymentFormDialogProps>) {
   const { createPayment } = useDebtPayments();
   const { updateDebtBalance, debts: allDebts } = useDebts();
   const [showSplit, setShowSplit] = useState(false);

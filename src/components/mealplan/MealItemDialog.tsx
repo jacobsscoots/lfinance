@@ -34,7 +34,7 @@ export function MealItemDialog({
   weekStart,
   existingItems = [],
   planDate,
-}: MealItemDialogProps) {
+}: Readonly<MealItemDialogProps>) {
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("100");
   const [manualOverride, setManualOverride] = useState(false);

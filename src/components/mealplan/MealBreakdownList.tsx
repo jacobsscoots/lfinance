@@ -15,7 +15,7 @@ const MEAL_LABELS: Record<MealType, string> = {
   snack: "SNACKS",
 };
 
-export function MealBreakdownList({ mealType, items, status, mealMacros }: MealBreakdownListProps) {
+export function MealBreakdownList({ mealType, items, status, mealMacros }: Readonly<MealBreakdownListProps>) {
   const totalCalories = mealMacros?.calories || 0;
 
   return (

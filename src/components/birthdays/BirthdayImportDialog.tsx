@@ -76,7 +76,7 @@ function parseDateValue(val: any): { month: number | null; day: number | null } 
 
   const str = String(val).trim();
   // Try DD/MM or DD/MM/YYYY
-  const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
+  const slashMatch = /^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/.exec(str);
   if (slashMatch) {
     const day = Number.parseInt(slashMatch[1], 10);
     const month = Number.parseInt(slashMatch[2], 10);

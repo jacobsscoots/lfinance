@@ -27,7 +27,7 @@ export function InvestmentCard({
   onClick,
   onEdit,
   onDelete,
-}: InvestmentCardProps) {
+}: Readonly<InvestmentCardProps>) {
   const metrics = useMemo(() => {
     const formattedTransactions = transactions.map(tx => ({
       id: tx.id,

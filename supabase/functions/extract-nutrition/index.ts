@@ -291,7 +291,7 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
   if (productType === "toiletry") {
     // Extract toiletry-specific fields
     // Price patterns
-    const priceMatch = normalizedText.match(/(?:price|£)\s{0,20}:?\s{0,20}£?([\d,.]{1,32})/i);
+    const priceMatch = /(?:price|£)\s{0,20}:?\s{0,20}£?([\d,.]{1,32})/i.exec(normalizedText);
     if (priceMatch?.[1]) {
       const price = Number.parseFloat(priceMatch[1].replaceAll(",", ""));
       if (!Number.isNaN(price)) {
@@ -301,7 +301,7 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
     }
 
     // Offer price patterns
-    const offerMatch = normalizedText.match(/(?:now|sale|offer|was)\s{0,20}:?\s{0,20}£?([\d,.]{1,32})/i);
+    const offerMatch = /(?:now|sale|offer|was)\s{0,20}:?\s{0,20}£?([\d,.]{1,32})/i.exec(normalizedText);
     if (offerMatch?.[1]) {
       const offerPrice = Number.parseFloat(offerMatch[1].replaceAll(",", ""));
       if (!Number.isNaN(offerPrice)) {
@@ -311,7 +311,7 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
     }
 
     // Pack size patterns (e.g., "500ml", "200g", "30 tablets")
-    const sizeMatch = normalizedText.match(/([\d,.]{1,32})\s{0,20}(ml|g|tablets?|units?|pack)/i);
+    const sizeMatch = /([\d,.]{1,32})\s{0,20}(ml|g|tablets?|units?|pack)/i.exec(normalizedText);
     if (sizeMatch) {
       const size = Number.parseFloat(sizeMatch[1].replaceAll(",", ""));
       const unit = sizeMatch[2].toLowerCase();
@@ -383,7 +383,7 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
 
   for (const [, { patterns: patternList, field }] of Object.entries(patterns)) {
     for (const pattern of patternList) {
-      const match = normalizedText.match(pattern);
+      const match = pattern.exec(normalizedText);
       if (match?.[1]) {
         const value = Number.parseFloat(match[1].replaceAll(",", ""));
         if (!Number.isNaN(value)) {
@@ -396,7 +396,7 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
   }
 
   // Check for sodium and convert to salt
-  const sodiumMatch = normalizedText.match(/sodium\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}(?:m?g)?/i);
+  const sodiumMatch = /sodium\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}(?:m?g)?/i.exec(normalizedText);
   if (sodiumMatch?.[1] && !result.salt) {
     const sodium = Number.parseFloat(sodiumMatch[1].replaceAll(",", ""));
     if (!Number.isNaN(sodium)) {

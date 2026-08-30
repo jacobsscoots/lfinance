@@ -56,7 +56,7 @@ function parseCurrency(str: string): number {
  * Parse a date string like "27/01/2026" to "2026-01-27".
  */
 function parseDateDDMMYYYY(str: string): string {
-  const match = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const match = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(str);
   if (!match) return "";
   const [, day, month, year] = match;
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
@@ -135,32 +135,24 @@ export async function parseStepChangeStatement(
   let estimatedDebtFreeDate = "";
   let statementDate = "";
 
-  const nextPaymentMatch = fullText.match(
-    /Next\s+payment\s+amount[:\s]*£([\d,.]+)/i
-  );
+  const nextPaymentMatch = /Next\s+payment\s+amount[:\s]*£([\d,.]+)/i.exec(fullText);
   if (nextPaymentMatch) {
     nextPaymentAmount = parseCurrency("£" + nextPaymentMatch[1]);
   } else {
     warnings.push("Could not find next payment amount in header");
   }
 
-  const totalBalanceMatch = fullText.match(
-    /Estimated\s+total\s+balance[:\s]*£([\d,.]+)/i
-  );
+  const totalBalanceMatch = /Estimated\s+total\s+balance[:\s]*£([\d,.]+)/i.exec(fullText);
   if (totalBalanceMatch) {
     estimatedTotalBalance = parseCurrency("£" + totalBalanceMatch[1]);
   }
 
-  const debtFreeDateMatch = fullText.match(
-    /Estimated\s+debt\s+free\s+date[:\s]*([A-Za-z]+\s+\d{4})/i
-  );
+  const debtFreeDateMatch = /Estimated\s+debt\s+free\s+date[:\s]*([A-Za-z]+\s+\d{4})/i.exec(fullText);
   if (debtFreeDateMatch) {
     estimatedDebtFreeDate = debtFreeDateMatch[1];
   }
 
-  const statementDateMatch = fullText.match(
-    /Statement\s+date[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})/i
-  );
+  const statementDateMatch = /Statement\s+date[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})/i.exec(fullText);
   if (statementDateMatch) {
     statementDate = parseDateDDMMYYYY(statementDateMatch[1]);
   } else {
@@ -230,9 +222,7 @@ export async function parseStepChangeStatement(
       // Look for "Original Creditor:" on subsequent lines
       let originalCreditor = "";
       for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-        const origMatch = lines[j].match(
-          /Original\s+Creditor[:\s]+(.+)/i
-        );
+        const origMatch = /Original\s+Creditor[:\s]+(.+)/i.exec(lines[j]);
         if (origMatch) {
           originalCreditor = origMatch[1].trim();
           break;

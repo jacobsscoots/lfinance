@@ -16,7 +16,7 @@ interface ZigzagCalculatorProps {
   onApply?: () => void;
 }
 
-export function ZigzagCalculator({ onApply }: ZigzagCalculatorProps) {
+export function ZigzagCalculator({ onApply }: Readonly<ZigzagCalculatorProps>) {
   const { settings: globalSettings } = useNutritionSettings();
   const [planMode, setPlanMode] = useState<PlanMode>("maintain");
   const [zigzagEnabled, setZigzagEnabled] = useState(false);

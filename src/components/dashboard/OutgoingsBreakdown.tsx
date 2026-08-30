@@ -21,7 +21,7 @@ interface OutgoingsBreakdownProps {
   isLoading?: boolean;
 }
 
-export function OutgoingsBreakdown({ items, totalSpent, isLoading }: OutgoingsBreakdownProps) {
+export function OutgoingsBreakdown({ items, totalSpent, isLoading }: Readonly<OutgoingsBreakdownProps>) {
   const [expanded, setExpanded] = useState(false);
 
   if (isLoading || items.length === 0) return null;

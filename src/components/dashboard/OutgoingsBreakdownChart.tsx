@@ -14,7 +14,7 @@ export function OutgoingsBreakdownChart({
   billsTotal, 
   otherTotal, 
   isLoading 
-}: OutgoingsBreakdownChartProps) {
+}: Readonly<OutgoingsBreakdownChartProps>) {
   if (isLoading) {
     return (
       <Card>

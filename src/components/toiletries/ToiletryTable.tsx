@@ -27,7 +27,7 @@ interface ToiletryTableProps {
   shippingProfiles?: Record<string, ShippingProfile | null>;
 }
 
-function SortIcon({ sortKey, currentKey, dir }: { sortKey: SortKey; currentKey: SortKey | null; dir: SortDir }) {
+function SortIcon({ sortKey, currentKey, dir }: Readonly<{ sortKey: SortKey; currentKey: SortKey | null; dir: SortDir }>) {
   if (currentKey !== sortKey) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
   return dir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
 }
@@ -42,7 +42,7 @@ export function ToiletryTable({
   onFindPrices,
   usageRates,
   shippingProfiles,
-}: ToiletryTableProps) {
+}: Readonly<ToiletryTableProps>) {
   const isMobile = useIsMobile();
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");

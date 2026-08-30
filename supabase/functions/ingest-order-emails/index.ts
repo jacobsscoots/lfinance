@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
       const fullText = `${subject}\n${body_snippet || ""}`;
       let orderNumber: string | null = null;
       for (const pattern of ORDER_PATTERNS) {
-        const match = fullText.match(pattern);
+        const match = pattern.exec(fullText);
         if (match?.[1]) {
           orderNumber = match[1].trim();
           break;
@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
       let carrier: string | null = null;
       let courierCode: string | null = null;
       for (const { carrier: c, courierCode: cc, pattern } of TRACKING_PATTERNS) {
-        const match = fullText.match(pattern);
+        const match = pattern.exec(fullText);
         if (match?.[1]) {
           trackingNumber = match[1].trim();
           carrier = c;

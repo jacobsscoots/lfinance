@@ -49,7 +49,7 @@ interface CreditorImportRow {
   selected: boolean;
 }
 
-export function StepChangeImport({ open, onOpenChange, debts }: StepChangeImportProps) {
+export function StepChangeImport({ open, onOpenChange, debts }: Readonly<StepChangeImportProps>) {
   const { createDebt, updateDebtBalance } = useDebts();
   const { createPayment } = useDebtPayments();
   const { createSnapshot } = useDebtSnapshots();

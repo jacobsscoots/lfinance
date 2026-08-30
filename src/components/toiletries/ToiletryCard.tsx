@@ -17,7 +17,7 @@ interface ToiletryCardProps {
   onRestock: (item: ToiletryItem) => void;
 }
 
-export function ToiletryCard({ item, forecast, onEdit, onDelete, onRestock }: ToiletryCardProps) {
+export function ToiletryCard({ item, forecast, onEdit, onDelete, onRestock }: Readonly<ToiletryCardProps>) {
   const categoryLabel = TOILETRY_CATEGORIES.find(c => c.value === item.category)?.label || item.category;
 
   return (

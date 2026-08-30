@@ -19,7 +19,7 @@ interface PaymentListProps {
 type CategoryFilter = 'all' | 'normal' | 'extra' | 'fee' | 'refund' | 'adjustment';
 type MatchedFilter = 'all' | 'matched' | 'unmatched';
 
-export function PaymentList({ payments, debts, links, isLoading }: PaymentListProps) {
+export function PaymentList({ payments, debts, links, isLoading }: Readonly<PaymentListProps>) {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [debtFilter, setDebtFilter] = useState<string>('all');
   const [matchedFilter, setMatchedFilter] = useState<MatchedFilter>('all');

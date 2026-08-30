@@ -5,7 +5,7 @@ interface SavingsOverviewCardProps {
   servicesCount: number;
 }
 
-export function SavingsOverviewCard({ totalSavings, servicesCount }: SavingsOverviewCardProps) {
+export function SavingsOverviewCard({ totalSavings, servicesCount }: Readonly<SavingsOverviewCardProps>) {
   return (
     <Card>
       <CardHeader className="pb-2">

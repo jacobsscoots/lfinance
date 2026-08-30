@@ -47,7 +47,7 @@ export function InvestmentFormDialog({
   isLoading,
   defaultValues,
   mode = "create",
-}: InvestmentFormDialogProps) {
+}: Readonly<InvestmentFormDialogProps>) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {

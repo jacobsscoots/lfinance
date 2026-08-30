@@ -61,7 +61,7 @@ function extractMerchant(from: string): string | null {
   if (!from) return null;
 
   // Try display name first: "Myprotein <service@...>"
-  const displayMatch = from.match(/^([^<]+)</);
+  const displayMatch = /^([^<]+)</.exec(from);
   if (displayMatch) {
     const name = displayMatch[1].trim();
     // Filter out generic names like "no-reply", "noreply", "info"
@@ -71,8 +71,8 @@ function extractMerchant(from: string): string | null {
   }
 
   // Fall back to domain extraction: service@t.myprotein.com → myprotein
-  const domainMatch = from.match(/@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}>/i) 
-    || from.match(/@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}$/i);
+  const domainMatch = /@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}>/i.exec(from) 
+    || /@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}$/i.exec(from);
   if (domainMatch) {
     const domain = domainMatch[1];
     // Skip generic domains
@@ -98,7 +98,7 @@ function extractAmount(text: string): number | null {
 
   // Try specific patterns first
   for (let i = 0; i < patterns.length - 1; i++) {
-    const match = text.match(patterns[i]);
+    const match = patterns[i].exec(text);
     if (match) {
       const amount = Number.parseFloat(match[1].replace(',', ''));
       if (!Number.isNaN(amount) && amount > 0 && amount < 10000) return amount;
@@ -273,7 +273,7 @@ serve(async (req) => {
         /invoice\s{0,20}#?\s{0,20}([A-Z0-9][-A-Z0-9]{3,})/i,
       ];
       for (const pattern of orderPatterns) {
-        const match = textToSearch.match(pattern);
+        const match = pattern.exec(textToSearch);
         if (match) { orderReference = match[1]; break; }
       }
 

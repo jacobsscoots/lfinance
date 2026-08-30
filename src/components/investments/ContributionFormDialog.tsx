@@ -41,7 +41,7 @@ export function ContributionFormDialog({
   isLoading,
   defaultValues,
   mode = "create",
-}: ContributionFormDialogProps) {
+}: Readonly<ContributionFormDialogProps>) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {

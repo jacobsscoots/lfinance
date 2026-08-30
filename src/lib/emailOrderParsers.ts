@@ -89,7 +89,7 @@ const ORDER_NUMBER_PATTERNS = [
 
 export function extractOrderNumber(text: string): string | null {
   for (const pattern of ORDER_NUMBER_PATTERNS) {
-    const match = text.match(pattern);
+    const match = pattern.exec(text);
     if (match?.[1]) return match[1].trim();
   }
   return null;
@@ -118,7 +118,7 @@ export interface TrackingMatch {
 
 export function extractTrackingNumber(text: string): TrackingMatch | null {
   for (const { carrier, pattern } of TRACKING_PATTERNS) {
-    const match = text.match(pattern);
+    const match = pattern.exec(text);
     if (match?.[1]) {
       return { trackingNumber: match[1].trim(), carrier };
     }
@@ -129,7 +129,7 @@ export function extractTrackingNumber(text: string): TrackingMatch | null {
 // --- Amount Extraction ---
 
 export function extractAmount(text: string): number | null {
-  const match = text.match(/(?:£|GBP)\s?([\d,]+\.?\d{0,2})/);
+  const match = /(?:£|GBP)\s?([\d,]+\.?\d{0,2})/.exec(text);
   if (match?.[1]) {
     return Number.parseFloat(match[1].replace(",", ""));
   }

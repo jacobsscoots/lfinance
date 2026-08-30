@@ -13,7 +13,7 @@ interface PayoffPlanCardProps {
   debts: Debt[];
 }
 
-export function PayoffPlanCard({ debts }: PayoffPlanCardProps) {
+export function PayoffPlanCard({ debts }: Readonly<PayoffPlanCardProps>) {
   const { settings, upsertSettings } = useDebtSettings();
   const [budget, setBudget] = useState<number>(settings?.monthly_budget || 0);
   const [strategy, setStrategy] = useState<PayoffStrategy>(settings?.preferred_strategy || 'avalanche');
