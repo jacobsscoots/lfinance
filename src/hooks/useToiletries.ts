@@ -174,11 +174,12 @@ export function useToiletries() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["toiletries"] });
-      const message = variables.readingType === "full" 
-        ? "Full weight recorded. You can now track usage over time."
-        : variables.readingType === "empty"
-        ? "Item marked as finished."
-        : "Weight recorded.";
+      let message = "Weight recorded.";
+      if (variables.readingType === "full") {
+        message = "Full weight recorded. You can now track usage over time.";
+      } else if (variables.readingType === "empty") {
+        message = "Item marked as finished.";
+      }
       toast({ title: "Weight logged", description: message });
     },
     onError: (error: Error) => {

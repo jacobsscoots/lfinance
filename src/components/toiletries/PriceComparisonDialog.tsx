@@ -244,12 +244,14 @@ export function PriceComparisonDialog({
                 </TableBody>
               </Table>
             </div>
-          ) : hasSearched && !isSearching ? (
+          )}
+          {!bestDeal && hasSearched && !isSearching && (
             <div className="text-center py-8 text-muted-foreground">
               <p>No prices found for this product.</p>
               <p className="text-sm">Try adjusting the product name or searching manually.</p>
             </div>
-          ) : !isSearching && (
+          )}
+          {!bestDeal && !hasSearched && !isSearching && (
             <div className="text-center py-8 text-muted-foreground">
               <p>Click "Search Prices" to find the best deals.</p>
               <p className="text-sm">We'll search UK retailers and calculate order-by dates.</p>

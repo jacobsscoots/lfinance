@@ -31,6 +31,12 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+function getSubmitLabel(isLoading: boolean, mode: string): string {
+  if (isLoading) return "Saving...";
+  if (mode === "create") return "Create Investment";
+  return "Save Changes";
+}
+
 interface InvestmentFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -324,11 +330,7 @@ export function InvestmentFormDialog({
                 Cancel
               </Button>
               <Button type="submit" className="flex-1" disabled={isLoading}>
-                {isLoading
-                  ? "Saving..."
-                  : mode === "create"
-                  ? "Create Investment"
-                  : "Save Changes"}
+                {getSubmitLabel(isLoading, mode)}
               </Button>
             </div>
           </form>

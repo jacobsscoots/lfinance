@@ -17,6 +17,12 @@ interface ToiletryCardProps {
   onRestock: (item: ToiletryItem) => void;
 }
 
+function getUsageSourceLabel(source: string): string {
+  if (source === "log") return "logged";
+  if (source === "weight") return "weight";
+  return "manual";
+}
+
 export function ToiletryCard({ item, forecast, onEdit, onDelete, onRestock }: Readonly<ToiletryCardProps>) {
   const categoryLabel = TOILETRY_CATEGORIES.find(c => c.value === item.category)?.label || item.category;
 
@@ -114,8 +120,7 @@ export function ToiletryCard({ item, forecast, onEdit, onDelete, onRestock }: Re
             <span className="text-muted-foreground">
               {forecast.effectiveDailyUsage.toFixed(1)}{item.size_unit}/day
               <span className="ml-1 opacity-70">
-                ({forecast.usageSource === "log" ? "logged" : 
-                  forecast.usageSource === "weight" ? "weight" : "manual"})
+                ({getUsageSourceLabel(forecast.usageSource)})
               </span>
             </span>
             {forecast.orderByFormatted && (
