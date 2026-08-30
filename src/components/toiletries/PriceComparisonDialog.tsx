@@ -155,7 +155,7 @@ export function PriceComparisonDialog({
           </div>
 
           {/* Results table */}
-          {results.length > 0 ? (
+          {results.length > 0 && (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -244,12 +244,14 @@ export function PriceComparisonDialog({
                 </TableBody>
               </Table>
             </div>
-          ) : hasSearched && !isSearching ? (
+          )}
+          {results.length === 0 && hasSearched && !isSearching && (
             <div className="text-center py-8 text-muted-foreground">
               <p>No prices found for this product.</p>
               <p className="text-sm">Try adjusting the product name or searching manually.</p>
             </div>
-          ) : !isSearching && (
+          )}
+          {results.length === 0 && !hasSearched && !isSearching && (
             <div className="text-center py-8 text-muted-foreground">
               <p>Click "Search Prices" to find the best deals.</p>
               <p className="text-sm">We'll search UK retailers and calculate order-by dates.</p>

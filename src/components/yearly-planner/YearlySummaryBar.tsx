@@ -11,6 +11,11 @@ function fmt(n: number) {
   return `£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+function getRunningPrefix(runningSurplus: number | undefined): string {
+  if (runningSurplus === undefined) return "";
+  return runningSurplus >= 0 ? "+" : "-";
+}
+
 export function YearlySummaryBar({ months }: Readonly<YearlySummaryBarProps>) {
   const totalIncome = months.reduce((s, m) => s + m.totalIncome, 0);
   const totalOutgoings = months.reduce((s, m) => s + m.totalOutgoings, 0);
@@ -55,7 +60,7 @@ export function YearlySummaryBar({ months }: Readonly<YearlySummaryBarProps>) {
               {MONTH_NAMES[lowestMonth?.month ?? 0]}
             </p>
             <p className="text-xs text-muted-foreground">
-              Running: {lowestMonth ? (lowestMonth.runningSurplus >= 0 ? '+' : '-') : ''}{fmt(lowestMonth?.runningSurplus ?? 0)}
+              Running: {getRunningPrefix(lowestMonth?.runningSurplus)}{fmt(lowestMonth?.runningSurplus ?? 0)}
             </p>
           </div>
         </div>

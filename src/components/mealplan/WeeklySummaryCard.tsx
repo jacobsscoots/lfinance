@@ -12,6 +12,12 @@ interface WeeklySummaryCardProps {
   settings: NutritionSettings | null | undefined;
 }
 
+function getCalorieDiffClass(calories: number): string {
+  if (Math.abs(calories) < 100) return "text-green-600";
+  if (calories > 0) return "text-destructive";
+  return "text-amber-600";
+}
+
 export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Readonly<WeeklySummaryCardProps>) {
   const isTargetMode = settings?.mode === "target_based";
 
@@ -124,11 +130,7 @@ export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Reado
                       <div className="font-semibold">{Math.round(day.totals.calories)} kcal</div>
                       {isTargetMode && day.targetDiff && (
                         <div className={`text-xs ${
-                          Math.abs(day.targetDiff.calories) < 100 
-                            ? "text-green-600" 
-                            : day.targetDiff.calories > 0 
-                              ? "text-destructive" 
-                              : "text-amber-600"
+                          getCalorieDiffClass(day.targetDiff.calories)
                         }`}>
                           {day.targetDiff.calories >= 0 ? "+" : ""}{Math.round(day.targetDiff.calories)}
                         </div>

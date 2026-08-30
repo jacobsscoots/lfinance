@@ -81,17 +81,16 @@ export function useDebtSettings() {
   });
 
   // Return settings with defaults merged
-  const settings: DebtSettings | null = settingsQuery.data
-    ? settingsQuery.data
-    : user?.id
-    ? {
-        id: '',
-        user_id: user.id,
-        ...DEFAULT_SETTINGS,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    : null;
+  let settings: DebtSettings | null = settingsQuery.data ?? null;
+  if (!settings && user?.id) {
+    settings = {
+      id: '',
+      user_id: user.id,
+      ...DEFAULT_SETTINGS,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
 
   return {
     settings,

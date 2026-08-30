@@ -10,6 +10,12 @@ import { InvestmentValuation } from "@/hooks/useInvestmentValuations";
 
 type TimeRange = "1W" | "1M" | "3M" | "6M" | "1Y" | "ALL";
 
+function getSeriesLabel(name: string): string {
+  if (name === "value") return "Value";
+  if (name === "contributions") return "Contributed";
+  return "Projected";
+}
+
 interface InvestmentPerformanceChartProps {
   transactions: InvestmentTransaction[];
   valuations: InvestmentValuation[];
@@ -195,7 +201,7 @@ export function InvestmentPerformanceChart({
                       if (typeof value !== 'number') return null;
                       return [
                         `£${value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                        name === "value" ? "Value" : name === "contributions" ? "Contributed" : "Projected"
+                        getSeriesLabel(String(name))
                       ];
                     }}
                   />

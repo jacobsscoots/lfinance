@@ -19,6 +19,12 @@ interface OnHandItem {
   daysUntilRunOut: number;
 }
 
+function getUrgencyIcon(urgency: string) {
+  if (urgency === "critical") return <AlertTriangle className="h-3.5 w-3.5" />;
+  if (urgency === "warning") return <Clock className="h-3.5 w-3.5" />;
+  return <Package className="h-3.5 w-3.5" />;
+}
+
 export function OnHandPanel({ items, usageRates, shippingProfiles }: Readonly<OnHandPanelProps>) {
   const onHandItems = useMemo(() => {
     const activeItems = items.filter(i => i.status === "active" && i.quantity_in_use > 0);
@@ -94,13 +100,7 @@ export function OnHandPanel({ items, usageRates, shippingProfiles }: Readonly<On
               urgency === "warning" && "bg-warning/10 text-warning",
               urgency === "ok" && "bg-muted text-muted-foreground"
             )}>
-              {urgency === "critical" ? (
-                <AlertTriangle className="h-3.5 w-3.5" />
-              ) : urgency === "warning" ? (
-                <Clock className="h-3.5 w-3.5" />
-              ) : (
-                <Package className="h-3.5 w-3.5" />
-              )}
+              {getUrgencyIcon(urgency)}
             </div>
 
             {/* Info */}

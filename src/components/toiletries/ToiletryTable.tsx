@@ -27,6 +27,12 @@ interface ToiletryTableProps {
   shippingProfiles?: Record<string, ShippingProfile | null>;
 }
 
+function getUsageSourceLabel(source: string): string {
+  if (source === "log") return "📊 Logged";
+  if (source === "weight") return "⚖️ Weight";
+  return "✏️ Manual";
+}
+
 function SortIcon({ sortKey, currentKey, dir }: Readonly<{ sortKey: SortKey; currentKey: SortKey | null; dir: SortDir }>) {
   if (currentKey !== sortKey) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
   return dir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
@@ -212,8 +218,7 @@ export function ToiletryTable({
                       {forecast.effectiveDailyUsage.toFixed(1)}{item.size_unit}/day
                     </span>
                     <span className="text-xs text-muted-foreground capitalize">
-                      {forecast.usageSource === "log" ? "📊 Logged" : 
-                       forecast.usageSource === "weight" ? "⚖️ Weight" : "✏️ Manual"}
+                      {getUsageSourceLabel(forecast.usageSource)}
                     </span>
                   </div>
                 </TableCell>
