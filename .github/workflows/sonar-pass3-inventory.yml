@@ -1,0 +1,47 @@
+name: Sonar pass 3 inventory
+
+on:
+  push:
+    branches:
+      - fix/sonar-maintainability-pass3
+    paths:
+      - .github/workflows/sonar-pass3-inventory.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print selected Sonar issues with source context
+        run: |
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request, pathlib
+          wanted={
+            'typescript:S6582','typescript:S6535','typescript:S7754','typescript:S7776',
+            'typescript:S4138','typescript:S6353','typescript:S4624','typescript:S5906',
+            'typescript:S5976','typescript:S6819','typescript:S6481','typescript:S6759',
+            'typescript:S6594','typescript:S3863'
+          }
+          all_=[]
+          for page in range(1,10):
+            q=urllib.parse.urlencode({'componentKeys':'jacobsscoots_lfinance','issueStatuses':'OPEN,CONFIRMED','ps':500,'p':page})
+            with urllib.request.urlopen('https://sonarcloud.io/api/issues/search?'+q, timeout=60) as r: d=json.load(r)
+            all_ += d.get('issues',[])
+            if len(all_) >= d.get('paging',{}).get('total',len(all_)): break
+          selected=[i for i in all_ if i.get('rule') in wanted]
+          from collections import Counter
+          print('COUNTS', json.dumps(Counter(i['rule'] for i in selected), sort_keys=True))
+          for i in selected:
+            file=i['component'].split(':',1)[1]; line=i.get('line') or 1
+            p=pathlib.Path(file)
+            context=''
+            if p.exists():
+              lines=p.read_text(errors='replace').splitlines()
+              a=max(0,line-2); b=min(len(lines),line+1)
+              context=' | '.join(f'{n+1}:{lines[n].strip()}' for n in range(a,b))
+            print(json.dumps({'rule':i['rule'],'file':file,'line':line,'message':i.get('message'),'context':context},ensure_ascii=False))
+          print('TOTAL_SELECTED',len(selected),'TOTAL_OPEN',len(all_))
+          PY
