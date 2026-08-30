@@ -181,7 +181,7 @@ export async function parseStepChangeStatement(
     const amounts = line.match(currencyPattern);
 
     // A creditor data line has exactly 3 £ values
-    if (amounts && amounts.length === 3) {
+    if (amounts?.length === 3) {
       // Skip the totals line
       const lineUpper = line.toUpperCase();
       if (lineUpper.includes("TOTAL")) continue;
@@ -287,3 +287,4 @@ export async function parseStepChangeStatement(
     warnings,
   };
 }
+

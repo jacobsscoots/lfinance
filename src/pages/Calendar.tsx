@@ -10,9 +10,9 @@ import { useBillOccurrences } from "@/hooks/useBillOccurrences";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { DayDetailPanel } from "@/components/calendar/DayDetailPanel";
 import { getNextPayday } from "@/lib/payday";
-import { getPayCycleForDate, getNextPayCycle, getPrevPayCycle, formatPayCycleLabel } from "@/lib/payCycle";
+import { getPayCycleForDate, getNextPayCycle, getPrevPayCycle, formatPayCycleLabel, toPaydaySettings } from "@/lib/payCycle";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
-import { toPaydaySettings } from "@/lib/payCycle";
+
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 
@@ -291,3 +291,4 @@ export default function Calendar() {
     </AppLayout>
   );
 }
+

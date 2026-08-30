@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { optimiseImage } from "./imageOptimiser";
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export interface PayslipValidationResult {
@@ -10,7 +10,7 @@ export interface PayslipValidationResult {
 }
 
 export function validatePayslipFile(file: File): PayslipValidationResult {
-  if (!ALLOWED_TYPES.includes(file.type)) {
+  if (!ALLOWED_TYPES.has(file.type)) {
     return {
       valid: false,
       error: "File must be a JPG, PNG, WebP image or PDF",
@@ -86,3 +86,4 @@ export async function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+

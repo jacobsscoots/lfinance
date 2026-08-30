@@ -54,7 +54,7 @@ export function useRetailerProfiles() {
   // Auto-seed defaults if none exist
   useEffect(() => {
     if (!user?.id || seeded.current || profilesQuery.isLoading) return;
-    if (profilesQuery.data && profilesQuery.data.length === 0) {
+    if (profilesQuery.data?.length === 0) {
       seeded.current = true;
       const rows = DEFAULT_PROFILES.map((p) => ({ ...p, user_id: user.id }));
       supabase
@@ -117,3 +117,4 @@ export function useRetailerProfiles() {
       ) ?? (profilesQuery.data ?? []).find((p) => p.retailer_name === "Other") ?? null,
   };
 }
+

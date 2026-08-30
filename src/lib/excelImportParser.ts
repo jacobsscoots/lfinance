@@ -3,9 +3,9 @@ import JSZip from "jszip";
 
 // --- Sheet Detection ---
 
-const SETTINGS_VARIANTS = [
+const SETTINGS_VARIANTS = new Set([
   "settings", "setting", "config", "configuration",
-];
+]);
 
 export function findSettingsSheet(workbook: ExcelJS.Workbook): {
   sheetName: string | null;
@@ -13,7 +13,7 @@ export function findSettingsSheet(workbook: ExcelJS.Workbook): {
 } {
   const availableSheets = workbook.worksheets.map((ws) => ws.name);
   const match = availableSheets.find((name) =>
-    SETTINGS_VARIANTS.includes(name.trim().toLowerCase())
+    SETTINGS_VARIANTS.has(name.trim().toLowerCase())
   );
   return { sheetName: match ?? null, availableSheets };
 }
@@ -39,8 +39,8 @@ export function sheetToGrid(sheet: ExcelJS.Worksheet): string[][] {
 
 export type LayoutType = "CATEGORY_TABLE" | "SECTION_TABLES" | "UNKNOWN";
 
-const SECTION_KEYWORDS = ["bills", "subscriptions", "debts", "bill", "subscription", "debt"];
-const CATEGORY_KEYWORDS = ["category", "section"];
+const SECTION_KEYWORDS = new Set(["bills", "subscriptions", "debts", "bill", "subscription", "debt"]);
+const CATEGORY_KEYWORDS = new Set(["category", "section"]);
 
 export function detectLayout(grid: string[][]): LayoutType {
   // Check for section headings first (more specific signal)
@@ -48,7 +48,7 @@ export function detectLayout(grid: string[][]): LayoutType {
     const nonEmpty = row.filter((c) => c.length > 0);
     if (
       nonEmpty.length <= 2 &&
-      nonEmpty.some((c) => SECTION_KEYWORDS.includes(c.toLowerCase()))
+      nonEmpty.some((c) => SECTION_KEYWORDS.has(c.toLowerCase()))
     ) {
       return "SECTION_TABLES";
     }
@@ -58,7 +58,7 @@ export function detectLayout(grid: string[][]): LayoutType {
   for (let r = 0; r < Math.min(5, grid.length); r++) {
     const row = grid[r];
     const hasCategory = row.some((cell) =>
-      CATEGORY_KEYWORDS.includes(cell.toLowerCase())
+      CATEGORY_KEYWORDS.has(cell.toLowerCase())
     );
     const hasMultipleHeaders = row.filter((c) => c.length > 0).length >= 3;
     if (hasCategory && hasMultipleHeaders) return "CATEGORY_TABLE";
@@ -83,7 +83,7 @@ function isSectionHeading(row: string[]): string | null {
   const nonEmpty = row.filter((c) => c.length > 0);
   if (nonEmpty.length > 2) return null;
   const val = nonEmpty[0]?.toLowerCase();
-  if (val && SECTION_KEYWORDS.includes(val)) {
+  if (val && SECTION_KEYWORDS.has(val)) {
     return nonEmpty[0];
   }
   return null;
@@ -107,7 +107,7 @@ function extractCategoryTable(grid: string[][]): ExtractedTable[] {
   // Find the header row
   let headerIdx = -1;
   for (let r = 0; r < Math.min(10, grid.length); r++) {
-    if (grid[r].some((c) => CATEGORY_KEYWORDS.includes(c.toLowerCase()))) {
+    if (grid[r].some((c) => CATEGORY_KEYWORDS.has(c.toLowerCase()))) {
       headerIdx = r;
       break;
     }
@@ -116,7 +116,7 @@ function extractCategoryTable(grid: string[][]): ExtractedTable[] {
 
   const headers = grid[headerIdx].map(normaliseHeader);
   const catIdx = headers.findIndex((h) =>
-    CATEGORY_KEYWORDS.includes(h)
+    CATEGORY_KEYWORDS.has(h)
   );
 
   const grouped: Record<string, Record<string, string>[]> = {};
@@ -134,7 +134,7 @@ function extractCategoryTable(grid: string[][]): ExtractedTable[] {
 
   return Object.entries(grouped).map(([sectionName, rows]) => ({
     sectionName,
-    headers: headers.filter((h) => h && !CATEGORY_KEYWORDS.includes(h)),
+    headers: headers.filter((h) => h && !CATEGORY_KEYWORDS.has(h)),
     rows,
   }));
 }
@@ -250,7 +250,7 @@ export function normaliseDate(value: any): string | null {
   }
 
   // UK format DD/MM/YYYY
-  const ukMatch = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(str);
+  const ukMatch = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/.exec(str);
   if (ukMatch) {
     const day = Number.parseInt(ukMatch[1]);
     const month = Number.parseInt(ukMatch[2]) - 1;
@@ -561,3 +561,4 @@ function resolveCellValue(val: any): string {
   }
   return String(val).trim();
 }
+

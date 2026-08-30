@@ -147,7 +147,7 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
           // FIRST: check if a linked transaction exists for this bill within ±3 days
           const dueDateMs = date.getTime();
           const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-          const foundLinked = linkedTransactions.find(txn => {
+          const foundLinked = linkedTransactions.some(txn => {
             if (txn.bill_id !== occ.billId) return false;
             const txnDate = new Date(txn.transaction_date + "T12:00:00").getTime();
             return Math.abs(txnDate - dueDateMs) <= threeDaysMs;
@@ -226,3 +226,4 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
     enabled: !!user,
   });
 }
+

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, formatDistanceToNow, subWeeks } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -19,7 +19,7 @@ import { GroceryListPanel } from "./GroceryListPanel";
 import { WeeklySummaryCard } from "./WeeklySummaryCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -412,3 +412,4 @@ export function WeeklyMealPlanner() {
     </div>
   );
 }
+

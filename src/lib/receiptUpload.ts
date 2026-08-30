@@ -9,12 +9,12 @@ import { optimiseImage } from "./imageOptimiser";
 
 const BUCKET_NAME = "transaction-receipts";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_MIME_TYPES = [
+const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "application/pdf",
-];
+]);
 const SIGNED_URL_EXPIRY = 3600; // 1 hour in seconds
 
 export interface ReceiptValidationResult {
@@ -27,7 +27,7 @@ export interface ReceiptValidationResult {
  * Checks MIME type and file size
  */
 export function validateReceiptFile(file: File): ReceiptValidationResult {
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  if (!ALLOWED_MIME_TYPES.has(file.type)) {
     return {
       valid: false,
       error: "Invalid file type. Please upload a JPG, PNG, WebP, or PDF file.",
@@ -145,3 +145,4 @@ export function getReceiptExtension(receiptPath: string | null): string {
   if (!receiptPath) return "";
   return receiptPath.split(".").pop()?.toLowerCase() || "";
 }
+

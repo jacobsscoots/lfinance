@@ -358,7 +358,7 @@ describe("getMacroDifferences", () => {
     
     const diffs = getMacroDifferences(achieved, targets);
     
-    expect(diffs.length).toBe(0);
+    expect(diffs).toHaveLength(0);
   });
 
   it("returns differences for out-of-tolerance macros", () => {
@@ -424,3 +424,4 @@ describe("regression: explicit fat targets are used correctly", () => {
     expect(monTargets.fat).toBe(42);
   });
 });
+

@@ -27,8 +27,8 @@ export interface ExtractedNutrition {
 const FIELD_PATTERNS: Record<string, { patterns: RegExp[]; field: keyof ExtractedNutrition }> = {
   energy_kj: {
     patterns: [
-      /energy\s{0,20}[\(\[]?\s{0,20}kj\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
-      /energie\s{0,20}[\(\[]?\s{0,20}kj\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /energy\s{0,20}[([]?\s{0,20}kj\s{0,20}[)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /energie\s{0,20}[([]?\s{0,20}kj\s{0,20}[)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
       /kilojoules?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
       /([\d,.]{1,32})\s{0,20}kj/i,
     ],
@@ -36,7 +36,7 @@ const FIELD_PATTERNS: Record<string, { patterns: RegExp[]; field: keyof Extracte
   },
   energy_kcal: {
     patterns: [
-      /energy\s{0,20}[\(\[]?\s{0,20}kcal\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /energy\s{0,20}[([]?\s{0,20}kcal\s{0,20}[)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
       /calories?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
       /energy\s{1,20}value\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
       /([\d,.]{1,32})\s{0,20}kcal/i,
@@ -121,7 +121,7 @@ export function parseNutritionText(text: string): ExtractedNutrition {
   for (const [key, { patterns, field }] of Object.entries(FIELD_PATTERNS)) {
     for (const pattern of patterns) {
       const match = normalizedText.match(pattern);
-      if (match && match[1]) {
+      if (match?.[1]) {
         const value = parseNumber(match[1]);
         if (value !== undefined) {
           (result as any)[field] = value;
@@ -194,3 +194,4 @@ export function mergeExtractedData<T extends Record<string, any>>(
 
   return result;
 }
+

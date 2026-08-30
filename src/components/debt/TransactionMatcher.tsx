@@ -118,7 +118,7 @@ export function TransactionMatcher({
         )}
 
         {/* Suggested Matches */}
-        {suggestedPayments.filter(p => !linkedPaymentIds.includes(p.id)).length > 0 && (
+        {suggestedPayments.some(p => !linkedPaymentIds.includes(p.id)) && (
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Suggested Matches</h4>
             {suggestedPayments
@@ -213,3 +213,4 @@ function PaymentCard({ payment, isLinked, isSuggested, onToggle, formatCurrency 
     </Card>
   );
 }
+

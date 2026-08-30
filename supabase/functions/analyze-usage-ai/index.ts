@@ -262,7 +262,7 @@ serve(async (req) => {
     }
 
     // Best switching deal
-    if (bestDeal && bestDeal.monthly_cost) {
+    if (bestDeal?.monthly_cost) {
       const currentAnnual = tariff ? (tariff.unit_rate_kwh * 2900 / 100) + ((tariff.standing_charge_daily ?? 0) * 365 / 100) : null;
       const dealAnnual = bestDeal.annual_cost || bestDeal.monthly_cost * 12;
       const potentialSavings = currentAnnual ? currentAnnual - dealAnnual : null;
@@ -400,3 +400,4 @@ ${Object.keys(RECOMMENDATION_KEYS).join(', ')}
     );
   }
 });
+

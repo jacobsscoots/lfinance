@@ -29,7 +29,7 @@ describe("mealPlannerWeek", () => {
       const range = getShoppingWeekRange(anchor);
       const dates = getShoppingWeekDates(range);
       
-      expect(dates.length).toBe(9);
+      expect(dates).toHaveLength(9);
     });
 
     it("should return correct range when anchor is Sunday", () => {
@@ -135,14 +135,14 @@ describe("mealPlannerWeek", () => {
       const activeDates = getActiveDatesInRange(range, blackouts);
       
       // 9 days total - 3 blackout days = 6 active days
-      expect(activeDates.length).toBe(6);
+      expect(activeDates).toHaveLength(6);
     });
 
     it("should return all dates when no blackouts", () => {
       const range = getShoppingWeekRange(new Date("2026-02-10"));
       const activeDates = getActiveDatesInRange(range, []);
       
-      expect(activeDates.length).toBe(9);
+      expect(activeDates).toHaveLength(9);
     });
   });
 
@@ -231,7 +231,7 @@ describe("mealPlannerWeek", () => {
       // Feb 9 is Monday, part of shopping week that started Sun Feb 8
       expect(format(range.start, "yyyy-MM-dd")).toBe("2026-02-08");
       expect(format(range.end, "yyyy-MM-dd")).toBe("2026-02-16");
-      expect(dates.length).toBe(9);
+      expect(dates).toHaveLength(9);
       
       // Verify all dates from Feb 8-16 are included
       expect(dates).toContain("2026-02-09");
@@ -282,3 +282,4 @@ describe("mealPlannerWeek", () => {
     });
   });
 });
+

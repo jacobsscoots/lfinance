@@ -233,7 +233,7 @@ export function useMealPlanItems(weekStart: Date) {
       
       // Find source plan items
       const sourcePlan = mealPlans.find(p => p.id === sourcePlanId);
-      if (!sourcePlan || !sourcePlan.items || sourcePlan.items.length === 0) {
+      if (!sourcePlan?.items?.length) {
         throw new Error("No items to copy");
       }
 
@@ -297,7 +297,7 @@ export function useMealPlanItems(weekStart: Date) {
       
       // Find source plan items
       const sourcePlan = mealPlans.find(p => p.id === sourcePlanId);
-      if (!sourcePlan || !sourcePlan.items || sourcePlan.items.length === 0) {
+      if (!sourcePlan?.items?.length) {
         throw new Error("No items to copy");
       }
 
@@ -367,7 +367,7 @@ export function useMealPlanItems(weekStart: Date) {
       
       // Find source plan items
       const sourcePlan = mealPlans.find(p => p.id === sourcePlanId);
-      if (!sourcePlan || !sourcePlan.items || sourcePlan.items.length === 0) {
+      if (!sourcePlan?.items?.length) {
         throw new Error("No items to copy");
       }
 
@@ -1374,3 +1374,4 @@ export function useMealPlanItems(weekStart: Date) {
     lastCalculated,
   };
 }
+

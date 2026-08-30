@@ -260,7 +260,7 @@ async function handleCheaperBills(
     if (profile.notes) context += `- Notes: ${profile.notes}\n`;
   }
 
-  if (bestDeal && bestDeal.monthly_cost) {
+  if (bestDeal?.monthly_cost) {
     const currentAnnual = tariff ? (tariff.unit_rate_kwh * 2900 / 100) + (tariff.standing_charge_daily * 365 / 100) : null;
     const dealAnnual = bestDeal.annual_cost || bestDeal.monthly_cost * 12;
     const potentialSavings = currentAnnual ? currentAnnual - dealAnnual : null;
@@ -1232,3 +1232,4 @@ function secureRandom(): number {
   globalThis.crypto.getRandomValues(values);
   return values[0] / 0x1_0000_0000;
 }
+

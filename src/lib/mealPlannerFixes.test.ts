@@ -140,7 +140,7 @@ describe("Date Range: Feb 9-16 2026 Week Generation", () => {
     // Feb 9 is Monday; shopping week starts previous Sunday = Feb 8
     expect(format(range.start, "yyyy-MM-dd")).toBe("2026-02-08");
     expect(format(range.end, "yyyy-MM-dd")).toBe("2026-02-16");
-    expect(dates.length).toBe(9);
+    expect(dates).toHaveLength(9);
 
     // Every date from Feb 8 through Feb 16 must be present
     for (let day = 8; day <= 16; day++) {
@@ -645,7 +645,7 @@ describe("Timezone regression: date string stability", () => {
 
     expect(dates[0]).toBe("2026-03-01"); // Sunday Mar 1
     expect(dates[8]).toBe("2026-03-09"); // Monday Mar 9
-    expect(dates.length).toBe(9);
+    expect(dates).toHaveLength(9);
   });
 });
 
@@ -1679,3 +1679,4 @@ describe("Solver Proof: hits MFP-day targets with same foods", () => {
     }
   });
 });
+

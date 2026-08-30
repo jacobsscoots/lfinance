@@ -10,7 +10,7 @@
 import { format, subDays, addDays, getDay } from "date-fns";
 
 // Hardcoded UK bank holidays 2024-2030 (fallback if DB unavailable)
-const UK_BANK_HOLIDAYS_FALLBACK: string[] = [
+const UK_BANK_HOLIDAYS_FALLBACK: ReadonlySet<string> = new Set([
   // 2024
   "2024-01-01", "2024-03-29", "2024-04-01", "2024-05-06", "2024-05-27",
   "2024-08-26", "2024-12-25", "2024-12-26",
@@ -32,7 +32,7 @@ const UK_BANK_HOLIDAYS_FALLBACK: string[] = [
   // 2030
   "2030-01-01", "2030-04-19", "2030-04-22", "2030-05-06", "2030-05-27",
   "2030-08-26", "2030-12-25", "2030-12-26",
-];
+]);
 
 let cachedHolidays: Set<string> | null = null;
 
@@ -49,7 +49,7 @@ export function setBankHolidays(dates: Date[]): void {
 export function isBankHoliday(date: Date): boolean {
   const dateStr = format(date, "yyyy-MM-dd");
   if (cachedHolidays) return cachedHolidays.has(dateStr);
-  return UK_BANK_HOLIDAYS_FALLBACK.includes(dateStr);
+  return UK_BANK_HOLIDAYS_FALLBACK.has(dateStr);
 }
 
 /**
@@ -175,3 +175,4 @@ export function getPayCycleForDate(date: Date): { start: Date; end: Date } {
     };
   }
 }
+

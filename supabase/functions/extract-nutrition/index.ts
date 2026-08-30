@@ -334,7 +334,7 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
   const patterns: Record<string, { patterns: RegExp[]; field: keyof ExtractedNutrition }> = {
     energy_kj: {
       patterns: [
-        /energy\s{0,20}[\(\[]?\s{0,20}kj\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+        /energy\s{0,20}[([]?\s{0,20}kj\s{0,20}[)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
         /kilojoules?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
         /([\d,.]{1,32})\s{0,20}kj/i,
       ],
@@ -342,7 +342,7 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
     },
     energy_kcal: {
       patterns: [
-        /energy\s{0,20}[\(\[]?\s{0,20}kcal\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+        /energy\s{0,20}[([]?\s{0,20}kcal\s{0,20}[)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
         /calories?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
         /([\d,.]{1,32})\s{0,20}kcal/i,
       ],
@@ -811,3 +811,4 @@ Extract the size value separately from the unit.`;
     throw new Error("Could not parse product data from URL. Try 'Upload Photo' or 'Paste Text' instead.");
   }
 }
+

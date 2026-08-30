@@ -138,12 +138,12 @@ export function validateRow(
   return { valid: errors.length === 0, errors, warnings, data };
 }
 
-const VALID_BILL_TYPES = ["fixed", "variable"];
+const VALID_BILL_TYPES = new Set(["fixed", "variable"]);
 
 function normaliseBillType(value: any): string | null {
   if (value == null || value === "") return null;
   const v = String(value).trim().toLowerCase();
-  return VALID_BILL_TYPES.includes(v) ? v : null;
+  return VALID_BILL_TYPES.has(v) ? v : null;
 }
 
 // --- Normalise a mapped row into DB-ready shape ---
@@ -272,3 +272,4 @@ export function findDebtDuplicates(
 export function buildMappingSignature(headers: string[], mapping: FieldMapping): string {
   return headers.map((h) => `${h}:${mapping[h] || "IGNORE"}`).join(",");
 }
+

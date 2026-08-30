@@ -192,10 +192,10 @@ export function useYearlyPlannerData(year: number) {
 
   // Council Tax is paid over 10 monthly instalments (April–January).
   // February (index 1) and March (index 2) are payment holidays.
-  const COUNCIL_TAX_PAYMENT_MONTHS = [0, 3, 4, 5, 6, 7, 8, 9, 10, 11]; // Jan, Apr-Nov, Dec
+  const COUNCIL_TAX_PAYMENT_MONTHS = new Set([0, 3, 4, 5, 6, 7, 8, 9, 10, 11]); // Jan, Apr-Nov, Dec
 
   const isCouncilTaxMonth = (mo: number): boolean =>
-    COUNCIL_TAX_PAYMENT_MONTHS.includes(mo);
+    COUNCIL_TAX_PAYMENT_MONTHS.has(mo);
 
   const getInflationAdjustedAmount = (billName: string, baseAmount: number, yr: number, mo: number): number => {
     // Council Tax: skip Feb (1) and Mar (2) — no instalments
@@ -420,3 +420,4 @@ export function useYearlyPlannerData(year: number) {
     isCreating: createOverride.isPending,
   };
 }
+
