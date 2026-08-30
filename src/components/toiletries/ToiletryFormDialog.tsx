@@ -46,17 +46,20 @@ function formatUsageDuration(days: number | null): string {
   if (days < 30) {
     const weeks = Math.floor(days / 7);
     const rem = days % 7;
-    return rem > 0 ? `${weeks}w ${rem}d` : `${weeks} week${weeks !== 1 ? "s" : ""}`;
+    const weekSuffix = weeks !== 1 ? "s" : "";
+    return rem > 0 ? `${weeks}w ${rem}d` : `${weeks} week${weekSuffix}`;
   }
   if (days < 365) {
     const months = Math.floor(days / 30);
     const rem = days % 30;
-    return rem > 0 ? `${months}m ${rem}d` : `${months} month${months !== 1 ? "s" : ""}`;
+    const monthSuffix = months !== 1 ? "s" : "";
+    return rem > 0 ? `${months}m ${rem}d` : `${months} month${monthSuffix}`;
   }
   const years = Math.floor(days / 365);
   const rem = days % 365;
   const months = Math.floor(rem / 30);
-  return months > 0 ? `${years}y ${months}m` : `${years} year${years !== 1 ? "s" : ""}`;
+  const yearSuffix = years !== 1 ? "s" : "";
+  return months > 0 ? `${years}y ${months}m` : `${years} year${yearSuffix}`;
 }
 
 const toiletryFormSchema = z.object({
@@ -225,11 +228,15 @@ export function ToiletryFormDialog({
       }
     }
 
-    const current_remaining = values.finished_at 
-      ? 0 
-      : values.opened_at 
-        ? Math.max(0, values.total_size - (usage_rate_per_day * differenceInDays(new Date(), new Date(values.opened_at))))
-        : values.total_size;
+    let current_remaining = values.total_size;
+    if (values.finished_at) {
+      current_remaining = 0;
+    } else if (values.opened_at) {
+      current_remaining = Math.max(
+        0,
+        values.total_size - (usage_rate_per_day * differenceInDays(new Date(), new Date(values.opened_at)))
+      );
+    }
 
     const image_url = await uploadImage();
 
@@ -257,6 +264,20 @@ export function ToiletryFormDialog({
     if (selectedFields.has("size_unit") && data.size_unit) form.setValue("size_unit", data.size_unit);
   };
 
+  let dialogTitle = "Add Toiletry Item";
+  if (isEditing) {
+    dialogTitle = "Edit Item";
+  } else if (section === "laundry") {
+    dialogTitle = "Add Laundry Item";
+  }
+
+  let submitActionLabel = "Add";
+  if (uploadingImage) {
+    submitActionLabel = "Uploading…";
+  } else if (isEditing) {
+    submitActionLabel = "Update";
+  }
+
   return (
     <>
       <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -264,7 +285,7 @@ export function ToiletryFormDialog({
           <ResponsiveDialogHeader className="pr-8">
             <div className="flex items-center justify-between gap-4">
               <ResponsiveDialogTitle>
-                {isEditing ? "Edit Item" : section === "laundry" ? "Add Laundry Item" : "Add Toiletry Item"}
+                {dialogTitle}
               </ResponsiveDialogTitle>
               <Button 
                 type="button" 
@@ -609,7 +630,7 @@ export function ToiletryFormDialog({
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isLoading || uploadingImage}>
-                  {uploadingImage ? "Uploading…" : isEditing ? "Update" : "Add"} Item
+                  {submitActionLabel} Item
                 </Button>
               </ResponsiveDialogFooter>
             </form>

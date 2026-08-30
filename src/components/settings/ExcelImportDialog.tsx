@@ -311,16 +311,25 @@ export function ExcelImportDialog({
     setStep("mapping");
   }, [sections, bills, debts]);
 
+  const sectionDataByKey = {
+    bills: billsData,
+    subs: subsData,
+    debts: debtsData,
+  };
+  const sectionSetterByKey = {
+    bills: setBillsData,
+    subs: setSubsData,
+    debts: setDebtsData,
+  };
+
   // --- Update mapping for a section ---
   const updateMapping = (
     section: "bills" | "subs" | "debts",
     header: string,
     targetKey: string
   ) => {
-    const setter =
-      section === "bills" ? setBillsData : section === "subs" ? setSubsData : setDebtsData;
-    const current =
-      section === "bills" ? billsData : section === "subs" ? subsData : debtsData;
+    const setter = sectionSetterByKey[section];
+    const current = sectionDataByKey[section];
     if (!current) return;
     setter({ ...current, mapping: { ...current.mapping, [header]: targetKey } });
   };
@@ -373,10 +382,8 @@ export function ExcelImportDialog({
     rowIdx: number,
     action: DuplicateAction
   ) => {
-    const setter =
-      section === "bills" ? setBillsData : section === "subs" ? setSubsData : setDebtsData;
-    const current =
-      section === "bills" ? billsData : section === "subs" ? subsData : debtsData;
+    const setter = sectionSetterByKey[section];
+    const current = sectionDataByKey[section];
     if (!current) return;
     const rows = [...current.rows];
     rows[rowIdx] = { ...rows[rowIdx], duplicateAction: action };
@@ -623,6 +630,37 @@ export function ExcelImportDialog({
     data: SectionData | null
   ) => {
     if (!data || data.rows.length === 0) return null;
+
+    const renderRowStatus = (row: SectionData["rows"][number], idx: number) => {
+      if (row.duplicate) {
+        return (
+          <Select
+            value={row.duplicateAction}
+            onValueChange={(val) =>
+              setDuplicateAction(sectionKey, idx, val as DuplicateAction)
+            }
+          >
+            <SelectTrigger className="h-6 w-24 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="skip">Skip</SelectItem>
+              <SelectItem value="update">Update</SelectItem>
+              <SelectItem value="import_new">New</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      }
+      if (row.valid) {
+        return (
+          <Badge variant="outline" className="text-xs">
+            New
+          </Badge>
+        );
+      }
+      return <span className="text-xs text-destructive">{row.errors[0]}</span>;
+    };
+
     return (
       <div className="space-y-2">
         <h4 className="font-medium text-sm">
@@ -663,33 +701,7 @@ export function ExcelImportDialog({
                           : "—"}
                       </TableCell>
                     ))}
-                  <TableCell>
-                    {row.duplicate ? (
-                      <Select
-                        value={row.duplicateAction}
-                        onValueChange={(val) =>
-                          setDuplicateAction(sectionKey, idx, val as DuplicateAction)
-                        }
-                      >
-                        <SelectTrigger className="h-6 w-24 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="skip">Skip</SelectItem>
-                          <SelectItem value="update">Update</SelectItem>
-                          <SelectItem value="import_new">New</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : row.valid ? (
-                      <Badge variant="outline" className="text-xs">
-                        New
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-destructive">
-                        {row.errors[0]}
-                      </span>
-                    )}
-                  </TableCell>
+                  <TableCell>{renderRowStatus(row, idx)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -698,6 +710,13 @@ export function ExcelImportDialog({
       </div>
     );
   };
+
+  let layoutLabel = "Unknown";
+  if (layoutDetected === "CATEGORY_TABLE") {
+    layoutLabel = "Category column";
+  } else if (layoutDetected === "SECTION_TABLES") {
+    layoutLabel = "Section headings";
+  }
 
   return (
     <Dialog
@@ -764,11 +783,7 @@ export function ExcelImportDialog({
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Sheet: {sheetName} · Layout:{" "}
-                {layoutDetected === "CATEGORY_TABLE"
-                  ? "Category column"
-                  : layoutDetected === "SECTION_TABLES"
-                  ? "Section headings"
-                  : "Unknown"}
+                {layoutLabel}
               </p>
             </div>
 
