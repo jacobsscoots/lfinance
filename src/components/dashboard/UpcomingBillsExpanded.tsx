@@ -135,7 +135,7 @@ export function UpcomingBillsExpanded({
           <Skeleton className="h-6 w-32" />
         </CardHeader>
         <CardContent className="space-y-4">
-          {[...Array(4)].map((_, i) => (
+          {[...new Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </CardContent>

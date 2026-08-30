@@ -242,7 +242,7 @@ export function extractAmountFromText(text: string): number | null {
     /£\s*([\d,]+\.?\d*)/,
     /GBP\s*([\d,]+\.?\d*)/i,
     /\$\s*([\d,]+\.?\d*)/,
-    /([\d,]{1,32}\.?\d*)\s{0,20}GBP/i,
+    /([\d,]{1,32}(?:\.\d{1,2})?)\s{0,20}GBP/i,
     /total[:\s]*([\d,]+\.?\d*)/i,
     /amount[:\s]*£?\s{0,20}([\d,]{1,32}\.?\d*)/i,
   ];

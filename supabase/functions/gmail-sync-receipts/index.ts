@@ -130,7 +130,7 @@ function decodeBody(payload: any): string {
     if (node.body?.data) {
       try {
         // base64url → base64 → decode
-        const b64 = node.body.data.replaceAll(/-/g, '+').replaceAll(/_/g, '/');
+        const b64 = node.body.data.replaceAll('-', '+').replaceAll('_', '/');
         const decoded = atob(b64);
         parts.push(decoded);
       } catch { /* ignore decode errors */ }
@@ -208,7 +208,7 @@ serve(async (req) => {
     // Using broader matching: subject keywords + category:purchases (Gmail's built-in label)
     const subjectPart = RECEIPT_KEYWORDS.map(k => `subject:"${k}"`).join(' OR ');
     const searchParts = [
-      `after:${afterDate.toISOString().split('T')[0].replaceAll(/-/g, '/')}`,
+      `after:${afterDate.toISOString().split('T')[0].replaceAll('-', '/')}`,
       `(${subjectPart} OR category:purchases OR category:updates OR label:receipts)`,
     ];
     if (settings?.allowed_domains?.length > 0) {

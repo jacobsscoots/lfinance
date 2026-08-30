@@ -43,7 +43,7 @@ export function BudgetHealthCard({ metrics, isLoading }: BudgetHealthCardProps) 
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
+            {[...new Array(4)].map((_, i) => (
               <div key={i} className="text-center space-y-2">
                 <Skeleton className="h-8 w-8 mx-auto rounded-full" />
                 <Skeleton className="h-6 w-16 mx-auto" />

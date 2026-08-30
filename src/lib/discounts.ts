@@ -77,7 +77,7 @@ export function parseMultiBuyOffer(offerLabel: string | null | undefined): Multi
   const normalized = offerLabel.toLowerCase().trim();
   
   // Pattern: "X for Y" (e.g., "4 for 3", "3 for 2")
-  const forPattern = /(\d+)\s{0,20}for\s{0,20}(?:the\s{0,20}price\s{0,20}of\s{0,20})?(\d+)/i;
+  const forPattern = /(\d{1,6})\s{0,20}for\s{0,20}(?:the\s{0,20}price\s{0,20}of\s{0,20})?(\d{1,6})/i;
   const forMatch = normalized.match(forPattern);
   if (forMatch) {
     const buyQty = Number.parseInt(forMatch[1], 10);
