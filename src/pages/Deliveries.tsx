@@ -136,13 +136,13 @@ function ShipmentList({
   onDelete,
   isLoading,
   emptyMessage,
-}: {
+}: Readonly<{
   shipments: ReturnType<typeof useShipments>["shipments"];
   events: ReturnType<typeof useShipments>["events"];
   onDelete: (id: string) => void;
   isLoading: boolean;
   emptyMessage: string;
-}) {
+}>) {
   if (isLoading) {
     return <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>;
   }

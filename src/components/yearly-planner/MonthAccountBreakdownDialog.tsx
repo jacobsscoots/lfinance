@@ -1,7 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
+import { Separator } from "@/components/ui/separator";import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
 import type { Bill } from "@/hooks/useBills";
 import type { BankAccount } from "@/hooks/useAccounts";
 import { useMemo } from "react";
@@ -36,7 +34,7 @@ export function MonthAccountBreakdownDialog({
   bills,
   accounts,
   getOverride,
-}: MonthAccountBreakdownDialogProps) {
+}: Readonly<MonthAccountBreakdownDialogProps>) {
   const accountMap = useMemo(() => {
     const m = new Map<string, string>();
     accounts.forEach(a => m.set(a.id, a.display_name || a.name));

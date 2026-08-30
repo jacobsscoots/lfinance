@@ -29,7 +29,7 @@ const accountTypes = [
   { value: 'business', label: 'Business Account' },
 ];
 
-export function AccountFormDialog({ open, onOpenChange, account, onSubmit, isLoading }: AccountFormDialogProps) {
+export function AccountFormDialog({ open, onOpenChange, account, onSubmit, isLoading }: Readonly<AccountFormDialogProps>) {
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [accountType, setAccountType] = useState('current');

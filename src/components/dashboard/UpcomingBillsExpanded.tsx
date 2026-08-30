@@ -1,21 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  Collapsible, 
-  CollapsibleContent, 
-  CollapsibleTrigger 
-} from "@/components/ui/collapsible";
-import { 
-  AlertTriangle, 
-  Calendar, 
-  ChevronDown, 
-  Receipt, 
-  Repeat,
-  CircleDollarSign,
-} from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AlertTriangle, Calendar, ChevronDown, Receipt, Repeat, CircleDollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/dashboardCalculations";
-import { format, differenceInDays, startOfDay } from "date-fns";
+import { differenceInDays, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 

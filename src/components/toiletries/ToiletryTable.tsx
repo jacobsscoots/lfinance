@@ -1,38 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { ToiletryImage } from "./ToiletryImage";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Pencil, Trash2, RefreshCw, Scale, Link, Search, ArrowUp, ArrowDown, ArrowUpDown, Package } from "lucide-react";
-import {
-  calculateForecast,
-  formatCurrency,
-  getStatusBadgeVariant,
-  getStatusDisplayText,
-  TOILETRY_CATEGORIES,
-  type ToiletryItem,
-  type ToiletryForecast,
-} from "@/lib/toiletryCalculations";
-import {
-  getReorderBadgeVariant,
-  getReorderStatusLabel,
-  type ShippingProfile,
-} from "@/lib/reorderCalculations";
+import { calculateForecast, formatCurrency, getStatusBadgeVariant, getStatusDisplayText, TOILETRY_CATEGORIES, type ToiletryItem, type ToiletryForecast } from "@/lib/toiletryCalculations";
+import { getReorderBadgeVariant, getReorderStatusLabel, type ShippingProfile } from "@/lib/reorderCalculations";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ToiletryCard } from "./ToiletryCard";
 import { cn } from "@/lib/utils";

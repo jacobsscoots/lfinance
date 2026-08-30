@@ -2,10 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, getValueColorClass } from "@/lib/dashboardCalculations";
 import { cn } from "@/lib/utils";
-import { Building2, AlertTriangle, RefreshCw } from "lucide-react";
-import { format } from "date-fns";
-
-interface Account {
+import { Building2, AlertTriangle, RefreshCw } from "lucide-react";interface Account {
   id: string;
   name: string;
   displayName: string | null;

@@ -1,9 +1,8 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { usePayCycleData, useHistoricalPayCycles } from "@/hooks/usePayCycleData";
-import { formatPayCycleLabel } from "@/lib/payCycle";
-import { Badge } from "@/components/ui/badge";
+import { usePayCycleData, useHistoricalPayCycles } from "@/hooks/usePayCycleData";import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock } from "lucide-react";
 
+// Dashboard components
 // Dashboard components
 import { RunwayBalanceCard } from "@/components/dashboard/RunwayBalanceCard";
 import { BudgetHealthCard } from "@/components/dashboard/BudgetHealthCard";

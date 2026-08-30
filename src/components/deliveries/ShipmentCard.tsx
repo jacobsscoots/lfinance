@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Package, Copy, ChevronDown, ChevronUp, MapPin, Clock, Truck, CheckCircle2, AlertTriangle, Circle, Mail, ExternalLink } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -41,7 +41,7 @@ interface ShipmentCardProps {
   onDelete?: (id: string) => void;
 }
 
-export function ShipmentCard({ shipment, events, onDelete }: ShipmentCardProps) {
+export function ShipmentCard({ shipment, events, onDelete }: Readonly<ShipmentCardProps>) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 

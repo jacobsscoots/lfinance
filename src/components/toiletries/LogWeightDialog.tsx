@@ -47,7 +47,7 @@ export function LogWeightDialog({
   item,
   onSubmit,
   isLoading = false,
-}: LogWeightDialogProps) {
+}: Readonly<LogWeightDialogProps>) {
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Extended item type with weight fields

@@ -49,7 +49,7 @@ interface TransactionFormDialogProps {
   transaction?: Transaction | null;
 }
 
-export function TransactionFormDialog({ open, onOpenChange, transaction }: TransactionFormDialogProps) {
+export function TransactionFormDialog({ open, onOpenChange, transaction }: Readonly<TransactionFormDialogProps>) {
   const { createTransaction, updateTransaction } = useTransactions();
   const { data: categories = [] } = useCategories();
   const { accounts } = useAccounts();

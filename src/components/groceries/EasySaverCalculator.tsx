@@ -12,7 +12,7 @@ interface EasySaverCalculatorProps {
   icelandTotal?: number;
 }
 
-export function EasySaverCalculator({ icelandTotal = 0 }: EasySaverCalculatorProps) {
+export function EasySaverCalculator({ icelandTotal = 0 }: Readonly<EasySaverCalculatorProps>) {
   const { cardBalance: savedBalance, updateBalance } = useEasySaverBalance();
 
   const [cardBalanceInput, setCardBalanceInput] = useState("");

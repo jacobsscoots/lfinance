@@ -88,7 +88,7 @@ function parseDateValue(val: any): { month: number | null; day: number | null } 
   return { month: null, day: null };
 }
 
-export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting }: Props) {
+export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting }: Readonly<Props>) {
   const [preview, setPreview] = useState<ImportRow[]>([]);
   const [fileName, setFileName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);

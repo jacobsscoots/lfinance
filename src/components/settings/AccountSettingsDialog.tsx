@@ -20,7 +20,7 @@ interface AccountSettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function AccountSettingsDialog({ open, onOpenChange }: AccountSettingsDialogProps) {
+export function AccountSettingsDialog({ open, onOpenChange }: Readonly<AccountSettingsDialogProps>) {
   const { user, signOut } = useAuth();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

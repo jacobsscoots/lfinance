@@ -1,16 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { 
-  eachDayOfInterval, 
-  isSameDay,
-  format,
-  getDay,
-  isBefore,
-  startOfDay,
-} from "date-fns";
+import { eachDayOfInterval, isSameDay, format, getDay, isBefore, startOfDay } from "date-fns";
 import { generateBillOccurrences } from "@/lib/billOccurrences";
-import { useToiletryForecasts, type ToiletryForecastEntry } from "@/hooks/useToiletryForecasts";
+import { useToiletryForecasts } from "@/hooks/useToiletryForecasts";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Bill = Tables<"bills"> & {

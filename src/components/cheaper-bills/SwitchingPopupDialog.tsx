@@ -23,7 +23,7 @@ export function SwitchingPopupDialog({
   onOpenChange,
   result,
   currentMonthlyCost,
-}: SwitchingPopupDialogProps) {
+}: Readonly<SwitchingPopupDialogProps>) {
   if (!result) return null;
 
   const currentAnnualCost = currentMonthlyCost * 12;

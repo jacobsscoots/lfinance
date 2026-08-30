@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
-import { useToiletryUsageLogs, type UsageLog } from "@/hooks/useToiletryUsageLogs";
+import { useToiletryUsageLogs } from "@/hooks/useToiletryUsageLogs";
 import type { ToiletryItem } from "@/lib/toiletryCalculations";
 
 interface QuickUsageLogProps {
   item: ToiletryItem;
 }
 
-export function QuickUsageLog({ item }: QuickUsageLogProps) {
+export function QuickUsageLog({ item }: Readonly<QuickUsageLogProps>) {
   const { logs, logUsage, deleteLog } = useToiletryUsageLogs(item.id);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));

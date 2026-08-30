@@ -1,12 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreVertical, Pencil, Trash2, Calendar, Repeat, CreditCard, TrendingUp } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MoreVertical, Pencil, Trash2, Calendar, Repeat, TrendingUp } from "lucide-react";
 import { Bill } from "@/hooks/useBills";
 import { cn } from "@/lib/utils";
 

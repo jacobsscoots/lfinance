@@ -28,7 +28,7 @@ interface NetTrendChartProps {
   isLoading?: boolean;
 }
 
-export function NetTrendChart({ data, isLoading }: NetTrendChartProps) {
+export function NetTrendChart({ data, isLoading }: Readonly<NetTrendChartProps>) {
   if (isLoading) {
     return (
       <Card>

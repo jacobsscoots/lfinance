@@ -2,33 +2,10 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  MoreVertical, 
-  Pencil, 
-  Trash2,
-  Building,
-  Calendar,
-  Percent,
-  Activity
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { TrendingUp, TrendingDown, MoreVertical, Pencil, Trash2, Building, Calendar, Percent, Activity } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { InvestmentAccount } from "@/hooks/useInvestments";
-import { InvestmentTransaction } from "@/hooks/useInvestmentTransactions";
-import { InvestmentValuation } from "@/hooks/useInvestmentValuations";
-import { 
-  calculateContributionTotal, 
-  calculateReturn, 
-  calculateDailyChange,
-  calculateDailyValues
-} from "@/lib/investmentCalculations";
+import { InvestmentTransaction } from "@/hooks/useInvestmentTransactions";import { calculateContributionTotal, calculateReturn, calculateDailyChange, calculateDailyValues } from "@/lib/investmentCalculations";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 

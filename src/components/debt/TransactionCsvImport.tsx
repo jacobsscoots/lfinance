@@ -26,7 +26,7 @@ interface TransactionCsvImportProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function TransactionCsvImport({ open, onOpenChange }: TransactionCsvImportProps) {
+export function TransactionCsvImport({ open, onOpenChange }: Readonly<TransactionCsvImportProps>) {
   const { createTransactions } = useDebtTransactions();
   const [csvContent, setCsvContent] = useState<string>('');
   const [headers, setHeaders] = useState<string[]>([]);

@@ -52,7 +52,7 @@ export function OrderFormDialog({
   onSubmit,
   initialData,
   isLoading = false,
-}: OrderFormDialogProps) {
+}: Readonly<OrderFormDialogProps>) {
   const isEditing = !!initialData;
 
   const form = useForm<OrderFormValues>({

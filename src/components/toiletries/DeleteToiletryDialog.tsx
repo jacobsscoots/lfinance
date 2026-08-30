@@ -23,7 +23,7 @@ export function DeleteToiletryDialog({
   onConfirm,
   itemName,
   isLoading = false,
-}: DeleteToiletryDialogProps) {
+}: Readonly<DeleteToiletryDialogProps>) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>

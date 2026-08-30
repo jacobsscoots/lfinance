@@ -17,7 +17,7 @@ interface StatItemProps {
   sublabel?: string;
 }
 
-function StatItem({ label, value, icon, colorClass, sublabel }: StatItemProps) {
+function StatItem({ label, value, icon, colorClass, sublabel }: Readonly<StatItemProps>) {
   return (
     <div className="text-center space-y-1">
       <div className="flex justify-center text-muted-foreground mb-1">
@@ -34,7 +34,7 @@ function StatItem({ label, value, icon, colorClass, sublabel }: StatItemProps) {
   );
 }
 
-export function BudgetHealthCard({ metrics, isLoading }: BudgetHealthCardProps) {
+export function BudgetHealthCard({ metrics, isLoading }: Readonly<BudgetHealthCardProps>) {
   if (isLoading) {
     return (
       <Card>

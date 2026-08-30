@@ -46,7 +46,7 @@ interface MacroCellProps {
   isCal?: boolean;
 }
 
-function MacroCell({ label, actual, target, unit, showBar, compact, isCal = false }: MacroCellProps) {
+function MacroCell({ label, actual, target, unit, showBar, compact, isCal = false }: Readonly<MacroCellProps>) {
   const status = getStatus(actual, target, isCal);
   const percent = target > 0 ? Math.min(100, (actual / target) * 100) : 0;
   const diff = getDiffLabel(actual, target);
@@ -124,7 +124,7 @@ function MacroCell({ label, actual, target, unit, showBar, compact, isCal = fals
   );
 }
 
-export function DayMacroSummary({ totals, targets, isTargetMode, compact = false }: DayMacroSummaryProps) {
+export function DayMacroSummary({ totals, targets, isTargetMode, compact = false }: Readonly<DayMacroSummaryProps>) {
   if (compact) {
     return (
       <div className="grid grid-cols-4 gap-1 text-xs py-1">

@@ -31,7 +31,7 @@ export function PriceComparisonDialog({
   open,
   onOpenChange,
   item,
-}: PriceComparisonDialogProps) {
+}: Readonly<PriceComparisonDialogProps>) {
   const [results, setResults] = useState<PriceCheckResult[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   

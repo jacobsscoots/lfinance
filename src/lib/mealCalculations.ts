@@ -1,9 +1,9 @@
 import { Product } from "@/hooks/useProducts";
 import { MealPlan, MealPlanItem, MealType, MealStatus } from "@/hooks/useMealPlanItems";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
-import { getCaloriesForDate, getWeekStartMonday, WeeklyCalorieSchedule } from "@/lib/weekTargets";
-import { format, parse } from "date-fns";
-import { getDailyTargets, MacroTotals as UnifiedMacroTotals, WeeklyTargetsOverride as UnifiedOverride } from "@/lib/dailyTargets";
+import { WeeklyCalorieSchedule } from "@/lib/weekTargets";
+import { parse } from "date-fns";
+import { getDailyTargets, WeeklyTargetsOverride as UnifiedOverride } from "@/lib/dailyTargets";
 
 export interface MacroTotals {
   calories: number;

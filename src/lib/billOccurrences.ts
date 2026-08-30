@@ -6,21 +6,14 @@
  * - Due dates stay on exact date (no auto-shift for weekends/holidays)
  */
 
-import { 
-  addDays,
-  addWeeks, 
-  addMonths, 
-  startOfMonth, 
-  endOfMonth, 
-  isBefore, 
-  isAfter, 
-  isSameDay, 
-  format, 
-  parseISO, 
-  lastDayOfMonth,
-  eachWeekOfInterval,
-  setDay,
-} from "date-fns";
+/**
+ * Bill occurrence calculation
+ *
+ * ASSUMPTIONS:
+ * - Occurrences are computed on-the-fly, not pre-stored for all future months
+ * - Due dates stay on exact date (no auto-shift for weekends/holidays)
+ */
+import { addDays, addWeeks, addMonths, startOfMonth, endOfMonth, isBefore, isAfter, isSameDay, format, parseISO, lastDayOfMonth } from "date-fns";
 import type { Bill } from "@/hooks/useBills";
 
 export interface BillOccurrence {

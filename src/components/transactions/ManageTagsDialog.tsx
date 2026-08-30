@@ -2,9 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Label } from "@/components/ui/label";import { Pencil, Trash2, Plus } from "lucide-react";
 import { useTransactionTags, TransactionTag } from "@/hooks/useTransactionTags";
 
 interface ManageTagsDialogProps {

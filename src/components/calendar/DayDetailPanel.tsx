@@ -20,7 +20,7 @@ interface DayDetailPanelProps {
   onReset?: (billId: string, dueDate: Date) => void;
 }
 
-export function DayDetailPanel({ date, bills, onMarkPaid, onSkip, onReset }: DayDetailPanelProps) {
+export function DayDetailPanel({ date, bills, onMarkPaid, onSkip, onReset }: Readonly<DayDetailPanelProps>) {
   const totalAmount = bills.reduce((sum, b) => sum + b.amount, 0);
   const paidCount = bills.filter((b) => b.isPaid).length;
   const skippedCount = bills.filter((b) => b.status === "skipped").length;

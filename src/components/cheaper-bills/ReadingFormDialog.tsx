@@ -52,7 +52,7 @@ export function ReadingFormDialog({
   onOpenChange,
   onSubmit,
   isLoading,
-}: ReadingFormDialogProps) {
+}: Readonly<ReadingFormDialogProps>) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {

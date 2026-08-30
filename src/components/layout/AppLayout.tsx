@@ -8,7 +8,7 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children }: Readonly<AppLayoutProps>) {
   // Runs silent background syncs for smart meter, Gmail, etc. every 5 minutes
   useBackgroundSync();
 

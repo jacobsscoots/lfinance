@@ -1,11 +1,4 @@
-import {
-  normaliseAmount,
-  normaliseDate,
-  normaliseDueDay,
-  normaliseFrequency,
-  normaliseDebtType,
-  normaliseBoolean,
-} from "./excelImportParser";
+import { normaliseAmount, normaliseDueDay, normaliseFrequency, normaliseDebtType, normaliseBoolean } from "./excelImportParser";
 
 // --- Target Field Definitions ---
 

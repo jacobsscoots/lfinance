@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { format, parse } from "date-fns";
-import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle, PenLine, Pencil, Check } from "lucide-react";
+import { Plus, MoreVertical, Lock, Unlock, ExternalLink, XCircle, Utensils, Eye, Copy, Trash2, RefreshCw, Loader2, Palmtree, CalendarDays, Sparkles, AlertTriangle, PenLine, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
   eating_out: <ExternalLink className="h-3 w-3 text-primary" />,
 };
 
-export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, previousWeekOverride, weekDates, mealPlans = [] }: MealDayCardProps) {
+export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, previousWeekOverride, weekDates, mealPlans = [] }: Readonly<MealDayCardProps>) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [eatingOutOpen, setEatingOutOpen] = useState(false);
   const [manualItemOpen, setManualItemOpen] = useState(false);

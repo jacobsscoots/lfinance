@@ -26,7 +26,7 @@ interface ServiceInfo {
   syncKey?: string;
 }
 
-function StatusBadge({ status }: { status: ServiceStatus }) {
+function StatusBadge({ status }: Readonly<{ status: ServiceStatus }>) {
   const config: Record<ServiceStatus, { label: string; className: string; icon: React.ReactNode }> = {
     connected: { label: "Connected", className: "bg-success/10 text-success border-success/20", icon: <CheckCircle2 className="h-3 w-3" /> },
     disconnected: { label: "Not Connected", className: "bg-muted text-muted-foreground border-border", icon: <XCircle className="h-3 w-3" /> },

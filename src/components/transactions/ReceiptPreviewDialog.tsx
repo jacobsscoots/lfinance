@@ -27,7 +27,7 @@ export function ReceiptPreviewDialog({
   transactionId,
   transactionDescription,
   receiptPath,
-}: ReceiptPreviewDialogProps) {
+}: Readonly<ReceiptPreviewDialogProps>) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);

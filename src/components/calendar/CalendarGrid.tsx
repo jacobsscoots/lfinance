@@ -20,7 +20,7 @@ interface CalendarGridProps {
 const weekDaysFull = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const weekDaysMobile = ["M", "T", "W", "T", "F", "S", "S"];
 
-export function CalendarGrid({ days, selectedDate, onSelectDate }: CalendarGridProps) {
+export function CalendarGrid({ days, selectedDate, onSelectDate }: Readonly<CalendarGridProps>) {
   const isMobile = useIsMobile();
   const weekDays = isMobile ? weekDaysMobile : weekDaysFull;
 
@@ -61,7 +61,7 @@ interface CalendarCellProps {
   isMobile: boolean;
 }
 
-function CalendarCell({ day, isSelected, onClick, isMobile }: CalendarCellProps) {
+function CalendarCell({ day, isSelected, onClick, isMobile }: Readonly<CalendarCellProps>) {
   const today = isToday(day.date);
   const maxBills = isMobile ? 2 : 3;
 
@@ -116,7 +116,7 @@ interface BillPillProps {
   compact?: boolean;
 }
 
-function BillPill({ bill, compact = false }: BillPillProps) {
+function BillPill({ bill, compact = false }: Readonly<BillPillProps>) {
   const getStatusStyle = () => {
     if (bill.isToiletryReorder) {
       if (bill.status === "overdue") return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";

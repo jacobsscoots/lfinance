@@ -20,7 +20,7 @@ interface EatingOutDialogProps {
   onConfirm: (data: EatingOutData) => void;
 }
 
-export function EatingOutDialog({ open, onOpenChange, onConfirm }: EatingOutDialogProps) {
+export function EatingOutDialog({ open, onOpenChange, onConfirm }: Readonly<EatingOutDialogProps>) {
   const [label, setLabel] = useState("");
   const [calories, setCalories] = useState("500");
   const [protein, setProtein] = useState("");

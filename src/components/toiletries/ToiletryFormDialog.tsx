@@ -94,7 +94,7 @@ export function ToiletryFormDialog({
   initialData,
   isLoading = false,
   section = "toiletry",
-}: ToiletryFormDialogProps) {
+}: Readonly<ToiletryFormDialogProps>) {
   const isEditing = !!initialData;
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);

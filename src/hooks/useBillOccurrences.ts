@@ -5,7 +5,7 @@ import { useBills } from "@/hooks/useBills";
 import { getBillOccurrencesForMonth, getBillOccurrencesInRange, BillOccurrence } from "@/lib/billOccurrences";
 import { autoMatchTransactions, Transaction } from "@/lib/transactionMatcher";
 import { toast } from "@/hooks/use-toast";
-import { format, isBefore, startOfDay, startOfMonth, endOfMonth } from "date-fns";
+import { format, isBefore, startOfDay } from "date-fns";
 
 export function useBillOccurrences(year: number, month: number, rangeStart?: Date, rangeEnd?: Date) {
   const { user } = useAuth();

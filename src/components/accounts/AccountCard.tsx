@@ -23,7 +23,7 @@ const accountTypeIcons: Record<string, React.ComponentType<{ className?: string 
   business: Building2,
 };
 
-export function AccountCard({ account, connectionStatus, onEdit, onDelete, onToggleHidden }: AccountCardProps) {
+export function AccountCard({ account, connectionStatus, onEdit, onDelete, onToggleHidden }: Readonly<AccountCardProps>) {
   const Icon = accountTypeIcons[account.account_type] || Wallet;
   const balance = Number(account.balance);
   const isNegative = balance < 0;

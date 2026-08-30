@@ -2,9 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp, AlertTriangle, ArrowRightLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/dashboardCalculations";
+import { ChevronDown, ChevronUp, ArrowRightLeft } from "lucide-react";import { formatCurrency } from "@/lib/dashboardCalculations";
 
 interface OutgoingsItem {
   id: string;

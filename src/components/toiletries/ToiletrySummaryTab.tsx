@@ -11,7 +11,7 @@ interface ToiletrySummaryTabProps {
   purchases: ToiletryPurchase[];
 }
 
-export function ToiletrySummaryTab({ items, purchases }: ToiletrySummaryTabProps) {
+export function ToiletrySummaryTab({ items, purchases }: Readonly<ToiletrySummaryTabProps>) {
   const stats = useMemo(() => {
     // Calculate forecasted monthly spend from items
     const forecastedMonthly = items

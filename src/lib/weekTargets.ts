@@ -1,4 +1,4 @@
-import { startOfWeek, addDays, format, getDay, isSunday, addWeeks, subWeeks } from "date-fns";
+import { startOfWeek, addDays, format, getDay, isSunday } from "date-fns";
 
 export type PlanMode = "maintain" | "mild_loss" | "loss" | "extreme_loss";
 export type ZigzagSchedule = "schedule_1" | "schedule_2";

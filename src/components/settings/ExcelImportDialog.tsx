@@ -107,7 +107,7 @@ export function ExcelImportDialog({
   onOpenChange,
   initialSection,
   onComplete,
-}: ExcelImportDialogProps) {
+}: Readonly<ExcelImportDialogProps>) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { bills } = useBills();

@@ -40,7 +40,7 @@ export function ProjectionCard({
   expectedAnnualReturn,
   onReturnChange,
   onContributionChange,
-}: ProjectionCardProps) {
+}: Readonly<ProjectionCardProps>) {
   const [periods, setPeriods] = useState<[string, string, string]>(["3", "6", "12"]);
 
   const projections = useMemo(() => {

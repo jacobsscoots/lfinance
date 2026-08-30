@@ -1,15 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { 
-  AlertCircle, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Info, 
-  ChevronRight,
-  Lightbulb,
-} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";import { AlertCircle, AlertTriangle, CheckCircle2, Info, Lightbulb } from "lucide-react";
 import { type Alert } from "@/lib/dashboardCalculations";
 import { cn } from "@/lib/utils";
 

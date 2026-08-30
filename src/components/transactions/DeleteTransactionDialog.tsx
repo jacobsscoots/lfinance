@@ -16,7 +16,7 @@ interface DeleteTransactionDialogProps {
   transaction: Transaction | null;
 }
 
-export function DeleteTransactionDialog({ open, onOpenChange, transaction }: DeleteTransactionDialogProps) {
+export function DeleteTransactionDialog({ open, onOpenChange, transaction }: Readonly<DeleteTransactionDialogProps>) {
   const { deleteTransaction } = useTransactions();
 
   const handleDelete = async () => {

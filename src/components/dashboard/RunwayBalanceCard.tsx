@@ -17,13 +17,13 @@ function BalanceTimeline({
   projection,
   daysPassed,
   daysTotal,
-}: { 
+}: Readonly<{ 
   startBalance: number; 
   currentBalance: number; 
   projection: BalanceProjection;
   daysPassed: number;
   daysTotal: number;
-}) {
+}>) {
   const progressPercent = Math.min(100, (daysPassed / daysTotal) * 100);
   
   return (
@@ -53,7 +53,7 @@ function BalanceTimeline({
   );
 }
 
-function ProjectionBand({ projection }: { projection: BalanceProjection }) {
+function ProjectionBand({ projection }: Readonly<{ projection: BalanceProjection }>) {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <TrendingUp className="h-3 w-3 text-emerald-500" />
@@ -65,7 +65,7 @@ function ProjectionBand({ projection }: { projection: BalanceProjection }) {
   );
 }
 
-export function RunwayBalanceCard({ metrics, isLoading }: RunwayBalanceCardProps) {
+export function RunwayBalanceCard({ metrics, isLoading }: Readonly<RunwayBalanceCardProps>) {
   if (isLoading) {
     return (
       <Card>

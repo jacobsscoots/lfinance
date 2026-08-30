@@ -5,7 +5,7 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { Plus, Pencil, Trash2, Package, Truck, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -126,11 +126,11 @@ function OrderCard({
   order,
   onEdit,
   onDelete,
-}: {
+}: Readonly<{
   order: GroceryOrder;
   onEdit: () => void;
   onDelete: () => void;
-}) {
+}>) {
   const getStatus = () => {
     if (order.actual_delivery) return { label: "Delivered", variant: "default" as const };
     if (order.dispatch_date) return { label: "Dispatched", variant: "secondary" as const };
@@ -194,13 +194,13 @@ function OrderFormDialog({
   order,
   onCreate,
   onUpdate,
-}: {
+}: Readonly<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: GroceryOrder | null;
   onCreate: (data: GroceryOrderFormData) => Promise<unknown>;
   onUpdate: (id: string, data: GroceryOrderFormData) => Promise<unknown>;
-}) {
+}>) {
   const isEditing = !!order;
 
   const form = useForm<OrderFormValues>({

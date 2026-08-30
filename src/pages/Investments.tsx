@@ -2,19 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Plus, 
-  TrendingUp, 
-  TrendingDown,
-  Download, 
-  PieChart, 
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-  Info
-} from "lucide-react";
+import { Plus, Download, PieChart, Wallet, ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useInvestments, CreateInvestmentData } from "@/hooks/useInvestments";
+import { useInvestments } from "@/hooks/useInvestments";
 import { useInvestmentTransactions } from "@/hooks/useInvestmentTransactions";
 import { useInvestmentValuations } from "@/hooks/useInvestmentValuations";
 import { InvestmentCard } from "@/components/investments/InvestmentCard";
@@ -24,12 +14,7 @@ import { ContributionList } from "@/components/investments/ContributionList";
 import { CsvImportDialog } from "@/components/investments/CsvImportDialog";
 import { InvestmentPerformanceChart } from "@/components/investments/InvestmentPerformanceChart";
 import { ProjectionCard } from "@/components/investments/ProjectionCard";
-import { 
-  calculateContributionTotal, 
-  calculateReturn, 
-  calculateDailyChange,
-  calculateDailyValues 
-} from "@/lib/investmentCalculations";
+import { calculateContributionTotal, calculateReturn, calculateDailyChange, calculateDailyValues } from "@/lib/investmentCalculations";
 import { ParsedContribution } from "@/lib/investmentCsvParser";
 import { cn } from "@/lib/utils";
 

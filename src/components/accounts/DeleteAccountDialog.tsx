@@ -19,7 +19,7 @@ interface DeleteAccountDialogProps {
   isLoading?: boolean;
 }
 
-export function DeleteAccountDialog({ open, onOpenChange, account, onConfirm, isLoading }: DeleteAccountDialogProps) {
+export function DeleteAccountDialog({ open, onOpenChange, account, onConfirm, isLoading }: Readonly<DeleteAccountDialogProps>) {
   if (!account) return null;
 
   return (

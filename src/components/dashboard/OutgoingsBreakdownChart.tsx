@@ -1,14 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PieChart, Receipt } from "lucide-react";
-import { 
-  PieChart as RechartsPie, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { formatCurrency } from "@/lib/dashboardCalculations";
 
 interface OutgoingsBreakdownChartProps {

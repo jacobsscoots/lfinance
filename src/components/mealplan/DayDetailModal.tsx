@@ -1,11 +1,6 @@
 import { format, parse } from "date-fns";
 import { AlertTriangle, Settings2, ChevronDown, ChevronUp, Bug } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -13,16 +8,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { MealPlan, MealType } from "@/hooks/useMealPlanItems";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
-import { 
-  DayMacros, 
-  getBalanceWarnings,
-  BalanceWarning,
-} from "@/lib/mealCalculations";
-import { getDailyTargets, computeTotals, MacroTotals, WeeklyTargetsOverride } from "@/lib/dailyTargets";
-import { MealBreakdownList } from "./MealBreakdownList";
-import { DayMacroSummary } from "./DayMacroSummary";
-import { cn } from "@/lib/utils";
-import { logPortioningUiComparison, PortioningDebugItem, PortioningDebugTotals, readPortioningSolverDebug, PortioningSolverDebugPayload } from "@/lib/portioningDebug";
+import { DayMacros, getBalanceWarnings } from "@/lib/mealCalculations";
+import { getDailyTargets, computeTotals, WeeklyTargetsOverride } from "@/lib/dailyTargets";
+import { MealBreakdownList } from "./MealBreakdownList";import { cn } from "@/lib/utils";
+import { logPortioningUiComparison, PortioningDebugItem, readPortioningSolverDebug, PortioningSolverDebugPayload } from "@/lib/portioningDebug";
 import { useEffect, useState } from "react";
 
 

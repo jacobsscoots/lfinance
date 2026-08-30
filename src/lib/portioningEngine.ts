@@ -13,31 +13,22 @@
  * - Tracks best valid candidate and returns it
  */
 
-import {
-  SolverItem,
-  SolverTargets,
-  SolverResult,
-  SolverOptions,
-  MacroTotals,
-  CandidatePlan,
-  SolverFailure,
-  Blocker,
-  ToleranceConfig,
-  DEFAULT_SOLVER_OPTIONS,
-  SolverDebugInfo,
-  SolverDebugLog,
-  SolverStrategyLog,
-  RoundingRule,
-  MealType,
-  MACRO_OVERSHOOT_MIN,
-} from './portioningTypes';
-import { 
-  normalizeSeasoningPortions, 
-  DEFAULT_SEASONING_MAX_GRAMS,
-  shouldCapAsSeasoning,
-  validateProductNutrition,
-  DEFAULT_SEASONING_FALLBACK_GRAMS,
-} from './seasoningRules';
+/**
+ * Portioning Engine V2 - Deterministic Constraint-Based Optimizer
+ *
+ * This solver keeps iterating until it finds a valid plan that matches
+ * calorie + macro targets within strict tolerances, or returns an explicit
+ * failure reason.
+ *
+ * Key properties:
+ * - Deterministic (same inputs → same outputs)
+ * - No LLM calls (pure math/logic)
+ * - Respects LOCKED/BOUNDED/FREE constraints
+ * - Integer grams output
+ * - Tracks best valid candidate and returns it
+ */
+import { SolverItem, SolverTargets, SolverResult, SolverOptions, MacroTotals, CandidatePlan, SolverFailure, Blocker, ToleranceConfig, DEFAULT_SOLVER_OPTIONS, SolverDebugInfo, SolverDebugLog, SolverStrategyLog, RoundingRule, MealType, MACRO_OVERSHOOT_MIN } from './portioningTypes';
+import { normalizeSeasoningPortions, DEFAULT_SEASONING_MAX_GRAMS, shouldCapAsSeasoning } from './seasoningRules';
 
 // ============================================================================
 // UTILITY FUNCTIONS

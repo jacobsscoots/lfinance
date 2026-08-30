@@ -7,7 +7,7 @@ interface ToiletryImageProps {
   className?: string;
 }
 
-export function ToiletryImage({ imageUrl, alt, className }: ToiletryImageProps) {
+export function ToiletryImage({ imageUrl, alt, className }: Readonly<ToiletryImageProps>) {
   const src = useToiletryImageUrl(imageUrl);
   
   if (!src) return null;

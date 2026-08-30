@@ -1,44 +1,18 @@
 import { useState, useMemo } from "react";
 import { format, formatDistanceToNow, subWeeks } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Palmtree, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChevronLeft, ChevronRight, Copy, UtensilsCrossed, MoreVertical, RefreshCw, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useMealPlanItems, MealPlan, MealType } from "@/hooks/useMealPlanItems";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useMealPlanItems, MealType } from "@/hooks/useMealPlanItems";
 import { useMealPlanBlackouts } from "@/hooks/useMealPlanBlackouts";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { useProducts } from "@/hooks/useProducts";
 import { useWeeklyNutritionTargets } from "@/hooks/useWeeklyNutritionTargets";
 import { calculateDayMacros, calculateWeeklyAverages, DayMacros, getBalanceWarnings, WeeklyTargetsOverride } from "@/lib/mealCalculations";
 import { DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
-import { 
-  getShoppingWeekRange, 
-  formatShoppingWeekRange,
-  getNextShoppingWeek,
-  getPreviousShoppingWeek,
-  isCurrentShoppingWeek,
-  isDateBlackout,
-  getBlackoutReason,
-  getActiveDateStringsInRange,
-} from "@/lib/mealPlannerWeek";
+import { getShoppingWeekRange, formatShoppingWeekRange, getNextShoppingWeek, getPreviousShoppingWeek, isCurrentShoppingWeek, isDateBlackout, getBlackoutReason, getActiveDateStringsInRange } from "@/lib/mealPlannerWeek";
 import { getWeekStartMonday } from "@/lib/weekTargets";
 import { MealDayCard } from "./MealDayCard";
 import { GroceryListPanel } from "./GroceryListPanel";

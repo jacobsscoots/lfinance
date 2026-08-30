@@ -1,4 +1,4 @@
-import { format, addDays, isWithinInterval, eachDayOfInterval, isSameDay, getDay } from "date-fns";
+import { format, addDays, isWithinInterval, eachDayOfInterval, getDay } from "date-fns";
 
 // ============= Types =============
 

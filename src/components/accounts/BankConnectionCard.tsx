@@ -201,7 +201,7 @@ export function BankConnectionCard() {
   );
 }
 
-function AutoSyncStatus({ isAutoSyncing, lastAutoSyncAt }: { isAutoSyncing: boolean; lastAutoSyncAt: Date | null }) {
+function AutoSyncStatus({ isAutoSyncing, lastAutoSyncAt }: Readonly<{ isAutoSyncing: boolean; lastAutoSyncAt: Date | null }>) {
   const [countdown, setCountdown] = useState("");
 
   useEffect(() => {
