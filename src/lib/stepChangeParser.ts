@@ -147,7 +147,7 @@ export async function parseStepChangeStatement(
     estimatedTotalBalance = parseCurrency("£" + totalBalanceMatch[1]);
   }
 
-  const debtFreeDateMatch = /Estimated\s+debt\s+free\s+date[:\s]*([A-Za-z]+\s+\d{4})/i.exec(fullText);
+  const debtFreeDateMatch = /Estimated\s+debt\s+free\s+date[:\s]*([a-z]+\s+\d{4})/i.exec(fullText);
   if (debtFreeDateMatch) {
     estimatedDebtFreeDate = debtFreeDateMatch[1];
   }
