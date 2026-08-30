@@ -726,6 +726,9 @@ export function ExcelImportDialog({
               onClick={() =>
                 document.getElementById("excel-import-input")?.click()
               }
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}
+              role="button"
+              tabIndex={0}
             >
               <input
                 id="excel-import-input"

@@ -39,7 +39,7 @@ const DELIVERY_KEYWORDS = [
 ];
 
 const ORDER_PATTERNS = [
-  /order\s*(?:#|number|no\.?|ref\.?)\s*[:.]?\s*([A-Z0-9-]{4,30})/i,
+  /order\s{0,20}(?:#|number|no\.?|ref\.?)\s{0,20}[:.]?\s{0,20}([A-Z0-9-]{4,30})/i,
   /order\s*([0-9]{3,}-[0-9]{3,}-[0-9]{3,})/i,
   /ref(?:erence)?[:\s]+([A-Z0-9-]{4,30})/i,
 ];
@@ -49,7 +49,7 @@ const TRACKING_PATTERNS = [
   { carrier: "DPD", courierCode: "dpd", pattern: /\b(\d{14})\b/ },
   { carrier: "Evri", courierCode: "evri", pattern: /\b(H[A-Z0-9]{15,20})\b/i },
   { carrier: "Yodel", courierCode: "yodel", pattern: /\b(JD\d{16,18})\b/i },
-  { carrier: null, courierCode: null, pattern: /tracking\s*(?:#|number|no\.?)\s*[:.]?\s*([A-Z0-9]{8,30})/i },
+  { carrier: null, courierCode: null, pattern: /tracking\s{0,20}(?:#|number|no\.?)\s{0,20}[:.]?\s{0,20}([A-Z0-9]{8,30})/i },
 ];
 
 // Register a tracking number with TrackingMore API

@@ -27,73 +27,73 @@ export interface ExtractedNutrition {
 const FIELD_PATTERNS: Record<string, { patterns: RegExp[]; field: keyof ExtractedNutrition }> = {
   energy_kj: {
     patterns: [
-      /energy\s*[\(\[]?\s*kj\s*[\)\]]?\s*:?\s*([\d,.]+)/i,
-      /energie\s*[\(\[]?\s*kj\s*[\)\]]?\s*:?\s*([\d,.]+)/i,
-      /kilojoules?\s*:?\s*([\d,.]+)/i,
-      /([\d,.]+)\s*kj/i,
+      /energy\s{0,20}[\(\[]?\s{0,20}kj\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /energie\s{0,20}[\(\[]?\s{0,20}kj\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /kilojoules?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /([\d,.]{1,32})\s{0,20}kj/i,
     ],
     field: "energy_kj",
   },
   energy_kcal: {
     patterns: [
-      /energy\s*[\(\[]?\s*kcal\s*[\)\]]?\s*:?\s*([\d,.]+)/i,
-      /calories?\s*:?\s*([\d,.]+)/i,
-      /energy\s+value\s*:?\s*([\d,.]+)/i,
-      /([\d,.]+)\s*kcal/i,
+      /energy\s{0,20}[\(\[]?\s{0,20}kcal\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /calories?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /energy\s{1,20}value\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+      /([\d,.]{1,32})\s{0,20}kcal/i,
     ],
     field: "energy_kcal",
   },
   fat: {
     patterns: [
-      /(?:total\s+)?fat\s*:?\s*([\d,.]+)\s*g/i,
-      /lipides?\s*:?\s*([\d,.]+)\s*g/i,
+      /(?:total\s{1,20})?fat\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
+      /lipides?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
     ],
     field: "fat",
   },
   saturates: {
     patterns: [
-      /(?:of which\s+)?saturates?\s*:?\s*([\d,.]+)\s*g/i,
-      /saturated\s+fat\s*:?\s*([\d,.]+)\s*g/i,
-      /sat\.?\s*fat\s*:?\s*([\d,.]+)\s*g/i,
+      /(?:of which\s{1,20})?saturates?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
+      /saturated\s{1,20}fat\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
+      /sat\.?\s{0,20}fat\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
     ],
     field: "saturates",
   },
   carbohydrate: {
     patterns: [
-      /carbohydrates?\s*:?\s*([\d,.]+)\s*g/i,
-      /carbs?\s*:?\s*([\d,.]+)\s*g/i,
-      /total\s+carbohydrate\s*:?\s*([\d,.]+)\s*g/i,
+      /carbohydrates?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
+      /carbs?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
+      /total\s{1,20}carbohydrate\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
     ],
     field: "carbohydrate",
   },
   sugars: {
     patterns: [
-      /(?:of which\s+)?sugars?\s*:?\s*([\d,.]+)\s*g/i,
-      /total\s+sugars?\s*:?\s*([\d,.]+)\s*g/i,
+      /(?:of which\s{1,20})?sugars?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
+      /total\s{1,20}sugars?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
     ],
     field: "sugars",
   },
   fibre: {
     patterns: [
-      /(?:dietary\s+)?fibr?e\s*:?\s*([\d,.]+)\s*g/i,
+      /(?:dietary\s{1,20})?fibr?e\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
     ],
     field: "fibre",
   },
   protein: {
     patterns: [
-      /proteins?\s*:?\s*([\d,.]+)\s*g/i,
+      /proteins?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
     ],
     field: "protein",
   },
   salt: {
     patterns: [
-      /salt\s*:?\s*([\d,.]+)\s*g/i,
+      /salt\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
     ],
     field: "salt",
   },
   sodium: {
     patterns: [
-      /sodium\s*:?\s*([\d,.]+)\s*(?:m?g)?/i,
+      /sodium\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}(?:m?g)?/i,
     ],
     field: "sodium",
   },
@@ -101,9 +101,9 @@ const FIELD_PATTERNS: Record<string, { patterns: RegExp[]; field: keyof Extracte
 
 function parseNumber(str: string): number | undefined {
   if (!str) return undefined;
-  const cleaned = str.replace(/,/g, "").trim();
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? undefined : num;
+  const cleaned = str.replaceAll(/,/g, "").trim();
+  const num = Number.parseFloat(cleaned);
+  return Number.isNaN(num) ? undefined : num;
 }
 
 export function parseNutritionText(text: string): ExtractedNutrition {
@@ -113,9 +113,9 @@ export function parseNutritionText(text: string): ExtractedNutrition {
 
   // Normalize text
   const normalizedText = text
-    .replace(/\r\n/g, "\n")
-    .replace(/\t/g, " ")
-    .replace(/\s+/g, " ");
+    .replaceAll(/\r\n/g, "\n")
+    .replaceAll(/\t/g, " ")
+    .replaceAll(/\s+/g, " ");
 
   // Extract each field
   for (const [key, { patterns, field }] of Object.entries(FIELD_PATTERNS)) {
@@ -140,7 +140,7 @@ export function parseNutritionText(text: string): ExtractedNutrition {
   }
 
   // Try to extract pack size
-  const packSizeMatch = normalizedText.match(/(\d+)\s*(?:g|ml)\s*(?:pack|net|e)/i);
+  const packSizeMatch = normalizedText.match(/(\d+)\s{0,20}(?:g|ml)\s{0,20}(?:pack|net|e)/i);
   if (packSizeMatch) {
     result.pack_size_grams = parseNumber(packSizeMatch[1]);
     result.confidence.pack_size_grams = "medium";

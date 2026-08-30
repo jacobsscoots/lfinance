@@ -195,7 +195,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
 
   const commitEditGrams = () => {
     if (editingItemId && editGramsValue) {
-      const grams = Math.max(0, Math.round(parseFloat(editGramsValue) || 0));
+      const grams = Math.max(0, Math.round(Number.parseFloat(editGramsValue) || 0));
       updateItem.mutate({ id: editingItemId, quantity_grams: grams });
     }
     setEditingItemId(null);

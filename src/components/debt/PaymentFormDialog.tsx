@@ -258,7 +258,7 @@ export function PaymentFormDialog({
                             placeholder="£"
                             {...field} 
                             value={field.value ?? ''} 
-                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            onChange={(e) => field.onChange(e.target.value ? Number.parseFloat(e.target.value) : null)}
                           />
                         </FormControl>
                       </FormItem>
@@ -277,7 +277,7 @@ export function PaymentFormDialog({
                             placeholder="£"
                             {...field} 
                             value={field.value ?? ''} 
-                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            onChange={(e) => field.onChange(e.target.value ? Number.parseFloat(e.target.value) : null)}
                           />
                         </FormControl>
                       </FormItem>
@@ -296,7 +296,7 @@ export function PaymentFormDialog({
                             placeholder="£"
                             {...field} 
                             value={field.value ?? ''} 
-                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            onChange={(e) => field.onChange(e.target.value ? Number.parseFloat(e.target.value) : null)}
                           />
                         </FormControl>
                       </FormItem>

@@ -79,7 +79,7 @@ export function ShipmentCard({ shipment, events, onDelete }: ShipmentCardProps) 
               </div>
               {shipment.carrier_code && (
                 <p className="text-xs text-muted-foreground capitalize mt-0.5">
-                  {shipment.carrier_code.replace(/-/g, " ")}
+                  {shipment.carrier_code.replaceAll(/-/g, " ")}
                 </p>
               )}
             </div>

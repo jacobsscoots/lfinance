@@ -63,7 +63,7 @@ export function AccountFormDialog({ open, onOpenChange, account, onSubmit, isLoa
       name,
       display_name: displayName.trim() || null,
       account_type: accountType,
-      balance: parseFloat(balance) || 0,
+      balance: Number.parseFloat(balance) || 0,
       is_primary: isPrimary,
     };
 

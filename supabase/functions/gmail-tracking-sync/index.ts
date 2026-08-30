@@ -44,7 +44,7 @@ const CARRIER_LINK_PATTERNS: { pattern: RegExp; carrierCode: string }[] = [
 ];
 
 // ── Generic tracking number pattern (fallback) ──
-const GENERIC_TRACKING = /tracking\s*(?:#|number|no\.?|ref\.?|:)\s*[:.]?\s*([A-Z0-9]{8,30})/gi;
+const GENERIC_TRACKING = /tracking\s{0,20}(?:#|number|no\.?|ref\.?|:)\s{0,20}[:.]?\s{0,20}([A-Z0-9]{8,30})/gi;
 
 // ── URL-encoded tracking (common in retailer emails) ──
 const URL_TRACKING = /(?:track|tracking)[^"']*?(?:number|id|code|ref)=([A-Z0-9-]{8,30})/gi;
@@ -113,7 +113,7 @@ function decodeEmailBody(payload: any): string {
     if (node.body?.data) {
       try {
         // Gmail base64url encoding
-        const decoded = atob(node.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+        const decoded = atob(node.body.data.replaceAll(/-/g, "+").replaceAll(/_/g, "/"));
         parts.push(decoded);
       } catch (_) { /* ignore decode errors */ }
     }
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
         // Build search query for shipping emails
         const afterDate = new Date();
         afterDate.setDate(afterDate.getDate() - 30); // Look back 30 days
-        const afterStr = afterDate.toISOString().split("T")[0].replace(/-/g, "/");
+        const afterStr = afterDate.toISOString().split("T")[0].replaceAll(/-/g, "/");
 
         const subjectTerms = SHIPPING_KEYWORDS.map((k) => `subject:${k}`).join(" OR ");
         const searchQuery = `after:${afterStr} (${subjectTerms})`;

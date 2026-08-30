@@ -53,7 +53,7 @@ export function BirthdayFormDialog({ open, onOpenChange, event, onSave }: Props)
       occasion,
       event_month: eventMonth,
       event_day: eventDay === "" ? null : Number(eventDay),
-      budget: parseFloat(budget) || 0,
+      budget: Number.parseFloat(budget) || 0,
       notes: notes || null,
     });
     onOpenChange(false);

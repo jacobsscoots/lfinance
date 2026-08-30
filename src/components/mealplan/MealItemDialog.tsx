@@ -136,7 +136,7 @@ export function MealItemDialog({
   // For fixed products, use the fixed portion size
   const effectiveQuantity = selectedProduct?.product_type === "fixed" && selectedProduct.fixed_portion_grams
     ? selectedProduct.fixed_portion_grams
-    : parseFloat(quantity) || 0;
+    : Number.parseFloat(quantity) || 0;
 
   // Calculate preview macros
   const previewMacros = selectedProduct ? {
@@ -147,7 +147,7 @@ export function MealItemDialog({
   } : null;
 
   const handleQuantityChange = (value: string) => {
-    let numValue = parseFloat(value) || 0;
+    let numValue = Number.parseFloat(value) || 0;
     // Clamp seasonings to max (Fix B3)
     if (isSeasoning && numValue > DEFAULT_SEASONING_MAX_GRAMS) {
       numValue = DEFAULT_SEASONING_MAX_GRAMS;

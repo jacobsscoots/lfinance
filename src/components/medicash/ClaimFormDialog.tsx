@@ -25,7 +25,7 @@ export function ClaimFormDialog({ open, onOpenChange, categories, onSubmit, isPe
   const [notes, setNotes] = useState("");
 
   const selectedCat = categories.find(c => c.id === categoryId);
-  const numAmount = parseFloat(amount) || 0;
+  const numAmount = Number.parseFloat(amount) || 0;
   const willExceed = selectedCat?.remaining !== null && selectedCat?.remaining !== undefined && numAmount > selectedCat.remaining;
   const cappedAmount = willExceed ? selectedCat!.remaining! : numAmount;
 

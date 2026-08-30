@@ -242,16 +242,16 @@ export function extractAmountFromText(text: string): number | null {
     /£\s*([\d,]+\.?\d*)/,
     /GBP\s*([\d,]+\.?\d*)/i,
     /\$\s*([\d,]+\.?\d*)/,
-    /([\d,]+\.?\d*)\s*GBP/i,
+    /([\d,]{1,32}\.?\d*)\s{0,20}GBP/i,
     /total[:\s]*([\d,]+\.?\d*)/i,
-    /amount[:\s]*£?\s*([\d,]+\.?\d*)/i,
+    /amount[:\s]*£?\s{0,20}([\d,]{1,32}\.?\d*)/i,
   ];
   
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      const amount = parseFloat(match[1].replace(',', ''));
-      if (!isNaN(amount) && amount > 0) {
+      const amount = Number.parseFloat(match[1].replace(',', ''));
+      if (!Number.isNaN(amount) && amount > 0) {
         return amount;
       }
     }

@@ -217,14 +217,14 @@ export function assignSections(tables: ExtractedTable[]): AssignedSections {
 // --- Normalisation Helpers ---
 
 export function normaliseHeader(h: string): string {
-  return h.trim().replace(/\s+/g, " ").toLowerCase();
+  return h.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
 
 export function normaliseAmount(value: any): number | null {
   if (value == null || value === "") return null;
-  const str = String(value).replace(/[£$€,\s]/g, "").trim();
-  const num = parseFloat(str);
-  return isNaN(num) ? null : Math.round(num * 100) / 100;
+  const str = String(value).replaceAll(/[£$€,\s]/g, "").trim();
+  const num = Number.parseFloat(str);
+  return Number.isNaN(num) ? null : Math.round(num * 100) / 100;
 }
 
 export function normaliseDate(value: any): string | null {
@@ -232,7 +232,7 @@ export function normaliseDate(value: any): string | null {
 
   // Date object (ExcelJS returns Date objects for date cells)
   if (value instanceof Date) {
-    return isNaN(value.getTime()) ? null : formatISODate(value);
+    return Number.isNaN(value.getTime()) ? null : formatISODate(value);
   }
 
   // Excel serial date (number)
@@ -246,18 +246,18 @@ export function normaliseDate(value: any): string | null {
   // ISO format YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
     const d = new Date(str);
-    return isNaN(d.getTime()) ? null : formatISODate(d);
+    return Number.isNaN(d.getTime()) ? null : formatISODate(d);
   }
 
   // UK format DD/MM/YYYY
   const ukMatch = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if (ukMatch) {
-    const day = parseInt(ukMatch[1]);
-    const month = parseInt(ukMatch[2]) - 1;
-    let year = parseInt(ukMatch[3]);
+    const day = Number.parseInt(ukMatch[1]);
+    const month = Number.parseInt(ukMatch[2]) - 1;
+    let year = Number.parseInt(ukMatch[3]);
     if (year < 100) year += 2000;
     const d = new Date(year, month, day);
-    return isNaN(d.getTime()) ? null : formatISODate(d);
+    return Number.isNaN(d.getTime()) ? null : formatISODate(d);
   }
 
   return null;
@@ -281,11 +281,11 @@ export function normaliseDueDay(value: any): number | null {
   // If it's a date string, extract day
   const dateStr = normaliseDate(value);
   if (dateStr) {
-    return parseInt(dateStr.split("-")[2]);
+    return Number.parseInt(dateStr.split("-")[2]);
   }
 
-  const num = parseInt(String(value));
-  if (!isNaN(num) && num >= 1 && num <= 31) return num;
+  const num = Number.parseInt(String(value));
+  if (!Number.isNaN(num) && num >= 1 && num <= 31) return num;
   return null;
 }
 
@@ -433,7 +433,7 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
     const rowElements = doc.getElementsByTagNameNS("*", "row");
     for (let r = 0; r < rowElements.length; r++) {
       const rowEl = rowElements[r];
-      const rowNum = parseInt(rowEl.getAttribute("r") || String(r + 1), 10);
+      const rowNum = Number.parseInt(rowEl.getAttribute("r") || String(r + 1), 10);
       const cellElements = rowEl.getElementsByTagNameNS("*", "c");
 
       if (!cellMap.has(rowNum)) cellMap.set(rowNum, new Map());
@@ -448,7 +448,7 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
 
         let value: any = rawVal;
         if (type === "s") {
-          const idx = parseInt(rawVal, 10);
+          const idx = Number.parseInt(rawVal, 10);
           value = sharedStrings[idx] ?? rawVal;
         } else if (type === "b") {
           value = rawVal === "1" ? "TRUE" : "FALSE";
@@ -458,7 +458,7 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
             const tEl = isEl.getElementsByTagNameNS("*", "t")[0];
             value = tEl?.textContent ?? rawVal;
           }
-        } else if (!type && rawVal && !isNaN(Number(rawVal))) {
+        } else if (!type && rawVal && !Number.isNaN(Number(rawVal))) {
           value = Number(rawVal);
         }
 
@@ -490,7 +490,7 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
     }
 
     results.push({
-      name: sheetPath.replace(/.*\//, "").replace(".xml", ""),
+      name: sheetPath.slice(sheetPath.lastIndexOf("/") + 1).replace(".xml", ""),
       rows: rowArrays,
     });
   }
@@ -501,7 +501,7 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
 function colLetterToIndex(letters: string): number {
   let idx = 0;
   for (let i = 0; i < letters.length; i++) {
-    idx = idx * 26 + (letters.charCodeAt(i) - 64);
+    idx = idx * 26 + ((letters.codePointAt(i) ?? 64) - 64);
   }
   return idx;
 }

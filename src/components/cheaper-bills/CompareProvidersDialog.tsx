@@ -66,16 +66,16 @@ function CurrentPlanCard({ service }: { service: TrackedService }) {
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Annual</p>
           <p className="font-medium">£{(service.monthly_cost * 12).toFixed(0)}</p>
         </div>
-        {service.current_speed_mbps && (
+        {Boolean(service.current_speed_mbps) && (
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Speed</p>
             <p className="font-medium">{service.current_speed_mbps} Mb/s</p>
           </div>
         )}
       </div>
-      {(service.preferred_contract_months || service.contract_end_date) && (
+      {Boolean(service.preferred_contract_months || service.contract_end_date) && (
         <div className="flex gap-2 flex-wrap mt-2">
-          {service.preferred_contract_months && (
+          {Boolean(service.preferred_contract_months) && (
             <Badge variant="secondary" className="text-[10px]">
               {service.preferred_contract_months}mo contract
             </Badge>

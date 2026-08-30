@@ -85,7 +85,7 @@ export function parseTransactionCsv(
       // Parse amount
       const amountStr = values[columnIndices.amount]?.trim();
       const amount = parseAmount(amountStr);
-      if (amount === null || isNaN(amount)) {
+      if (amount === null || Number.isNaN(amount)) {
         warnings.push(`Row ${rowNum}: Invalid amount "${amountStr}", skipping`);
         continue;
       }
@@ -200,8 +200,8 @@ function parseAmount(amountStr: string): number | null {
 
   // Remove currency symbols and whitespace
   let cleaned = amountStr
-    .replace(/[£$€¥]/g, '')
-    .replace(/\s/g, '')
+    .replaceAll(/[£$€¥]/g, '')
+    .replaceAll(/\s/g, '')
     .trim();
 
   // Handle parentheses for negative
@@ -212,7 +212,7 @@ function parseAmount(amountStr: string): number | null {
   // Handle comma as thousand separator or decimal
   if (cleaned.includes(',') && cleaned.includes('.')) {
     // Both present - comma is thousand separator
-    cleaned = cleaned.replace(/,/g, '');
+    cleaned = cleaned.replaceAll(/,/g, '');
   } else if (cleaned.includes(',')) {
     // Only comma - check if it's decimal (last comma with 2 digits after)
     const lastComma = cleaned.lastIndexOf(',');
@@ -221,12 +221,12 @@ function parseAmount(amountStr: string): number | null {
       cleaned = cleaned.slice(0, lastComma) + '.' + cleaned.slice(lastComma + 1);
     } else {
       // Likely thousand separator
-      cleaned = cleaned.replace(/,/g, '');
+      cleaned = cleaned.replaceAll(/,/g, '');
     }
   }
 
-  const amount = parseFloat(cleaned);
-  return isNaN(amount) ? null : amount;
+  const amount = Number.parseFloat(cleaned);
+  return Number.isNaN(amount) ? null : amount;
 }
 
 /**
@@ -283,7 +283,7 @@ export function exportTransactionsCsv(
   const rows = transactions.map(t => [
     t.transaction_date,
     t.amount.toFixed(2),
-    `"${(t.description || '').replace(/"/g, '""')}"`,
+    `"${(t.description || '').replaceAll(/"/g, '""')}"`,
     t.reference || '',
     t.account_name || '',
   ]);
@@ -310,13 +310,13 @@ export function exportPaymentsCsv(
   const headers = ['Date', 'Creditor', 'Amount', 'Category', 'Principal', 'Interest', 'Fees', 'Notes', 'Matched'];
   const rows = payments.map(p => [
     p.payment_date,
-    `"${(p.creditor_name || '').replace(/"/g, '""')}"`,
+    `"${(p.creditor_name || '').replaceAll(/"/g, '""')}"`,
     p.amount.toFixed(2),
     p.category,
     p.principal_amount?.toFixed(2) || '',
     p.interest_amount?.toFixed(2) || '',
     p.fee_amount?.toFixed(2) || '',
-    `"${(p.notes || '').replace(/"/g, '""')}"`,
+    `"${(p.notes || '').replaceAll(/"/g, '""')}"`,
     p.matched ? 'Yes' : 'No',
   ]);
 

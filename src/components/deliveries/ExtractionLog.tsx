@@ -53,7 +53,7 @@ export function ExtractionLog({ extractions }: { extractions: EmailTrackingExtra
                 <div className="flex items-center gap-2 mt-0.5">
                   {e.extracted_carrier_code && (
                     <span className="text-xs text-muted-foreground capitalize">
-                      {e.extracted_carrier_code.replace(/-/g, " ")}
+                      {e.extracted_carrier_code.replaceAll(/-/g, " ")}
                     </span>
                   )}
                   {e.received_at && (

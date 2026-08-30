@@ -343,7 +343,7 @@ export function useYearlyPlannerData(year: number) {
   // Tracked income from actual transactions (excluding salary-level ones already in salary row)
   yearTransactions.forEach(t => {
     if (t.type !== 'income' || !isTrackedIncome(t.description)) return;
-    const monthIdx = parseInt(t.transaction_date.substring(5, 7), 10) - 1;
+    const monthIdx = Number.parseInt(t.transaction_date.substring(5, 7), 10) - 1;
     const source = getTrackedIncomeLabel(t.description || 'Other Income');
     if (!incomeBreakdown[source]) incomeBreakdown[source] = new Array(12).fill(0);
     incomeBreakdown[source][monthIdx] += Math.abs(Number(t.amount));
@@ -401,7 +401,7 @@ export function useYearlyPlannerData(year: number) {
     incomeBreakdown[medicashLabel] = new Array(12).fill(0);
     medicashClaims.forEach(c => {
       if (!c.claim_date.startsWith(`${year}-`)) return;
-      const monthIdx = parseInt(c.claim_date.substring(5, 7), 10) - 1;
+      const monthIdx = Number.parseInt(c.claim_date.substring(5, 7), 10) - 1;
       incomeBreakdown[medicashLabel][monthIdx] += Number(c.amount);
     });
   }

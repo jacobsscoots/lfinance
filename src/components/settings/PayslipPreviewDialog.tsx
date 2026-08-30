@@ -166,7 +166,7 @@ export function PayslipPreviewDialog({
                     type="number"
                     step="0.01"
                     value={editValues.gross_pay ?? ""}
-                    onChange={(e) => setEditValues({ ...editValues, gross_pay: e.target.value ? parseFloat(e.target.value) : null })}
+                    onChange={(e) => setEditValues({ ...editValues, gross_pay: e.target.value ? Number.parseFloat(e.target.value) : null })}
                   />
                 </div>
                 <div className="space-y-1">
@@ -176,7 +176,7 @@ export function PayslipPreviewDialog({
                     type="number"
                     step="0.01"
                     value={editValues.net_pay ?? ""}
-                    onChange={(e) => setEditValues({ ...editValues, net_pay: e.target.value ? parseFloat(e.target.value) : null })}
+                    onChange={(e) => setEditValues({ ...editValues, net_pay: e.target.value ? Number.parseFloat(e.target.value) : null })}
                   />
                 </div>
                 <div className="space-y-1">
@@ -186,7 +186,7 @@ export function PayslipPreviewDialog({
                     type="number"
                     step="0.01"
                     value={editValues.tax_deducted ?? ""}
-                    onChange={(e) => setEditValues({ ...editValues, tax_deducted: e.target.value ? parseFloat(e.target.value) : null })}
+                    onChange={(e) => setEditValues({ ...editValues, tax_deducted: e.target.value ? Number.parseFloat(e.target.value) : null })}
                   />
                 </div>
                 <div className="space-y-1">
@@ -196,7 +196,7 @@ export function PayslipPreviewDialog({
                     type="number"
                     step="0.01"
                     value={editValues.ni_deducted ?? ""}
-                    onChange={(e) => setEditValues({ ...editValues, ni_deducted: e.target.value ? parseFloat(e.target.value) : null })}
+                    onChange={(e) => setEditValues({ ...editValues, ni_deducted: e.target.value ? Number.parseFloat(e.target.value) : null })}
                   />
                 </div>
                 <div className="space-y-1">
@@ -206,7 +206,7 @@ export function PayslipPreviewDialog({
                     type="number"
                     step="0.01"
                     value={editValues.pension_deducted ?? ""}
-                    onChange={(e) => setEditValues({ ...editValues, pension_deducted: e.target.value ? parseFloat(e.target.value) : null })}
+                    onChange={(e) => setEditValues({ ...editValues, pension_deducted: e.target.value ? Number.parseFloat(e.target.value) : null })}
                   />
                 </div>
                 <div className="space-y-1">

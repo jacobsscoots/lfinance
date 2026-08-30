@@ -15,7 +15,7 @@ BEGIN
   
   -- If jwt_secret is not available, return NULL so the caller
   -- knows encryption is unavailable and can fall back to plain storage
-  IF jwt_secret IS NULL OR jwt_secret = '' THEN
+  IF COALESCE(jwt_secret, '') = '' THEN
     RETURN NULL;
   END IF;
   

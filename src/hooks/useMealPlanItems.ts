@@ -715,7 +715,7 @@ export function useMealPlanItems(weekStart: Date) {
           fixed_portion_grams: product.fixed_portion_grams,
         },
         item.meal_type as SolverMealType,
-        isEffectivelyLocked ? item.quantity_grams : item.quantity_grams  // Always pass actual grams; solver will clamp
+        item.quantity_grams  // Always pass actual grams; solver will clamp
       );
     });
   }, []);

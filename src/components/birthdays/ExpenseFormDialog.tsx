@@ -22,7 +22,7 @@ export function ExpenseFormDialog({ open, onOpenChange, eventId, year, onSave }:
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ event_id: eventId, description, amount: parseFloat(amount) || 0, year });
+    onSave({ event_id: eventId, description, amount: Number.parseFloat(amount) || 0, year });
     onOpenChange(false);
   };
 

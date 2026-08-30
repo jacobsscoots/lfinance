@@ -267,7 +267,7 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
                         placeholder="e.g., 24.9"
                         {...field} 
                         value={field.value ?? ''} 
-                        onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                        onChange={(e) => field.onChange(e.target.value ? Number.parseFloat(e.target.value) : null)}
                       />
                     </FormControl>
                     <FormMessage />
@@ -313,7 +313,7 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
                         placeholder="e.g., 25"
                         {...field} 
                         value={field.value ?? ''} 
-                        onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                        onChange={(e) => field.onChange(e.target.value ? Number.parseFloat(e.target.value) : null)}
                       />
                     </FormControl>
                     <FormMessage />
@@ -335,7 +335,7 @@ export function DebtFormDialog({ open, onOpenChange, debt }: DebtFormDialogProps
                         placeholder="e.g., 15"
                         {...field} 
                         value={field.value ?? ''} 
-                        onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                        onChange={(e) => field.onChange(e.target.value ? Number.parseInt(e.target.value) : null)}
                       />
                     </FormControl>
                     <FormMessage />

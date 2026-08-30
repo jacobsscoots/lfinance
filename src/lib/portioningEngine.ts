@@ -1159,12 +1159,12 @@ function runGradientSolve(
 
     // Perturbation escape every 200 stale iterations
     if (stagnation > 200 && stagnation % 200 === 0) {
-      const shuffled = [...adjustableItems].sort(() => Math.random() - 0.5);
+      const shuffled = [...adjustableItems].sort((a, b) => deterministicUnit(`${iter}:${a.id}:shuffle`) - deterministicUnit(`${iter}:${b.id}:shuffle`) || a.id.localeCompare(b.id));
       const numPerturb = Math.min(3, shuffled.length);
       for (let pi = 0; pi < numPerturb; pi++) {
         const f = shuffled[pi];
         const cur = portions.get(f.id) || 0;
-        const pertDelta = (Math.random() > 0.5 ? 1 : -1) * Math.round(Math.random() * 20 + 5);
+        const pertDelta = (deterministicUnit(`${iter}:${pi}:${f.id}:sign`) > 0.5 ? 1 : -1) * Math.round(deterministicUnit(`${iter}:${pi}:${f.id}:magnitude`) * 20 + 5);
         portions.set(f.id, clampToConstraints(cur + pertDelta, f));
       }
       scaleSeasonings(items, portions);
@@ -1638,8 +1638,8 @@ export function solve(
       randomStart2.set(item.id, item.currentGrams);
     } else {
       const range = (item.maxPortionGrams > 0 ? item.maxPortionGrams : 500) - item.minPortionGrams;
-      randomStart1.set(item.id, clampToConstraints(item.minPortionGrams + Math.round(Math.random() * range), item));
-      randomStart2.set(item.id, clampToConstraints(item.minPortionGrams + Math.round(Math.random() * range), item));
+      randomStart1.set(item.id, clampToConstraints(item.minPortionGrams + Math.round(deterministicUnit(`start1:${item.id}:${targets.calories}:${targets.protein}:${targets.carbs}:${targets.fat}`) * range), item));
+      randomStart2.set(item.id, clampToConstraints(item.minPortionGrams + Math.round(deterministicUnit(`start2:${item.id}:${targets.calories}:${targets.protein}:${targets.carbs}:${targets.fat}`) * range), item));
     }
   }
 
@@ -2126,4 +2126,14 @@ export function productToSolverItem(
       : Math.min(Math.max(initialGrams > 0 ? initialGrams : (product.fixed_portion_grams ?? effectiveInitialGrams), minPortion), maxPortion),
     countMacros: !isSeasoning,
   };
+}
+
+
+function deterministicUnit(seed: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.codePointAt(i) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 0x1_0000_0000;
 }

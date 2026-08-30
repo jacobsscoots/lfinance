@@ -68,6 +68,9 @@ function CalendarCell({ day, isSelected, onClick, isMobile }: CalendarCellProps)
   return (
     <div
       onClick={onClick}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}
+      role="button"
+      tabIndex={0}
       className={cn(
         "p-1 sm:p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/30 overflow-hidden",
         isMobile ? "min-h-[68px]" : "min-h-[100px]",

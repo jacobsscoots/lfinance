@@ -160,7 +160,7 @@ export function MealItemMultiSelectDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Products</label>
+            <div className="text-sm font-medium">Products</div>
             <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button

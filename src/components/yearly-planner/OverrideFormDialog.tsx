@@ -35,7 +35,7 @@ export function OverrideFormDialog({ open, onOpenChange, month, onSubmit, isLoad
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!label.trim() || !amount) return;
-    onSubmit({ month, label: label.trim(), amount: parseFloat(amount), type });
+    onSubmit({ month, label: label.trim(), amount: Number.parseFloat(amount), type });
     setLabel("");
     setAmount("");
     setType("expense");

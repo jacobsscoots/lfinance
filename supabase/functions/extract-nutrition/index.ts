@@ -268,7 +268,7 @@ Important:
   const content = data.choices?.[0]?.message?.content || "";
   
   // Extract JSON from response
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  const jsonMatch = content.match(/\{[\s\S]{0,100000}\}/);
   if (!jsonMatch) {
     throw new Error("Could not parse nutrition data from image");
   }
@@ -286,36 +286,36 @@ Important:
 
 function extractFromText(text: string, productType: string = "grocery"): ExtractedNutrition {
   const result: ExtractedNutrition = { confidence: {} };
-  const normalizedText = text.replace(/\s+/g, " ");
+  const normalizedText = text.replaceAll(/\s+/g, " ");
 
   if (productType === "toiletry") {
     // Extract toiletry-specific fields
     // Price patterns
-    const priceMatch = normalizedText.match(/(?:price|£)\s*:?\s*£?([\d,.]+)/i);
+    const priceMatch = normalizedText.match(/(?:price|£)\s{0,20}:?\s{0,20}£?([\d,.]{1,32})/i);
     if (priceMatch?.[1]) {
-      const price = parseFloat(priceMatch[1].replace(/,/g, ""));
-      if (!isNaN(price)) {
+      const price = Number.parseFloat(priceMatch[1].replaceAll(/,/g, ""));
+      if (!Number.isNaN(price)) {
         (result as any).price = price;
         result.confidence.price = "medium";
       }
     }
 
     // Offer price patterns
-    const offerMatch = normalizedText.match(/(?:now|sale|offer|was)\s*:?\s*£?([\d,.]+)/i);
+    const offerMatch = normalizedText.match(/(?:now|sale|offer|was)\s{0,20}:?\s{0,20}£?([\d,.]{1,32})/i);
     if (offerMatch?.[1]) {
-      const offerPrice = parseFloat(offerMatch[1].replace(/,/g, ""));
-      if (!isNaN(offerPrice)) {
+      const offerPrice = Number.parseFloat(offerMatch[1].replaceAll(/,/g, ""));
+      if (!Number.isNaN(offerPrice)) {
         (result as any).offer_price = offerPrice;
         result.confidence.offer_price = "medium";
       }
     }
 
     // Pack size patterns (e.g., "500ml", "200g", "30 tablets")
-    const sizeMatch = normalizedText.match(/([\d,.]+)\s*(ml|g|tablets?|units?|pack)/i);
+    const sizeMatch = normalizedText.match(/([\d,.]{1,32})\s{0,20}(ml|g|tablets?|units?|pack)/i);
     if (sizeMatch) {
-      const size = parseFloat(sizeMatch[1].replace(/,/g, ""));
+      const size = Number.parseFloat(sizeMatch[1].replaceAll(/,/g, ""));
       const unit = sizeMatch[2].toLowerCase();
-      if (!isNaN(size)) {
+      if (!Number.isNaN(size)) {
         (result as any).pack_size = size;
         if (unit.includes("tablet") || unit.includes("unit") || unit.includes("pack")) {
           (result as any).size_unit = "units";
@@ -334,49 +334,49 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
   const patterns: Record<string, { patterns: RegExp[]; field: keyof ExtractedNutrition }> = {
     energy_kj: {
       patterns: [
-        /energy\s*[\(\[]?\s*kj\s*[\)\]]?\s*:?\s*([\d,.]+)/i,
-        /kilojoules?\s*:?\s*([\d,.]+)/i,
-        /([\d,.]+)\s*kj/i,
+        /energy\s{0,20}[\(\[]?\s{0,20}kj\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+        /kilojoules?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+        /([\d,.]{1,32})\s{0,20}kj/i,
       ],
       field: "energy_kj",
     },
     energy_kcal: {
       patterns: [
-        /energy\s*[\(\[]?\s*kcal\s*[\)\]]?\s*:?\s*([\d,.]+)/i,
-        /calories?\s*:?\s*([\d,.]+)/i,
-        /([\d,.]+)\s*kcal/i,
+        /energy\s{0,20}[\(\[]?\s{0,20}kcal\s{0,20}[\)\]]?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+        /calories?\s{0,20}:?\s{0,20}([\d,.]{1,32})/i,
+        /([\d,.]{1,32})\s{0,20}kcal/i,
       ],
       field: "energy_kcal",
     },
     fat: {
-      patterns: [/(?:total\s+)?fat\s*:?\s*([\d,.]+)\s*g/i],
+      patterns: [/(?:total\s{1,20})?fat\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i],
       field: "fat",
     },
     saturates: {
       patterns: [
-        /(?:of which\s+)?saturates?\s*:?\s*([\d,.]+)\s*g/i,
-        /saturated\s+fat\s*:?\s*([\d,.]+)\s*g/i,
+        /(?:of which\s{1,20})?saturates?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
+        /saturated\s{1,20}fat\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i,
       ],
       field: "saturates",
     },
     carbohydrate: {
-      patterns: [/carbohydrates?\s*:?\s*([\d,.]+)\s*g/i],
+      patterns: [/carbohydrates?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i],
       field: "carbohydrate",
     },
     sugars: {
-      patterns: [/(?:of which\s+)?sugars?\s*:?\s*([\d,.]+)\s*g/i],
+      patterns: [/(?:of which\s{1,20})?sugars?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i],
       field: "sugars",
     },
     fibre: {
-      patterns: [/(?:dietary\s+)?fibr?e\s*:?\s*([\d,.]+)\s*g/i],
+      patterns: [/(?:dietary\s{1,20})?fibr?e\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i],
       field: "fibre",
     },
     protein: {
-      patterns: [/proteins?\s*:?\s*([\d,.]+)\s*g/i],
+      patterns: [/proteins?\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i],
       field: "protein",
     },
     salt: {
-      patterns: [/salt\s*:?\s*([\d,.]+)\s*g/i],
+      patterns: [/salt\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}g/i],
       field: "salt",
     },
   };
@@ -385,8 +385,8 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
     for (const pattern of patternList) {
       const match = normalizedText.match(pattern);
       if (match?.[1]) {
-        const value = parseFloat(match[1].replace(/,/g, ""));
-        if (!isNaN(value)) {
+        const value = Number.parseFloat(match[1].replaceAll(/,/g, ""));
+        if (!Number.isNaN(value)) {
           (result as any)[field] = value;
           result.confidence[field] = "medium";
           break;
@@ -396,10 +396,10 @@ function extractFromText(text: string, productType: string = "grocery"): Extract
   }
 
   // Check for sodium and convert to salt
-  const sodiumMatch = normalizedText.match(/sodium\s*:?\s*([\d,.]+)\s*(?:m?g)?/i);
+  const sodiumMatch = normalizedText.match(/sodium\s{0,20}:?\s{0,20}([\d,.]{1,32})\s{0,20}(?:m?g)?/i);
   if (sodiumMatch?.[1] && !result.salt) {
-    const sodium = parseFloat(sodiumMatch[1].replace(/,/g, ""));
-    if (!isNaN(sodium)) {
+    const sodium = Number.parseFloat(sodiumMatch[1].replaceAll(/,/g, ""));
+    if (!Number.isNaN(sodium)) {
       // Sodium is usually in mg, salt in g
       result.salt = (sodium / 1000) * 2.5;
       result.confidence.salt = "low";
@@ -688,7 +688,7 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
 
     if (jsonLdMatch) {
       for (const match of jsonLdMatch) {
-        const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, "").trim();
+        const jsonContent = match.replaceAll(/<script[^>]*>|<\/script>/gi, "").trim();
         try {
           const parsed = JSON.parse(jsonContent);
           if (parsed["@type"] === "Product" || parsed["@type"]?.includes?.("Product")) {
@@ -787,7 +787,7 @@ Extract the size value separately from the unit.`;
   const aiData = await aiResponse.json();
   const content = aiData.choices?.[0]?.message?.content || "";
 
-  const jsonMatch2 = content.match(/\{[\s\S]*\}/);
+  const jsonMatch2 = content.match(/\{[\s\S]{0,100000}\}/);
   if (!jsonMatch2) {
     throw new Error("Could not extract product data from this URL. Try 'Upload Photo' or 'Paste Text' instead.");
   }

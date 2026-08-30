@@ -40,7 +40,7 @@ const MONTH_MAP: Record<string, number> = {
 function parseMonth(val: any): number | null {
   if (!val) return null;
   const n = Number(val);
-  if (!isNaN(n) && n >= 1 && n <= 12) return n;
+  if (!Number.isNaN(n) && n >= 1 && n <= 12) return n;
   const str = String(val).toLowerCase().trim();
   return MONTH_MAP[str] || null;
 }
@@ -48,7 +48,7 @@ function parseMonth(val: any): number | null {
 function parseDay(val: any): number | null {
   if (!val) return null;
   const n = Number(val);
-  if (!isNaN(n) && n >= 1 && n <= 31) return Math.floor(n);
+  if (!Number.isNaN(n) && n >= 1 && n <= 31) return Math.floor(n);
   return null;
 }
 
@@ -69,7 +69,7 @@ function parseDateValue(val: any): { month: number | null; day: number | null } 
   // Excel serial number (e.g. 45966 = a date in 2025)
   if (typeof val === "number" && val > 1 && val < 100000) {
     const d = excelSerialToDate(val);
-    if (!isNaN(d.getTime())) {
+    if (!Number.isNaN(d.getTime())) {
       return { month: d.getMonth() + 1, day: d.getDate() };
     }
   }
@@ -78,8 +78,8 @@ function parseDateValue(val: any): { month: number | null; day: number | null } 
   // Try DD/MM or DD/MM/YYYY
   const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
   if (slashMatch) {
-    const day = parseInt(slashMatch[1], 10);
-    const month = parseInt(slashMatch[2], 10);
+    const day = Number.parseInt(slashMatch[1], 10);
+    const month = Number.parseInt(slashMatch[2], 10);
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       return { month, day };
     }
@@ -160,11 +160,11 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
 
         // Find budget — check multiple column names
         const budgetRaw = row["Budget"] || row["budget"] || row["Amount to give?"] || row["Amount to Give"] || row["Amount"] || row["amount"] || 0;
-        const budget = parseFloat(String(budgetRaw).replace(/[£$,]/g, "")) || 0;
+        const budget = Number.parseFloat(String(budgetRaw).replaceAll(/[£$,]/g, "")) || 0;
 
         // Find cost/amount (inline expense)
         const costRaw = row["Cost"] || row["cost"] || row["Total"] || row["total"];
-        const cost = costRaw ? parseFloat(String(costRaw).replace(/[£$,]/g, "")) || 0 : 0;
+        const cost = costRaw ? Number.parseFloat(String(costRaw).replaceAll(/[£$,]/g, "")) || 0 : 0;
 
         // Find item description
         const itemDesc = row["Item"] || row["item"] || row["Description"] || row["description"] || row["Gift"] || row["gift"];

@@ -23,7 +23,7 @@ export function hashDealSync(
   const normalized = `${title.toLowerCase().trim()}|${price}|${(store || "").toLowerCase()}|${url}`;
   let hash = 0;
   for (let i = 0; i < normalized.length; i++) {
-    const char = normalized.charCodeAt(i);
+    const char = normalized.codePointAt(i) ?? 0;
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32-bit integer
   }

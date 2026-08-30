@@ -17,8 +17,8 @@ export function QuickUsageLog({ item }: QuickUsageLogProps) {
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const handleLog = () => {
-    const val = parseFloat(amount);
-    if (isNaN(val) || val <= 0) return;
+    const val = Number.parseFloat(amount);
+    if (Number.isNaN(val) || val <= 0) return;
     logUsage.mutate({
       toiletry_item_id: item.id,
       logged_date: date,

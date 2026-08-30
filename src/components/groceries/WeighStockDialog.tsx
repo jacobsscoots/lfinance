@@ -71,7 +71,7 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
 
       // Save weight-based items (existing logic)
       const weightUpdates = Object.entries(weights)
-        .filter(([, val]) => val !== "" && !isNaN(Number(val)))
+        .filter(([, val]) => val !== "" && !Number.isNaN(Number(val)))
         .map(([id, val]) => ({ id, weight: Number(val) }));
 
       for (const { id, weight } of weightUpdates) {
@@ -85,7 +85,7 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
 
       // Save unit-count items → quantity_on_hand, clear current_weight_grams so pack-based calc is used
       const unitUpdates = Object.entries(unitCounts)
-        .filter(([, val]) => val !== "" && !isNaN(Number(val)))
+        .filter(([, val]) => val !== "" && !Number.isNaN(Number(val)))
         .map(([id, val]) => ({ id, units: Number(val) }));
 
       for (const { id, units } of unitUpdates) {
@@ -128,8 +128,8 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
   };
 
   const changedCount =
-    Object.values(weights).filter((v) => v !== "" && !isNaN(Number(v))).length +
-    Object.values(unitCounts).filter((v) => v !== "" && !isNaN(Number(v))).length;
+    Object.values(weights).filter((v) => v !== "" && !Number.isNaN(Number(v))).length +
+    Object.values(unitCounts).filter((v) => v !== "" && !Number.isNaN(Number(v))).length;
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -156,7 +156,7 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
                 const inputVal = unitCounts[product.id] ?? "";
                 const units = inputVal ? Number(inputVal) : null;
                 const portionG = product.fixed_portion_grams ?? 0;
-                const totalGrams = units != null && !isNaN(units) ? units * portionG : null;
+                const totalGrams = units != null && !Number.isNaN(units) ? units * portionG : null;
                 const unitLabel = getUnitLabel(product);
 
                 // Calculate current stock in units
@@ -229,7 +229,7 @@ export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDia
                 const inputVal = weights[product.id] ?? "";
                 const scaleWeight = inputVal ? Number(inputVal) : null;
                 const usable =
-                  scaleWeight != null && !isNaN(scaleWeight)
+                  scaleWeight != null && !Number.isNaN(scaleWeight)
                     ? getUsableGrams(product, scaleWeight)
                     : null;
 

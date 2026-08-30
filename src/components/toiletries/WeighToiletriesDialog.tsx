@@ -45,7 +45,7 @@ export function WeighToiletriesDialog({ open, onOpenChange, items }: WeighToilet
     setSaving(true);
     try {
       const updates = Object.entries(weights)
-        .filter(([, val]) => val !== "" && !isNaN(Number(val)))
+        .filter(([, val]) => val !== "" && !Number.isNaN(Number(val)))
         .map(([id, val]) => ({ id, weight: Number(val) }));
 
       for (const { id, weight } of updates) {
@@ -71,7 +71,7 @@ export function WeighToiletriesDialog({ open, onOpenChange, items }: WeighToilet
   };
 
   const changedCount = Object.values(weights).filter(
-    (v) => v !== "" && !isNaN(Number(v))
+    (v) => v !== "" && !Number.isNaN(Number(v))
   ).length;
 
   return (
@@ -97,7 +97,7 @@ export function WeighToiletriesDialog({ open, onOpenChange, items }: WeighToilet
               const inputVal = weights[item.id] ?? "";
               const scaleWeight = inputVal ? Number(inputVal) : null;
               const usable =
-                scaleWeight != null && !isNaN(scaleWeight)
+                scaleWeight != null && !Number.isNaN(scaleWeight)
                   ? getUsableGrams(item, scaleWeight)
                   : null;
 
