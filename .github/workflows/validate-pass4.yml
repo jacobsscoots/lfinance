@@ -1,0 +1,21 @@
+name: Validate maintainability pass 4
+
+on:
+  push:
+    branches:
+      - fix/sonar-maintainability-pass4
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test
