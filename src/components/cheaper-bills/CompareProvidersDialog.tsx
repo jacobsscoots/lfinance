@@ -35,6 +35,12 @@ interface CompareProvidersDialogProps {
 
 type SortKey = "savings" | "monthly" | "provider";
 
+function getSortLabel(key: SortKey): string {
+  if (key === "savings") return "Savings";
+  if (key === "monthly") return "Price";
+  return "Name";
+}
+
 const SERVICE_TABS = [
   { value: "all", label: "All", icon: null },
   { value: "energy", label: "Energy", icon: Zap },
@@ -305,7 +311,7 @@ export function CompareProvidersDialog({
                     onClick={() => setSortBy(key)}
                   >
                     <ArrowUpDown className="h-3 w-3 mr-1" />
-                    {key === "savings" ? "Savings" : key === "monthly" ? "Price" : "Name"}
+                    {getSortLabel(key)}
                   </Button>
                 ))}
               </div>

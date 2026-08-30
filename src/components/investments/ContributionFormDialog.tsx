@@ -61,6 +61,9 @@ export function ContributionFormDialog({
     }
   };
 
+  const idleSubmitLabel = mode === "create" ? "Add" : "Save";
+  const submitLabel = isLoading ? "Saving..." : idleSubmitLabel;
+
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent className="sm:max-w-[400px]">
@@ -193,7 +196,7 @@ export function ContributionFormDialog({
                 Cancel
               </Button>
               <Button type="submit" className="flex-1" disabled={isLoading}>
-                {isLoading ? "Saving..." : mode === "create" ? "Add" : "Save"}
+                {submitLabel}
               </Button>
             </div>
           </form>

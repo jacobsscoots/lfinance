@@ -43,6 +43,11 @@ export function RetailerSection({ group, onDiscountChange, collectedIds, onToggl
     ? group.items.filter(i => collectedIds.has(i.product.id)).length
     : 0;
 
+  const itemLabel = group.items.length === 1 ? "item" : "items";
+  const collectionLabel = collectedIds
+    ? `${collectedCount}/${group.items.length} collected`
+    : `${group.items.length} ${itemLabel}`;
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="rounded-xl border shadow-sm overflow-hidden">
       <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-accent/30 transition-colors">
@@ -54,10 +59,7 @@ export function RetailerSection({ group, onDiscountChange, collectedIds, onToggl
             <span className="font-semibold">{group.retailer}</span>
             <div className="flex items-center gap-2 mt-0.5">
               <Badge variant="secondary" className="text-xs">
-                {collectedIds
-                  ? `${collectedCount}/${group.items.length} collected`
-                  : `${group.items.length} ${group.items.length === 1 ? "item" : "items"}`
-                }
+                {collectionLabel}
               </Badge>
               {discountLabel && (
                 <Badge variant="outline" className="text-xs text-primary border-primary/30">

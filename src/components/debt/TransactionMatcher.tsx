@@ -176,8 +176,12 @@ interface PaymentCardProps {
 }
 
 function PaymentCard({ payment, isLinked, isSuggested, onToggle, formatCurrency }: Readonly<PaymentCardProps>) {
+  let cardStateClass = '';
+  if (isLinked) cardStateClass = 'border-green-500/50 bg-green-500/5';
+  else if (isSuggested) cardStateClass = 'border-amber-500/50';
+
   return (
-    <Card className={`${isLinked ? 'border-green-500/50 bg-green-500/5' : isSuggested ? 'border-amber-500/50' : ''}`}>
+    <Card className={cardStateClass}>
       <CardContent className="p-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center shrink-0">
