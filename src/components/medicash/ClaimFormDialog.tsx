@@ -17,7 +17,7 @@ interface ClaimFormDialogProps {
   isPending: boolean;
 }
 
-export function ClaimFormDialog({ open, onOpenChange, categories, onSubmit, isPending }: ClaimFormDialogProps) {
+export function ClaimFormDialog({ open, onOpenChange, categories, onSubmit, isPending }: Readonly<ClaimFormDialogProps>) {
   const [categoryId, setCategoryId] = useState("");
   const [claimDate, setClaimDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");

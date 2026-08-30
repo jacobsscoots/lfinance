@@ -4,7 +4,7 @@ import { Debt } from "@/hooks/useDebts";
 import { DebtPayment } from "@/hooks/useDebtPayments";
 import { DebtSettings } from "@/hooks/useDebtSettings";
 import { AlertTriangle, Calendar, Clock, Percent } from "lucide-react";
-import { addMonths, differenceInDays, parseISO, isAfter, isBefore, startOfMonth, endOfMonth } from "date-fns";
+import { addMonths, differenceInDays, parseISO, isAfter, startOfMonth, endOfMonth } from "date-fns";
 
 interface DebtAlertsCardProps {
   debts: Debt[];
@@ -20,7 +20,7 @@ interface Alert {
   debtId?: string;
 }
 
-export function DebtAlertsCard({ debts, payments, settings }: DebtAlertsCardProps) {
+export function DebtAlertsCard({ debts, payments, settings }: Readonly<DebtAlertsCardProps>) {
   const alerts: Alert[] = [];
   const today = new Date();
   const reminderDays = settings?.reminder_days_before ?? 3;

@@ -6,22 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useEnergyProfile, EnergyProfile } from "@/hooks/useEnergyProfile";
-import { Home, Thermometer, Zap, ChevronDown, Loader2, Save, AlertTriangle, CheckCircle, Building } from "lucide-react";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { Home, Thermometer, Zap, ChevronDown, Loader2, Save, AlertTriangle, CheckCircle, Building } from "lucide-react";import { cn } from "@/lib/utils";
 
 const DEFAULT_FORM_DATA: Partial<EnergyProfile> = {
   eco_mode_dishwasher: false,

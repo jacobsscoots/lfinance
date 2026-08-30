@@ -1,10 +1,7 @@
 import { Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { MealPlanItem, MealType, MealStatus } from "@/hooks/useMealPlanItems";
-import { MealMacros, calculateItemMacros } from "@/lib/mealCalculations";
-import { cn } from "@/lib/utils";
-
-interface MealBreakdownListProps {
+import { MealMacros, calculateItemMacros } from "@/lib/mealCalculations";interface MealBreakdownListProps {
   mealType: MealType;
   items: MealPlanItem[];
   status: MealStatus;

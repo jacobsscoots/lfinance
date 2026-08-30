@@ -3,27 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { useAccounts } from "@/hooks/useAccounts";
-import { 
-  format, 
-  differenceInDays, 
-  isBefore, 
-  isAfter, 
-  isSameDay,
-  addDays,
-  subDays,
-  startOfDay,
-} from "date-fns";
+import { format, differenceInDays, isBefore, isAfter, isSameDay, addDays, subDays, startOfDay } from "date-fns";
 import { getPayCycleForDate, toPaydaySettings, type PayCycle } from "@/lib/payCycle";
 import { generateBillOccurrences } from "@/lib/billOccurrences";
-import {
-  calculateSafeToSpend,
-  calculateProjectedEndBalance,
-  checkRunwayRisk,
-  buildDailySpendingData,
-  generateAlerts,
-  type PayCycleMetrics,
-  type Alert,
-} from "@/lib/dashboardCalculations";
+import { calculateProjectedEndBalance, checkRunwayRisk, buildDailySpendingData, generateAlerts, type PayCycleMetrics, type Alert } from "@/lib/dashboardCalculations";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Transaction = Tables<"transactions">;

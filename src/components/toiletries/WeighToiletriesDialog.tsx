@@ -21,7 +21,7 @@ interface WeighToiletriesDialogProps {
   items: ToiletryItem[];
 }
 
-export function WeighToiletriesDialog({ open, onOpenChange, items }: WeighToiletriesDialogProps) {
+export function WeighToiletriesDialog({ open, onOpenChange, items }: Readonly<WeighToiletriesDialogProps>) {
   const queryClient = useQueryClient();
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);

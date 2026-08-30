@@ -26,7 +26,7 @@ interface UsageLogHistoryProps {
   item: ToiletryItem | null;
 }
 
-export function UsageLogHistory({ open, onOpenChange, item }: UsageLogHistoryProps) {
+export function UsageLogHistory({ open, onOpenChange, item }: Readonly<UsageLogHistoryProps>) {
   const { logs, deleteLog } = useToiletryUsageLogs(item?.id);
 
   if (!item) return null;

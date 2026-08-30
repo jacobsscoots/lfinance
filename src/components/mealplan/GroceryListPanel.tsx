@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { MealPlan } from "@/hooks/useMealPlanItems";
-import { generateGroceryList, GroceryItem } from "@/lib/mealCalculations";
+import { generateGroceryList } from "@/lib/mealCalculations";
 import { BlackoutRange, isDateBlackout } from "@/lib/mealPlannerWeek";
 
 interface GroceryListPanelProps {
@@ -11,7 +11,7 @@ interface GroceryListPanelProps {
   blackouts?: BlackoutRange[];
 }
 
-export function GroceryListPanel({ plans, blackouts = [] }: GroceryListPanelProps) {
+export function GroceryListPanel({ plans, blackouts = [] }: Readonly<GroceryListPanelProps>) {
   // Filter out blackout days from grocery calculation
   const activePlans = plans.filter(plan => !isDateBlackout(plan.meal_date, blackouts));
   

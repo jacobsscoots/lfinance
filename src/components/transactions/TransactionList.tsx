@@ -59,7 +59,7 @@ interface FlatItem {
   gmailReceipt?: any;
 }
 
-export function TransactionList({ transactions, onEdit, onDelete }: TransactionListProps) {
+export function TransactionList({ transactions, onEdit, onDelete }: Readonly<TransactionListProps>) {
   const { user } = useAuth();
   const { tags } = useTransactionTags();
 
@@ -214,7 +214,7 @@ interface TransactionRowProps {
   onUnassignTag: (tagId: string) => void;
 }
 
-function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt, allTags, assignedTagIds, onAssignTag, onUnassignTag }: TransactionRowProps) {
+function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt, allTags, assignedTagIds, onAssignTag, onUnassignTag }: Readonly<TransactionRowProps>) {
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [gmailReceiptOpen, setGmailReceiptOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);

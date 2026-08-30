@@ -2,19 +2,8 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertTriangle, Package, ShoppingCart, Clock } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
-import {
-  calculateForecast,
-  formatCurrency,
-  type ToiletryItem,
-  type ToiletryForecast,
-} from "@/lib/toiletryCalculations";
-import {
-  getReorderBadgeVariant,
-  getReorderStatusLabel,
-  type ShippingProfile,
-} from "@/lib/reorderCalculations";
+import { AlertTriangle, Package, ShoppingCart, Clock } from "lucide-react";import { calculateForecast, type ToiletryItem, type ToiletryForecast } from "@/lib/toiletryCalculations";
+import { getReorderBadgeVariant, getReorderStatusLabel, type ShippingProfile } from "@/lib/reorderCalculations";
 import { cn } from "@/lib/utils";
 
 interface OnHandPanelProps {

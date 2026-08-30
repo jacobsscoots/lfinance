@@ -28,7 +28,7 @@ const frequencyLabels: Record<string, string> = {
   yearly: "Yearly",
 };
 
-export function BillCard({ bill, onEdit, onDelete }: BillCardProps) {
+export function BillCard({ bill, onEdit, onDelete }: Readonly<BillCardProps>) {
   const amount = Number(bill.amount);
 
   return (

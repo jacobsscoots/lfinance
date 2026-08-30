@@ -35,7 +35,7 @@ interface Props {
 export function BirthdayEventCard({
   event, expenses, year, onEdit, onDelete, onAddExpense, onTogglePurchased, onDeleteExpense,
   onToggleCardSent, onToggleMoneyScheduled,
-}: Props) {
+}: Readonly<Props>) {
   const [expanded, setExpanded] = useState(false);
   const Icon = OCCASION_ICONS[event.occasion] || Gift;
   

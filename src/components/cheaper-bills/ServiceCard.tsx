@@ -55,7 +55,7 @@ const serviceIcons: Record<string, any> = {
   streaming: Tv,
 };
 
-export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete, onToggleTracking, onScan, isScanning }: ServiceCardProps) {
+export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete, onToggleTracking, onScan, isScanning }: Readonly<ServiceCardProps>) {
   const [isResultsOpen, setIsResultsOpen] = useState(false);
   const [switchingDialogOpen, setSwitchingDialogOpen] = useState(false);
   const Icon = serviceIcons[service.service_type] || Zap;

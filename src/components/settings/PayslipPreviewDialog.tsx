@@ -47,7 +47,7 @@ export function PayslipPreviewDialog({
   payslip,
   open,
   onOpenChange,
-}: PayslipPreviewDialogProps) {
+}: Readonly<PayslipPreviewDialogProps>) {
   const { updatePayslip, isUpdating, matchTransaction, isMatching, deletePayslip, isDeleting } = usePayslips();
   
   const [fileUrl, setFileUrl] = useState<string | null>(null);
@@ -334,7 +334,7 @@ export function PayslipPreviewDialog({
   );
 }
 
-function MatchStatusBadge({ payslip }: { payslip: Payslip }) {
+function MatchStatusBadge({ payslip }: Readonly<{ payslip: Payslip }>) {
   switch (payslip.match_status) {
     case "auto_matched":
       return (

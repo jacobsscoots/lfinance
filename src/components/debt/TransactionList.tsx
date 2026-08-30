@@ -7,7 +7,7 @@ import { DebtTransaction, PaymentTransactionLink } from "@/hooks/useDebtTransact
 import { DebtPaymentWithDebt } from "@/hooks/useDebtPayments";
 import { Debt } from "@/hooks/useDebts";
 import { format, parseISO, differenceInDays } from "date-fns";
-import { ArrowRightLeft, Calendar, Search, Check, AlertCircle, X, Link2, Unlink } from "lucide-react";
+import { ArrowRightLeft, Calendar, Search, Check, AlertCircle, X } from "lucide-react";
 import { TransactionMatcher } from "./TransactionMatcher";
 
 interface TransactionListProps {
@@ -26,7 +26,7 @@ export function TransactionList({
   links, 
   debts,
   isLoading 
-}: TransactionListProps) {
+}: Readonly<TransactionListProps>) {
   const [matchStatus, setMatchStatus] = useState<MatchStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTransaction, setSelectedTransaction] = useState<DebtTransaction | null>(null);

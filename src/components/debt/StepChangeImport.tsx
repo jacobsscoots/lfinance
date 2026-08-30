@@ -1,11 +1,5 @@
 import { useState, useCallback } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,24 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Upload, AlertTriangle, CheckCircle, Loader2, FileText } from "lucide-react";
 import { useDebts, Debt } from "@/hooks/useDebts";
 import { useDebtPayments } from "@/hooks/useDebtPayments";
 import { useDebtSnapshots } from "@/hooks/useDebtSnapshots";
-import {
-  parseStepChangeStatement,
-  StepChangeStatement,
-  StepChangeCreditor,
-  StepChangeParseResult,
-} from "@/lib/stepChangeParser";
+import { parseStepChangeStatement, StepChangeCreditor, StepChangeParseResult } from "@/lib/stepChangeParser";
 
 interface StepChangeImportProps {
   open: boolean;

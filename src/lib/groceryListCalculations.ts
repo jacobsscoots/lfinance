@@ -1,6 +1,6 @@
 import { Product } from "@/hooks/useProducts";
 import { MealPlan } from "@/hooks/useMealPlanItems";
-import { generateGroceryList, GroceryItem } from "./mealCalculations";
+import { generateGroceryList } from "./mealCalculations";
 import { calculateBasketDiscount, DiscountType, parseMultiBuyOffer, calculateMultiBuyPrice, MultiBuyOffer, getDefaultRetailerDiscount } from "./discounts";
 
 // ============= Types =============

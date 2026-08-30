@@ -33,7 +33,7 @@ export function CopyToDateDialog({
   mealPlans,
   onConfirm,
   isPending,
-}: CopyToDateDialogProps) {
+}: Readonly<CopyToDateDialogProps>) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   
   const sourceDate = parse(sourcePlan.meal_date, "yyyy-MM-dd", new Date());

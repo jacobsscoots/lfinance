@@ -21,7 +21,7 @@ interface WeighStockDialogProps {
   products: Product[];
 }
 
-export function WeighStockDialog({ open, onOpenChange, products }: WeighStockDialogProps) {
+export function WeighStockDialog({ open, onOpenChange, products }: Readonly<WeighStockDialogProps>) {
   const queryClient = useQueryClient();
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [unitCounts, setUnitCounts] = useState<Record<string, string>>({});

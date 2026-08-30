@@ -19,7 +19,7 @@ interface Props {
   onSave: (data: Partial<BirthdayEvent>) => void;
 }
 
-export function BirthdayFormDialog({ open, onOpenChange, event, onSave }: Props) {
+export function BirthdayFormDialog({ open, onOpenChange, event, onSave }: Readonly<Props>) {
   const [personName, setPersonName] = useState("");
   const [occasion, setOccasion] = useState("birthday");
   const [eventMonth, setEventMonth] = useState(1);

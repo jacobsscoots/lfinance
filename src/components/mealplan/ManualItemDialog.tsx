@@ -36,7 +36,7 @@ const MEAL_LABELS: Record<MealType, string> = {
   snack: "Snacks",
 };
 
-export function ManualItemDialog({ open, onOpenChange, mealType, onConfirm }: ManualItemDialogProps) {
+export function ManualItemDialog({ open, onOpenChange, mealType, onConfirm }: Readonly<ManualItemDialogProps>) {
   const [name, setName] = useState("");
   const [grams, setGrams] = useState("");
   const [calories, setCalories] = useState("");

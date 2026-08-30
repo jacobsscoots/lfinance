@@ -48,7 +48,7 @@ const FIELD_LABELS: Record<string, string> = {
   salt: "Salt",
 };
 
-export function NutritionImportDialog({ open, onOpenChange, onImport }: NutritionImportDialogProps) {
+export function NutritionImportDialog({ open, onOpenChange, onImport }: Readonly<NutritionImportDialogProps>) {
   const [method, setMethod] = useState<ImportMethod>("image");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -1,24 +1,15 @@
-import { useState, useMemo } from "react";
-import { format } from "date-fns";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useState, useMemo } from "react";import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Package, Scale, Target, ChevronDown, Check } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Package, Scale, Target, ChevronDown } from "lucide-react";
 import { Product } from "@/hooks/useProducts";
 import { MealType, MealPlanItem, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { isProductAllowedForMeal, isProductAllowedForDay } from "@/lib/autoPortioning";
-import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
+import { shouldCapAsSeasoning } from "@/lib/seasoningRules";
 import { cn } from "@/lib/utils";
 
 interface MealItemMultiSelectDialogProps {
@@ -48,7 +39,7 @@ export function MealItemMultiSelectDialog({
   weekStart,
   existingItems = [],
   planDate,
-}: MealItemMultiSelectDialogProps) {
+}: Readonly<MealItemMultiSelectDialogProps>) {
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

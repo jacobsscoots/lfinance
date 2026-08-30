@@ -2,12 +2,10 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Debt } from "@/hooks/useDebts";
 import { useDebtSettings, PayoffStrategy } from "@/hooks/useDebtSettings";
-import { generatePayoffPlan, calculateInterestSaved, getDebtTypeLabel } from "@/lib/debtCalculations";
+import { generatePayoffPlan, calculateInterestSaved } from "@/lib/debtCalculations";
 import { format } from "date-fns";
 import { TrendingDown, Calendar, Percent, AlertTriangle } from "lucide-react";
 

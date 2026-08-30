@@ -4,10 +4,15 @@
  * Zero tolerance - day totals match ALL targets exactly (calories, protein, carbs, fat).
  */
 
+/**
+ * Precision Auto-Portioning Algorithm for Target-Based Meal Planning.
+ * Uses iterative multi-target optimization to calculate EXACT gram quantities.
+ * Zero tolerance - day totals match ALL targets exactly (calories, protein, carbs, fat).
+ */
 import { Product } from "@/hooks/useProducts";
 import { MealPlanItem, MealType } from "@/hooks/useMealPlanItems";
 import { MacroTotals } from "./mealCalculations";
-import { storePortioningSolverDebug, PortioningDebugItem, PortioningDebugTotals, PortioningSolverDebugPayload } from "./portioningDebug";
+import { storePortioningSolverDebug, PortioningDebugItem, PortioningSolverDebugPayload } from "./portioningDebug";
 
 
 export type FoodType = "protein" | "carb" | "fat" | "veg" | "fruit" | "dairy" | "sauce" | "treat" | "other";

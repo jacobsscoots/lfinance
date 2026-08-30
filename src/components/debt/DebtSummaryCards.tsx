@@ -11,7 +11,7 @@ interface DebtSummaryCardsProps {
   monthlyBudget: number | null;
 }
 
-export function DebtSummaryCards({ debts, payments, monthlyBudget }: DebtSummaryCardsProps) {
+export function DebtSummaryCards({ debts, payments, monthlyBudget }: Readonly<DebtSummaryCardsProps>) {
   const summary = calculateDebtSummary(debts, payments, monthlyBudget);
 
   const formatCurrency = (amount: number) => {

@@ -1,10 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/ui/responsive-dialog";
+import { ResponsiveDialog, ResponsiveDialogContent, ResponsiveDialogHeader, ResponsiveDialogTitle } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,18 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Package, Scale, AlertTriangle, Target, Zap } from "lucide-react";
-import { Product, MealEligibility } from "@/hooks/useProducts";
+import { Product } from "@/hooks/useProducts";
 import { MealType, MealPlanItem, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { format } from "date-fns";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
-import { 
-  calculateSingleItemPortion, 
-  isProductAllowedForMeal,
-  isProductAllowedForDay,
-  PortioningSettings,
-  DEFAULT_PORTIONING_SETTINGS 
-} from "@/lib/autoPortioning";
-import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
+import { calculateSingleItemPortion, isProductAllowedForMeal, isProductAllowedForDay, PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
+import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS } from "@/lib/seasoningRules";
 
 interface MealItemDialogProps {
   open: boolean;

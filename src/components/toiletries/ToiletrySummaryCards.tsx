@@ -6,7 +6,7 @@ interface ToiletrySummaryCardsProps {
   items: ToiletryItem[];
 }
 
-export function ToiletrySummaryCards({ items }: ToiletrySummaryCardsProps) {
+export function ToiletrySummaryCards({ items }: Readonly<ToiletrySummaryCardsProps>) {
   const stats = calculateAggregateStats(items);
   
   return (

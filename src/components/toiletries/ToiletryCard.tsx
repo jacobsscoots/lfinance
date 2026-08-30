@@ -4,24 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { 
-  formatCurrency, 
-  getStatusBadgeVariant, 
-  getStatusDisplayText,
-  TOILETRY_CATEGORIES,
-  type ToiletryItem,
-  type ToiletryForecast,
-} from "@/lib/toiletryCalculations";
-import {
-  getReorderBadgeVariant,
-  getReorderStatusLabel,
-} from "@/lib/reorderCalculations";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { formatCurrency, getStatusBadgeVariant, getStatusDisplayText, TOILETRY_CATEGORIES, type ToiletryItem, type ToiletryForecast } from "@/lib/toiletryCalculations";
+import { getReorderBadgeVariant } from "@/lib/reorderCalculations";
 import { cn } from "@/lib/utils";
 
 interface ToiletryCardProps {

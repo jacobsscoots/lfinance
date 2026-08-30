@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { getPayCycleForDate, toPaydaySettings } from "@/lib/payCycle";
 import { useAutoLinkTransactions } from "@/hooks/useAutoLinkTransactions";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function Transactions() {
   const { effectiveSettings } = usePaydaySettings();

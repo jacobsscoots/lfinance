@@ -1,4 +1,4 @@
-import { format, addMonths, subMonths, startOfMonth, isBefore, isSameDay } from "date-fns";
+import { format, addMonths, subMonths, isSameDay } from "date-fns";
 import { getPayday, PaydaySettings, AdjustmentRule } from "./payday";
 
 export interface PayCycle {

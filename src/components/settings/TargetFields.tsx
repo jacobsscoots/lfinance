@@ -23,7 +23,7 @@ export function TargetFields({
   setMacroMode,
   split,
   setSplit,
-}: TargetFieldsProps) {
+}: Readonly<TargetFieldsProps>) {
   const isWeekend = prefix === "weekend";
 
   const clampPct = (n: number) => Math.max(0, Math.min(100, n));

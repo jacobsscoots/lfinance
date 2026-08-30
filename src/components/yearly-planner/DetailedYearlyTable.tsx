@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Eye, EyeOff, Undo2 } from "lucide-react";
+import { Plus, Eye, EyeOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getBillOccurrencesForMonth } from "@/lib/billOccurrences";
@@ -70,7 +70,7 @@ function EditableCell({
   onSave,
   onReset,
   isEditable = true,
-}: EditableCellProps) {
+}: Readonly<EditableCellProps>) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -168,7 +168,7 @@ export function DetailedYearlyTable({
   onCellReset,
   onMonthHeaderClick,
   overrideMap: overrideMapProp,
-}: DetailedYearlyTableProps) {
+}: Readonly<DetailedYearlyTableProps>) {
   const activeBills = useMemo(() => bills.filter(b => b.is_active), [bills]);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
   const canEdit = !!onCellEdit;

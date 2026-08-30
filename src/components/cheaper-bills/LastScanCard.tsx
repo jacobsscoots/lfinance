@@ -24,7 +24,7 @@ export function LastScanCard({
   isScanning,
   scanProgress,
   onViewBestDeal,
-}: LastScanCardProps) {
+}: Readonly<LastScanCardProps>) {
   const getRecommendationDisplay = () => {
     if (!recommendation) {
       return { icon: Clock, label: "Not scanned", color: "text-muted-foreground", bg: "bg-muted" };

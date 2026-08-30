@@ -44,7 +44,7 @@ const FIELD_LABELS: Record<string, string> = {
   size_unit: "Size Unit",
 };
 
-export function ToiletryImportDialog({ open, onOpenChange, onImport }: ToiletryImportDialogProps) {
+export function ToiletryImportDialog({ open, onOpenChange, onImport }: Readonly<ToiletryImportDialogProps>) {
   const [method, setMethod] = useState<ImportMethod>("image");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

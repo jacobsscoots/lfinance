@@ -43,7 +43,7 @@ const SERVICE_TABS = [
   { value: "other", label: "Other", icon: Settings },
 ] as const;
 
-function CurrentPlanCard({ service }: { service: TrackedService }) {
+function CurrentPlanCard({ service }: Readonly<{ service: TrackedService }>) {
   return (
     <div className="p-3 rounded-lg border-2 border-primary/30 bg-primary/5">
       <div className="flex items-center gap-2 mb-2">
@@ -95,11 +95,11 @@ function ResultCard({
   result,
   isBest,
   onVisit,
-}: {
+}: Readonly<{
   result: ComparisonResult & { savings: number };
   isBest: boolean;
   onVisit: (url: string) => void;
-}) {
+}>) {
   return (
     <div
       className={`flex flex-col gap-2 p-3 rounded-lg border ${
@@ -186,7 +186,7 @@ export function CompareProvidersDialog({
   currentMonthlyCost,
   serviceType,
   currentServices = [],
-}: CompareProvidersDialogProps) {
+}: Readonly<CompareProvidersDialogProps>) {
   const [sortBy, setSortBy] = useState<SortKey>("savings");
   const [activeTab, setActiveTab] = useState(serviceType || "all");
   const [visitUrl, setVisitUrl] = useState<string | null>(null);

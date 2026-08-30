@@ -5,19 +5,7 @@ import { Debt } from "@/hooks/useDebts";
 import { DebtPayment } from "@/hooks/useDebtPayments";
 import { DebtBalanceSnapshot } from "@/hooks/useDebtSnapshots";
 import { getPaymentsByMonth } from "@/lib/debtCalculations";
-import { 
-  LineChart, 
-  Line, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  ResponsiveContainer,
-  Legend,
-  Area,
-  AreaChart,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from "recharts";
 import { format, subMonths, parseISO, isAfter } from "date-fns";
 
 interface DebtChartsProps {

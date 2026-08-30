@@ -11,7 +11,7 @@ function fmt(n: number) {
   return `£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-export function YearlySummaryBar({ months }: YearlySummaryBarProps) {
+export function YearlySummaryBar({ months }: Readonly<YearlySummaryBarProps>) {
   const totalIncome = months.reduce((s, m) => s + m.totalIncome, 0);
   const totalOutgoings = months.reduce((s, m) => s + m.totalOutgoings, 0);
   const totalNet = totalIncome - totalOutgoings;

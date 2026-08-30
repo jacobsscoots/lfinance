@@ -54,7 +54,7 @@ interface BillFormDialogProps {
   bill?: Bill | null;
 }
 
-export function BillFormDialog({ open, onOpenChange, bill }: BillFormDialogProps) {
+export function BillFormDialog({ open, onOpenChange, bill }: Readonly<BillFormDialogProps>) {
   const { createBill, updateBill } = useBills();
   const { data: categories = [] } = useCategories();
   const { accounts } = useAccounts();

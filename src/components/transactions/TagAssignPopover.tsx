@@ -24,7 +24,7 @@ export function TagAssignPopover({
   assignedTagIds,
   onAssign,
   onUnassign,
-}: TagAssignPopoverProps) {
+}: Readonly<TagAssignPopoverProps>) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -69,7 +69,7 @@ interface TransactionTagBadgesProps {
   allTags: TagInfo[];
 }
 
-export function TransactionTagBadges({ tagIds, allTags }: TransactionTagBadgesProps) {
+export function TransactionTagBadges({ tagIds, allTags }: Readonly<TransactionTagBadgesProps>) {
   if (tagIds.length === 0) return null;
 
   const tagMap = new Map(allTags.map(t => [t.id, t]));

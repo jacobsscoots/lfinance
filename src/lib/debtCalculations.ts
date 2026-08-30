@@ -1,8 +1,8 @@
-import { Debt, DebtStatus } from "@/hooks/useDebts";
+import { Debt } from "@/hooks/useDebts";
 import { DebtPayment } from "@/hooks/useDebtPayments";
 import { DebtBalanceSnapshot } from "@/hooks/useDebtSnapshots";
 import { PayoffStrategy } from "@/hooks/useDebtSettings";
-import { addMonths, differenceInDays, format, startOfMonth, endOfMonth, isWithinInterval, isBefore, isAfter, parseISO, getDaysInMonth } from "date-fns";
+import { addMonths, format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 
 export interface DebtSummary {
   totalBalance: number;

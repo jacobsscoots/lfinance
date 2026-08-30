@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { Mail, Package, AlertCircle } from "lucide-react";
+import { Mail, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { type EmailTrackingExtraction } from "@/hooks/useGmailTrackingSync";
@@ -11,7 +11,7 @@ function confidenceBadge(confidence: number | null) {
   return <Badge className="text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Low</Badge>;
 }
 
-export function ExtractionLog({ extractions }: { extractions: EmailTrackingExtraction[] }) {
+export function ExtractionLog({ extractions }: Readonly<{ extractions: EmailTrackingExtraction[] }>) {
   const withTracking = extractions.filter((e) => e.extracted_tracking_number);
 
   if (withTracking.length === 0) {

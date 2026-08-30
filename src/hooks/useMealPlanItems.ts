@@ -8,11 +8,13 @@ import { Product, ProductType } from "./useProducts";
 import { NutritionSettings } from "./useNutritionSettings";
 import { getDailyTargets, WeeklyTargetsOverride } from "@/lib/dailyTargets";
 // Legacy import for fallback (deprecated)
+// Legacy import for fallback (deprecated)
 import { PortioningSettings, DEFAULT_PORTIONING_SETTINGS } from "@/lib/autoPortioning";
+// V2 portioning engine (new)
 // V2 portioning engine (new)
 import { solve, productToSolverItem, generateFixSuggestions } from "@/lib/portioningEngine";
 import { SolverItem, SolverTargets, DEFAULT_SOLVER_OPTIONS, MealType as SolverMealType, SolverFailed } from "@/lib/portioningTypes";
-import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS, DEFAULT_SEASONING_FALLBACK_GRAMS } from "@/lib/seasoningRules";
+import { shouldCapAsSeasoning, DEFAULT_SEASONING_MAX_GRAMS } from "@/lib/seasoningRules";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type MealStatus = "planned" | "skipped" | "eating_out";

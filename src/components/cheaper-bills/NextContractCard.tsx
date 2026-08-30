@@ -8,7 +8,7 @@ interface NextContractCardProps {
   service: TrackedService | null;
 }
 
-export function NextContractCard({ service }: NextContractCardProps) {
+export function NextContractCard({ service }: Readonly<NextContractCardProps>) {
   if (!service || !service.contract_end_date) {
     return (
       <Card>

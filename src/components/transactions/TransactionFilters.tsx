@@ -4,39 +4,16 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet, Mail, RefreshCw, CheckCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";import { ChevronLeft, ChevronRight, Search, X, Calendar, Wallet, Mail, RefreshCw, CheckCircle } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useTransactionTags } from "@/hooks/useTransactionTags";
 import { useGmailConnection } from "@/hooks/useGmailConnection";
 import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { TransactionFilters as FilterType } from "@/hooks/useTransactions";
-import { 
-  getPayCycleForDate, 
-  getNextPayCycle, 
-  getPrevPayCycle, 
-  formatPayCycleLabel,
-  formatPayCycleLabelShort,
-  toPaydaySettings,
-  PayCycle 
-} from "@/lib/payCycle";
+import { getPayCycleForDate, getNextPayCycle, getPrevPayCycle, formatPayCycleLabel, formatPayCycleLabelShort, toPaydaySettings, PayCycle } from "@/lib/payCycle";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { toast } from "sonner";
-
-interface TransactionFiltersProps {
+import { useIsMobile } from "@/hooks/use-mobile";interface TransactionFiltersProps {
   filters: FilterType;
   onFiltersChange: (filters: FilterType) => void;
 }

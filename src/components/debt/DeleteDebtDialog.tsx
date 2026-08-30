@@ -16,7 +16,7 @@ interface DeleteDebtDialogProps {
   debt?: Debt;
 }
 
-export function DeleteDebtDialog({ open, onOpenChange, debt }: DeleteDebtDialogProps) {
+export function DeleteDebtDialog({ open, onOpenChange, debt }: Readonly<DeleteDebtDialogProps>) {
   const { deleteDebt } = useDebts();
 
   const handleDelete = async () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { format, addDays } from "date-fns";
+import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -7,18 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Zap, TrendingDown, Scale, Flame, AlertTriangle, Calendar, Sparkles } from "lucide-react";
-import { 
-  PlanMode, 
-  ZigzagSchedule, 
-  PLAN_MODES, 
-  getNextWeekStartFromSundayWeighIn,
-  buildFlatSchedule,
-  buildZigzagSchedule,
-  getWeeklyAverage,
-  scheduleToArray,
-  formatWeekLabel,
-  WeeklyCalorieSchedule 
-} from "@/lib/weekTargets";
+import { PlanMode, ZigzagSchedule, PLAN_MODES, getNextWeekStartFromSundayWeighIn, buildFlatSchedule, buildZigzagSchedule, getWeeklyAverage, scheduleToArray, formatWeekLabel, WeeklyCalorieSchedule } from "@/lib/weekTargets";
 import { useWeeklyNutritionTargets } from "@/hooks/useWeeklyNutritionTargets";
 import { useNutritionSettings } from "@/hooks/useNutritionSettings";
 import { cn } from "@/lib/utils";

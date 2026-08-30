@@ -7,10 +7,7 @@ import { useRepeatPurchases, RepeatPurchase } from "@/hooks/useRepeatPurchases";
 import { useBills } from "@/hooks/useBills";
 import { useToiletries } from "@/hooks/useToiletries";
 import { format, differenceInDays } from "date-fns";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-
-function intervalLabel(days: number): string {
+import { toast } from "sonner";function intervalLabel(days: number): string {
   if (days <= 10) return "weekly";
   if (days <= 21) return "fortnightly";
   if (days <= 45) return "monthly";

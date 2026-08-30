@@ -1,5 +1,5 @@
 import { format, parseISO } from "date-fns";
-import { TrendingUp, Target, AlertTriangle } from "lucide-react";
+import { TrendingUp, Target } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ interface WeeklySummaryCardProps {
   settings: NutritionSettings | null | undefined;
 }
 
-export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: WeeklySummaryCardProps) {
+export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Readonly<WeeklySummaryCardProps>) {
   const isTargetMode = settings?.mode === "target_based";
 
   const getProgressColor = (current: number, target: number) => {

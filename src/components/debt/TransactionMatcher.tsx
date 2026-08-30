@@ -1,12 +1,5 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";import { Card, CardContent } from "@/components/ui/card";
 import { DebtTransaction, useDebtTransactions, PaymentTransactionLink } from "@/hooks/useDebtTransactions";
 import { DebtPaymentWithDebt } from "@/hooks/useDebtPayments";
 import { Debt } from "@/hooks/useDebts";
@@ -29,7 +22,7 @@ export function TransactionMatcher({
   payments,
   links,
   debts,
-}: TransactionMatcherProps) {
+}: Readonly<TransactionMatcherProps>) {
   const { linkTransaction, unlinkTransaction } = useDebtTransactions();
 
   if (!transaction) return null;

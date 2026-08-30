@@ -69,7 +69,7 @@ export function LinkPurchaseDialog({
   item,
   onSubmit,
   isLoading = false,
-}: LinkPurchaseDialogProps) {
+}: Readonly<LinkPurchaseDialogProps>) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"search" | "manual">("search");
   const { transactions } = useTransactions();

@@ -38,7 +38,7 @@ export function LinkTransactionDialog({
   open,
   onOpenChange,
   transaction,
-}: LinkTransactionDialogProps) {
+}: Readonly<LinkTransactionDialogProps>) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { updateTransaction } = useTransactions();

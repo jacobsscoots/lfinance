@@ -19,7 +19,7 @@ interface BrightConnectDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function BrightConnectDialog({ open, onOpenChange }: BrightConnectDialogProps) {
+export function BrightConnectDialog({ open, onOpenChange }: Readonly<BrightConnectDialogProps>) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const { connect, isConnecting } = useBrightConnection();

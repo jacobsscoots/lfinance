@@ -19,9 +19,7 @@ import { PaymentFormDialog } from "@/components/debt/PaymentFormDialog";
 import { TransactionList } from "@/components/debt/TransactionList";
 import { TransactionFormDialog } from "@/components/debt/TransactionFormDialog";
 import { TransactionCsvImport } from "@/components/debt/TransactionCsvImport";
-import { StepChangeImport } from "@/components/debt/StepChangeImport";
-import { PayoffPlanCard } from "@/components/debt/PayoffPlanCard";
-import { DebtReportsTab } from "@/components/debt/DebtReportsTab";
+import { StepChangeImport } from "@/components/debt/StepChangeImport";import { DebtReportsTab } from "@/components/debt/DebtReportsTab";
 
 export default function DebtTracker() {
   const [activeTab, setActiveTab] = useState("overview");

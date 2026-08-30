@@ -12,22 +12,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNutritionSettings, NutritionMode } from "@/hooks/useNutritionSettings";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { TargetFields } from "./TargetFields";
-import {
-  calculateNutritionTargets,
-  validateCalculatorInput,
-  ACTIVITY_LABELS,
-  GOAL_LABELS,
-  DEFAULT_MACRO_RULES,
-  Sex,
-  ActivityLevel,
-  Formula,
-  GoalType,
-  CalculatorInput,
-  CalculatorOutput,
-} from "@/lib/nutritionTargets";
+import { calculateNutritionTargets, validateCalculatorInput, ACTIVITY_LABELS, Sex, ActivityLevel, Formula, GoalType, CalculatorInput, CalculatorOutput } from "@/lib/nutritionTargets";
 
 const settingsSchema = z.object({
   mode: z.enum(["target_based", "manual"]),

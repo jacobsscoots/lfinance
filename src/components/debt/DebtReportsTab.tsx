@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Debt } from "@/hooks/useDebts";
@@ -7,7 +6,7 @@ import { DebtTransaction, PaymentTransactionLink } from "@/hooks/useDebtTransact
 import { DebtSettings } from "@/hooks/useDebtSettings";
 import { exportPaymentsCsv, exportTransactionsCsv } from "@/lib/debtCsvParser";
 import { PayoffPlanCard } from "./PayoffPlanCard";
-import { Download, FileText, Printer } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 
 interface DebtReportsTabProps {
   debts: Debt[];
@@ -23,7 +22,7 @@ export function DebtReportsTab({
   transactions,
   links,
   settings,
-}: DebtReportsTabProps) {
+}: Readonly<DebtReportsTabProps>) {
   const downloadCsv = (content: string, filename: string) => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

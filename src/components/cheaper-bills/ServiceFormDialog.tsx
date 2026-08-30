@@ -88,7 +88,7 @@ export function ServiceFormDialog({
   isLoading,
   defaultValues,
   mode = "create",
-}: ServiceFormDialogProps) {
+}: Readonly<ServiceFormDialogProps>) {
   const [providerOpen, setProviderOpen] = useState(false);
   const [customProvider, setCustomProvider] = useState("");
   

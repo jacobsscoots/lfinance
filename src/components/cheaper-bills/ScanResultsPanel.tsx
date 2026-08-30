@@ -8,7 +8,7 @@ interface ScanResultsPanelProps {
   currentMonthlyCost: number;
 }
 
-export function ScanResultsPanel({ results, currentMonthlyCost }: ScanResultsPanelProps) {
+export function ScanResultsPanel({ results, currentMonthlyCost }: Readonly<ScanResultsPanelProps>) {
   const currentAnnualCost = currentMonthlyCost * 12;
 
   // Sort by savings (highest first)

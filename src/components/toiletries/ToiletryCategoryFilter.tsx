@@ -1,8 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { TOILETRY_CATEGORIES, LAUNDRY_CATEGORIES } from "@/lib/toiletryCalculations";
-import { cn } from "@/lib/utils";
-
-interface ToiletryCategoryFilterProps {
+import { TOILETRY_CATEGORIES, LAUNDRY_CATEGORIES } from "@/lib/toiletryCalculations";interface ToiletryCategoryFilterProps {
   selectedCategory: string | null;
   onCategoryChange: (category: string | null) => void;
   section?: "toiletry" | "laundry";
@@ -12,7 +9,7 @@ export function ToiletryCategoryFilter({
   selectedCategory,
   onCategoryChange,
   section = "toiletry",
-}: ToiletryCategoryFilterProps) {
+}: Readonly<ToiletryCategoryFilterProps>) {
   const categories = section === "laundry" ? LAUNDRY_CATEGORIES : TOILETRY_CATEGORIES;
 
   return (

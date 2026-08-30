@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MonthData, YearlyOverride } from "@/hooks/useYearlyPlannerData";
+import type { MonthData } from "@/hooks/useYearlyPlannerData";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -17,7 +17,7 @@ function formatCurrency(n: number) {
   return `£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-export function MonthColumn({ data, onAddOverride, onDeleteOverride }: MonthColumnProps) {
+export function MonthColumn({ data, onAddOverride, onDeleteOverride }: Readonly<MonthColumnProps>) {
   const netColor = data.net >= 0 ? "text-success" : "text-destructive";
   const surplusColor = data.runningSurplus >= 0 ? "text-success" : "text-destructive";
   const surplusBg = data.runningSurplus < 0 

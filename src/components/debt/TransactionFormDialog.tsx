@@ -36,7 +36,7 @@ interface TransactionFormDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function TransactionFormDialog({ open, onOpenChange }: TransactionFormDialogProps) {
+export function TransactionFormDialog({ open, onOpenChange }: Readonly<TransactionFormDialogProps>) {
   const { createTransaction } = useDebtTransactions();
 
   const form = useForm<TransactionFormValues>({

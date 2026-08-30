@@ -25,7 +25,7 @@ export function CsvImportDialog({
   onOpenChange,
   onImport,
   isLoading,
-}: CsvImportDialogProps) {
+}: Readonly<CsvImportDialogProps>) {
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<{
     success: boolean;

@@ -53,7 +53,7 @@ const ResponsiveDialogContext = React.createContext<{ isMobile: boolean }>({
   isMobile: false,
 });
 
-function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveDialogProps) {
+function ResponsiveDialog({ open, onOpenChange, children }: Readonly<ResponsiveDialogProps>) {
   const isMobile = useIsMobile();
 
   if (isMobile) {
@@ -75,7 +75,7 @@ function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveDialogProp
   );
 }
 
-function ResponsiveDialogContent({ children, className }: ResponsiveDialogContentProps) {
+function ResponsiveDialogContent({ children, className }: Readonly<ResponsiveDialogContentProps>) {
   const { isMobile } = React.useContext(ResponsiveDialogContext);
 
   if (isMobile) {
@@ -93,7 +93,7 @@ function ResponsiveDialogContent({ children, className }: ResponsiveDialogConten
   );
 }
 
-function ResponsiveDialogHeader({ children, className }: ResponsiveDialogHeaderProps) {
+function ResponsiveDialogHeader({ children, className }: Readonly<ResponsiveDialogHeaderProps>) {
   const { isMobile } = React.useContext(ResponsiveDialogContext);
 
   if (isMobile) {
@@ -103,7 +103,7 @@ function ResponsiveDialogHeader({ children, className }: ResponsiveDialogHeaderP
   return <DialogHeader className={className}>{children}</DialogHeader>;
 }
 
-function ResponsiveDialogTitle({ children, className }: ResponsiveDialogTitleProps) {
+function ResponsiveDialogTitle({ children, className }: Readonly<ResponsiveDialogTitleProps>) {
   const { isMobile } = React.useContext(ResponsiveDialogContext);
 
   if (isMobile) {
@@ -113,7 +113,7 @@ function ResponsiveDialogTitle({ children, className }: ResponsiveDialogTitlePro
   return <DialogTitle className={className}>{children}</DialogTitle>;
 }
 
-function ResponsiveDialogDescription({ children, className }: ResponsiveDialogDescriptionProps) {
+function ResponsiveDialogDescription({ children, className }: Readonly<ResponsiveDialogDescriptionProps>) {
   const { isMobile } = React.useContext(ResponsiveDialogContext);
 
   if (isMobile) {
@@ -123,7 +123,7 @@ function ResponsiveDialogDescription({ children, className }: ResponsiveDialogDe
   return <DialogDescription className={className}>{children}</DialogDescription>;
 }
 
-function ResponsiveDialogFooter({ children, className }: ResponsiveDialogFooterProps) {
+function ResponsiveDialogFooter({ children, className }: Readonly<ResponsiveDialogFooterProps>) {
   const { isMobile } = React.useContext(ResponsiveDialogContext);
 
   if (isMobile) {

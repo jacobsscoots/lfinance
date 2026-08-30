@@ -1,16 +1,6 @@
 import { useMemo, useState } from "react";
-import { format, subDays, subMonths, subWeeks, subYears } from "date-fns";
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  Legend,
-  ReferenceLine,
-} from "recharts";
+import { format, subMonths, subWeeks, subYears } from "date-fns";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";

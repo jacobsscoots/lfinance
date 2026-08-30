@@ -43,7 +43,7 @@ const debtTypeIcons: Record<string, React.ReactNode> = {
   other: <Wallet className="h-5 w-5" />,
 };
 
-export function DebtList({ debts, payments, isLoading, onAddDebt, onLogPayment }: DebtListProps) {
+export function DebtList({ debts, payments, isLoading, onAddDebt, onLogPayment }: Readonly<DebtListProps>) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('balance');

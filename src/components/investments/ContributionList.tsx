@@ -32,7 +32,7 @@ const typeConfig = {
   dividend: { icon: Coins, color: "text-blue-500", bg: "bg-blue-500/10", label: "Dividend" },
 };
 
-export function ContributionList({ transactions, onDelete, isDeleting }: ContributionListProps) {
+export function ContributionList({ transactions, onDelete, isDeleting }: Readonly<ContributionListProps>) {
   if (transactions.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">

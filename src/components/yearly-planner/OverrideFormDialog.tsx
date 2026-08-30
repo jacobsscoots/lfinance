@@ -27,7 +27,7 @@ interface OverrideFormDialogProps {
   isLoading?: boolean;
 }
 
-export function OverrideFormDialog({ open, onOpenChange, month, onSubmit, isLoading }: OverrideFormDialogProps) {
+export function OverrideFormDialog({ open, onOpenChange, month, onSubmit, isLoading }: Readonly<OverrideFormDialogProps>) {
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<'income' | 'expense'>("expense");

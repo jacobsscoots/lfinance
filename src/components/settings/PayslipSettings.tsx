@@ -11,7 +11,7 @@ interface PayslipSettingsProps {
   onViewPayslip: (payslip: Payslip) => void;
 }
 
-export function PayslipSettings({ onViewPayslip }: PayslipSettingsProps) {
+export function PayslipSettings({ onViewPayslip }: Readonly<PayslipSettingsProps>) {
   const { payslips, isLoading, uploadPayslip, isUploading } = usePayslips();
   const fileInputRef = useRef<HTMLInputElement>(null);
 

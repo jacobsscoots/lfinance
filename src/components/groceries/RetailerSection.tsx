@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Store, Tag, Percent, Truck } from "lucide-react";
+import { ChevronDown, ChevronUp, Store, Percent, Truck } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RetailerGroup, ShopReadyItem } from "@/lib/groceryListCalculations";
-import { DiscountType, getRetailerDiscountOptions, getDefaultRetailerDiscount } from "@/lib/discounts";
+import { DiscountType } from "@/lib/discounts";
 
 interface RetailerSectionProps {
   group: RetailerGroup;
@@ -34,7 +34,7 @@ const DISCOUNT_LABELS: Record<string, string> = {
   other: "",
 };
 
-export function RetailerSection({ group, onDiscountChange, collectedIds, onToggleCollected }: RetailerSectionProps) {
+export function RetailerSection({ group, onDiscountChange, collectedIds, onToggleCollected }: Readonly<RetailerSectionProps>) {
   const [isOpen, setIsOpen] = useState(true);
   const colorClass = RETAILER_COLORS[group.retailer] ?? "bg-primary/10 text-primary border-primary/20";
   const discountLabel = DISCOUNT_LABELS[group.discountType] ?? "";
@@ -119,7 +119,7 @@ export function RetailerSection({ group, onDiscountChange, collectedIds, onToggl
   );
 }
 
-function RetailerItemRow({ item, isCollected, onToggle }: { item: ShopReadyItem; isCollected: boolean; onToggle?: () => void }) {
+function RetailerItemRow({ item, isCollected, onToggle }: Readonly<{ item: ShopReadyItem; isCollected: boolean; onToggle?: () => void }>) {
   const hasOfferPrice = item.product.offer_price && item.product.offer_price > 0 && item.product.offer_price < item.product.price;
   
   return (

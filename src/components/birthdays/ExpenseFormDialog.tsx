@@ -12,7 +12,7 @@ interface Props {
   onSave: (data: { event_id: string; description: string; amount: number; year: number }) => void;
 }
 
-export function ExpenseFormDialog({ open, onOpenChange, eventId, year, onSave }: Props) {
+export function ExpenseFormDialog({ open, onOpenChange, eventId, year, onSave }: Readonly<Props>) {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
 

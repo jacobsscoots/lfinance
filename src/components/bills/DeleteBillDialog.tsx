@@ -16,7 +16,7 @@ interface DeleteBillDialogProps {
   bill: Bill | null;
 }
 
-export function DeleteBillDialog({ open, onOpenChange, bill }: DeleteBillDialogProps) {
+export function DeleteBillDialog({ open, onOpenChange, bill }: Readonly<DeleteBillDialogProps>) {
   const { deleteBill } = useBills();
 
   const handleDelete = async () => {
