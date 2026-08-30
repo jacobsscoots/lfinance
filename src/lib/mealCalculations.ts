@@ -172,7 +172,7 @@ export function calculateDayMacros(
   );
 
   let targetDiff: MacroTotals | undefined;
-  if (settings && settings.mode === "target_based") {
+  if (settings?.mode === "target_based") {
     // Use day-specific targets (weekday vs weekend, or weekly override)
     // Parse as local date to avoid UTC-shift bugs when resolving week/day targets.
     const planDate = parse(plan.meal_date, "yyyy-MM-dd", new Date());
@@ -457,3 +457,4 @@ export function distributeToTargets(
 
   return { adjustedItems, warnings, achievedMacros: achieved };
 }
+

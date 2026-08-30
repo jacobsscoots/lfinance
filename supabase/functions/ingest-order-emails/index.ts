@@ -40,7 +40,7 @@ const DELIVERY_KEYWORDS = [
 
 const ORDER_PATTERNS = [
   /order\s{0,20}(?:#|number|no\.?|ref\.?)\s{0,20}[:.]?\s{0,20}([A-Z0-9-]{4,30})/i,
-  /order\s*([0-9]{3,}-[0-9]{3,}-[0-9]{3,})/i,
+  /order\s*(\d{3,}-\d{3,}-\d{3,})/i,
   /ref(?:erence)?[:\s]+([A-Z0-9-]{4,30})/i,
 ];
 
@@ -268,3 +268,4 @@ Deno.serve(async (req) => {
     );
   }
 });
+

@@ -1408,7 +1408,7 @@ describe('PROOF: Deterministic Reproducibility', () => {
       const l = logs[i];
       expect(l.winningStrategy).toBe(ref.winningStrategy);
       expect(l.totalIterations).toBe(ref.totalIterations);
-      expect(l.strategies.length).toBe(ref.strategies.length);
+      expect(l.strategies).toHaveLength(ref.strategies.length);
       for (let s = 0; s < ref.strategies.length; s++) {
         expect(l.strategies[s].strategy).toBe(ref.strategies[s].strategy);
         expect(l.strategies[s].iterationsUsed).toBe(ref.strategies[s].iterationsUsed);
@@ -1631,3 +1631,4 @@ describe('PROOF: Exhaustive Fallback Solver', () => {
     }
   });
 });
+

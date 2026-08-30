@@ -9,11 +9,11 @@
  * This ensures UI and Solver always use identical values.
  */
 
-import { parse, getDay } from "date-fns";
+import { parse, getDay, format } from "date-fns";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { MealPlanItem } from "@/hooks/useMealPlanItems";
 import { getCaloriesForDate, getWeekStartMonday, WeeklyCalorieSchedule } from "@/lib/weekTargets";
-import { format } from "date-fns";
+
 
 // Re-export MacroTotals for convenience
 export interface MacroTotals {
@@ -298,3 +298,4 @@ export function getMacroDifferences(
 
   return diffs;
 }
+

@@ -216,10 +216,10 @@ export function DetailedYearlyTable({
     'Santander Premium Bank': { type: 'percent', value: 25 },
   };
 
-  const COUNCIL_TAX_PAYMENT_MONTHS = [0, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  const COUNCIL_TAX_PAYMENT_MONTHS = new Set([0, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 
   const applyInflation = (billName: string, baseAmount: number, yr: number, mo: number): number => {
-    if (/council\s*tax/i.test(billName) && !COUNCIL_TAX_PAYMENT_MONTHS.includes(mo)) return 0;
+    if (/council\s*tax/i.test(billName) && !COUNCIL_TAX_PAYMENT_MONTHS.has(mo)) return 0;
     if (yr < 2026 || (yr === 2026 && mo < 3)) return baseAmount;
     if (baseAmount === 0) return 0;
     const rule = APRIL_2026_INFLATION[billName];
@@ -708,3 +708,4 @@ export function DetailedYearlyTable({
     </Card>
   );
 }
+

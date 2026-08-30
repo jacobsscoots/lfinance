@@ -429,7 +429,7 @@ serve(async (req) => {
               const domainMatch = receipt.from_email.match(/@(?:[^.]{1,63}\.){0,10}([^.]{1,63})\.[a-z]{2,63}/i);
               if (domainMatch) {
                 const domain = domainMatch[1].toLowerCase();
-                if ((descLower && descLower.includes(domain)) || (txMerchantLower && txMerchantLower.includes(domain))) {
+                if ((descLower?.includes(domain)) || (txMerchantLower?.includes(domain))) {
                   score += 15; reasons.push('Email domain match');
                 }
               }
@@ -507,3 +507,4 @@ serve(async (req) => {
     );
   }
 });
+

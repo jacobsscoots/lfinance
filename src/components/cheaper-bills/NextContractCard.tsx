@@ -69,3 +69,4 @@ export function NextContractCard({ service }: Readonly<NextContractCardProps>) {
     </Card>
   );
 }
+

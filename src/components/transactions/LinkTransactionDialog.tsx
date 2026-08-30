@@ -51,7 +51,7 @@ export function LinkTransactionDialog({
   const [selectedBillId, setSelectedBillId] = useState<string>(transaction.bill_id || "");
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string>(
     // Pre-select if already linked to a subscription
-    transaction.bill_id && bills.find(b => b.id === transaction.bill_id && b.is_subscription) 
+    transaction.bill_id && bills.some(b => b.id === transaction.bill_id && b.is_subscription) 
       ? transaction.bill_id 
       : ""
   );
@@ -187,7 +187,7 @@ export function LinkTransactionDialog({
   };
 
   // Determine default tab
-  const defaultTab = transaction.bill_id && bills.find(b => b.id === transaction.bill_id && b.is_subscription)
+  const defaultTab = transaction.bill_id && bills.some(b => b.id === transaction.bill_id && b.is_subscription)
     ? "subscription"
     : transaction.bill_id
     ? "bill"
@@ -387,3 +387,4 @@ export function LinkTransactionDialog({
     </ResponsiveDialog>
   );
 }
+

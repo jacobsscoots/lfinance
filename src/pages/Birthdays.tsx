@@ -194,7 +194,7 @@ export default function Birthdays() {
                     updateEvent.mutate({ id: e.id, money_scheduled: newVal });
                     if (newVal && Number(e.budget) > 0) {
                       // Auto-create a purchased expense for the budget amount
-                      const existingMoneyExpense = expenses.find(
+                      const existingMoneyExpense = expenses.some(
                         exp => exp.event_id === e.id && exp.year === year && exp.description === "Money gift"
                       );
                       if (!existingMoneyExpense) {
@@ -222,3 +222,4 @@ export default function Birthdays() {
     </AppLayout>
   );
 }
+

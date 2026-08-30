@@ -82,7 +82,7 @@ export function classifyEmail(subject: string, bodySnippet?: string): EmailType 
 
 const ORDER_NUMBER_PATTERNS = [
   /order\s{0,20}(?:#|number|no\.?|ref\.?)\s{0,20}[:.]?\s{0,20}([A-Z0-9-]{4,30})/i,
-  /order\s*([0-9]{3,}-[0-9]{3,}-[0-9]{3,})/i, // Amazon format
+  /order\s*(\d{3,}-\d{3,}-\d{3,})/i, // Amazon format
   /ref(?:erence)?[:\s]+([A-Z0-9-]{4,30})/i,
   /confirmation\s{0,20}(?:#|number)\s{0,20}[:.]?\s{0,20}([A-Z0-9-]{4,30})/i,
 ];
@@ -160,3 +160,4 @@ export function parseOrderEmail(
     amount: extractAmount(fullText),
   };
 }
+

@@ -199,7 +199,7 @@ serve(async (req) => {
 
     // Handle sync action
     if (action === "sync") {
-      if (!connection || connection.status !== "connected") {
+      if (connection?.status !== "connected") {
         throw new Error("Not connected to Bright. Please connect first.");
       }
 
@@ -331,3 +331,4 @@ serve(async (req) => {
     );
   }
 });
+

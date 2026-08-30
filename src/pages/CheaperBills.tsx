@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { CompareProvidersDialog } from "@/components/cheaper-bills/CompareProvidersDialog";
-import { ComparisonResult } from "@/hooks/useComparisonResults";
+import { ComparisonResult, useComparisonResults } from "@/hooks/useComparisonResults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +11,7 @@ import { useEnergyReadings } from "@/hooks/useEnergyReadings";
 import { useEnergyTariffs } from "@/hooks/useEnergyTariffs";
 import { useBillsScanner } from "@/hooks/useBillsScanner";
 import { useCheaperBillsSettings } from "@/hooks/useCheaperBillsSettings";
-import { useComparisonResults } from "@/hooks/useComparisonResults";
+
 import { SavingsOverviewCard } from "@/components/cheaper-bills/SavingsOverviewCard";
 import { NextContractCard } from "@/components/cheaper-bills/NextContractCard";
 import { LastScanCard } from "@/components/cheaper-bills/LastScanCard";
@@ -468,3 +468,4 @@ export default function CheaperBills() {
     </AppLayout>
   );
 }
+

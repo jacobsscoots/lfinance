@@ -3,14 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { Receipt, Check, AlertCircle, Clock, SkipForward, RotateCcw, Link2 } from "lucide-react";
+import { Receipt, Check, AlertCircle, Clock, SkipForward, RotateCcw, Link2, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical } from "lucide-react";
+
 
 interface DayDetailPanelProps {
   date: Date;
@@ -175,3 +175,4 @@ export function DayDetailPanel({ date, bills, onMarkPaid, onSkip, onReset }: Rea
     </Card>
   );
 }
+
