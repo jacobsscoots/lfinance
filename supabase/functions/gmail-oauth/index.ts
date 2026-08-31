@@ -80,7 +80,8 @@ serve(async (req) => {
         const stateData = JSON.parse(atob(state));
         userId = stateData.userId;
         if (!userId) throw new Error('No user ID in state');
-      } catch (e) {
+      } catch (error) {
+        console.warn("Invalid Gmail OAuth state; redirecting to settings", error);
         return Response.redirect(`${appUrl}/settings?gmail_error=invalid_state`, 302);
       }
 

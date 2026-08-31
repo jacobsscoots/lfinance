@@ -640,5 +640,5 @@ export {
 function secureRandom(): number {
   const values = new Uint32Array(1);
   globalThis.crypto.getRandomValues(values);
-  return values[0] / 0x1_0000_0000;
+  return values[0] / 0x100000000;
 }

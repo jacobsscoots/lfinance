@@ -146,7 +146,7 @@ export function DebtAlertsCard({ debts, payments, settings }: Readonly<DebtAlert
   }
 
   // Sort alerts: danger first, then warning, then info
-  const sortedAlerts = alerts.sort((a, b) => {
+  const sortedAlerts = alerts.toSorted((a, b) => {
     const order = { danger: 0, warning: 1, info: 2 };
     return order[a.type] - order[b.type];
   });

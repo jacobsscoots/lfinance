@@ -53,7 +53,7 @@ function parseCSVLine(line: string): string[] {
  */
 function parseUKDate(dateStr: string): string | null {
   // Match patterns like "23rd December 2025", "1st October 2025"
-  const ukDatePattern = /^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})$/i;
+  const ukDatePattern = /^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)\s+(\d{4})$/i;
   const match = ukDatePattern.exec(dateStr.trim());
   
   if (match) {
@@ -179,7 +179,7 @@ function detectChipStatement(lines: string[]): boolean {
 function extractStatementPeriod(lines: string[]): string | null {
   for (const line of lines.slice(0, 30)) {
     // Look for patterns like "1st October 2025 (opening values) to 31st December 2025 (closing values)"
-    const periodMatch = /to\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})/i.exec(line);
+    const periodMatch = /to\s+(\d{1,2}(?:st|nd|rd|th)?\s+[a-z]+\s+\d{4})/i.exec(line);
     if (periodMatch) {
       return parseUKDate(periodMatch[1]);
     }

@@ -294,7 +294,7 @@ export function NutritionImportDialog({ open, onOpenChange, onImport }: Readonly
                         <Label htmlFor={key} className="cursor-pointer font-medium">
                           {FIELD_LABELS[key] || key}
                         </Label>
-                        <p className="text-sm text-muted-foreground truncate max-w-[250px]" title={String(value)}>
+                        <p className="text-sm text-muted-foreground truncate max-w-[250px]" title={formatValue(key, value)}>
                           {formatValue(key, value)}
                         </p>
                       </div>

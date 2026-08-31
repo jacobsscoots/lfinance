@@ -70,6 +70,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 type Step = "upload" | "detect" | "mapping" | "preview" | "importing" | "done";
 type DuplicateAction = "skip" | "update" | "import_new";
+type ImportSection = "bills" | "subs" | "debts";
 
 interface ProcessedRow {
   raw: Record<string, string>;
@@ -117,7 +118,6 @@ export function ExcelImportDialog({
   const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState("");
   const [sheetName, setSheetName] = useState<string | null>(null);
-  const [, setAvailableSheets] = useState<string[]>([]);
   const [layoutDetected, setLayoutDetected] = useState<LayoutType>("UNKNOWN");
   const [sections, setSections] = useState<AssignedSections>({
     bills: null,
@@ -136,7 +136,6 @@ export function ExcelImportDialog({
     setStep("upload");
     setFileName("");
     setSheetName(null);
-    setAvailableSheets([]);
     setLayoutDetected("UNKNOWN");
     setSections({ bills: null, subscriptions: null, debts: null });
     setBillsData(null);
@@ -159,8 +158,6 @@ export function ExcelImportDialog({
         const buffer = await file.arrayBuffer();
         const workbook = await readWorkbook(buffer);
         const { sheetName: found, availableSheets: sheets } = findSettingsSheet(workbook);
-
-        setAvailableSheets(sheets);
 
         if (!found) {
           toast.error(
@@ -324,7 +321,7 @@ export function ExcelImportDialog({
 
   // --- Update mapping for a section ---
   const updateMapping = (
-    section: "bills" | "subs" | "debts",
+    section: ImportSection,
     header: string,
     targetKey: string
   ) => {

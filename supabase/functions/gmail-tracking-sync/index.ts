@@ -302,7 +302,7 @@ Deno.serve(async (req) => {
           }
 
           // Process best extraction (highest confidence)
-          const best = extractions.sort((a, b) => b.confidence - a.confidence)[0];
+          const best = extractions.toSorted((a, b) => b.confidence - a.confidence)[0];
           const confidence = isKnownDomain ? Math.min(best.confidence + 0.1, 1.0) : best.confidence;
 
           // Check if shipment already exists

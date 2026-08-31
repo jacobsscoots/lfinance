@@ -78,13 +78,11 @@ async function registerWithTrackingMore(trackingNumber: string, courierCode: str
     const data = await res.json();
     if (res.ok) {
       console.log(`TrackingMore: registered ${trackingNumber}`, data?.data?.courier_code);
-    } else {
+    } else if (data?.meta?.code === 4016) {
       // 4016 = already exists, which is fine
-      if (data?.meta?.code === 4016) {
-        console.log(`TrackingMore: ${trackingNumber} already registered`);
-      } else {
-        console.error(`TrackingMore registration failed for ${trackingNumber}:`, data);
-      }
+      console.log(`TrackingMore: ${trackingNumber} already registered`);
+    } else {
+      console.error(`TrackingMore registration failed for ${trackingNumber}:`, data);
     }
   } catch (err) {
     console.error(`TrackingMore registration error for ${trackingNumber}:`, err);

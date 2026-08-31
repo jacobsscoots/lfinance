@@ -108,7 +108,7 @@ const TRACKING_PATTERNS = [
   { carrier: "DHL", pattern: /\b(\d{10,11})\b/ },
   // Generic tracking
   { carrier: null, pattern: /tracking\s{0,20}(?:#|number|no\.?|ref\.?)\s{0,20}[:.]?\s{0,20}([A-Z0-9]{8,30})/i },
-  { carrier: null, pattern: /track(?:ing)?\s*[:]\s*([A-Z0-9-]{8,30})/i },
+  { carrier: null, pattern: /track(?:ing)?\s*:\s*([A-Z0-9-]{8,30})/i },
 ];
 
 export interface TrackingMatch {

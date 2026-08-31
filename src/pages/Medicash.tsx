@@ -105,7 +105,7 @@ export default function Medicash() {
               <p className="text-sm text-muted-foreground">Policy Year Resets</p>
               <p className="text-2xl font-bold text-foreground">{format(policyYear.end, "d MMM yyyy")}</p>
               <p className="text-xs text-muted-foreground">
-                {Math.ceil((policyYear.end.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining
+                {Math.ceil((policyYear.end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days remaining
               </p>
             </CardContent>
           </Card>

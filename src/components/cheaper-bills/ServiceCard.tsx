@@ -74,7 +74,7 @@ export function ServiceCard({ service, comparisonResults = [], onEdit, onDelete,
   
   // Get the best offer from cheaper alternatives
   const bestOffer = cheaperAlternatives.find(r => r.is_best_offer) || 
-    cheaperAlternatives.sort((a, b) => (a.monthly_cost) - (b.monthly_cost))[0] || null;
+    cheaperAlternatives.toSorted((a, b) => a.monthly_cost - b.monthly_cost)[0] || null;
 
   const handleAddToCalendar = () => {
     if (!service.contract_end_date) return;

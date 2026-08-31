@@ -406,16 +406,14 @@ function solveSimultaneous(
         case "topper": breakfastTopper.push(idx); break;
         default: otherItems.push(idx); break;
       }
+    } else if (isHighProteinSource(item.product) || item.proteinPer100g > 15) {
+      proteinItems.push(idx);
+    } else if (item.carbsPer100g > 25 && item.proteinPer100g < 10) {
+      carbItems.push(idx);
+    } else if (item.fatPer100g > 10) {
+      fatItems.push(idx);
     } else {
-      if (isHighProteinSource(item.product) || item.proteinPer100g > 15) {
-        proteinItems.push(idx);
-      } else if (item.carbsPer100g > 25 && item.proteinPer100g < 10) {
-        carbItems.push(idx);
-      } else if (item.fatPer100g > 10) {
-        fatItems.push(idx);
-      } else {
-        otherItems.push(idx);
-      }
+      otherItems.push(idx);
     }
   });
 

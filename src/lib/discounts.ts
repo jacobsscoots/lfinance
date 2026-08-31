@@ -259,4 +259,4 @@ export const RETAILER_OPTIONS = [
   "Other",
 ] as const;
 
-export type Retailer = typeof RETAILER_OPTIONS[number] | string;
+export type Retailer = string;

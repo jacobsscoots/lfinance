@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -219,7 +219,7 @@ function OrderFormDialog({
   });
 
   // Reset form when order changes
-  useState(() => {
+  useEffect(() => {
     if (order) {
       form.reset({
         order_date: order.order_date,
@@ -245,7 +245,7 @@ function OrderFormDialog({
         notes: "",
       });
     }
-  });
+  }, [form, order]);
 
   async function onSubmit(values: OrderFormValues) {
     const data: GroceryOrderFormData = {

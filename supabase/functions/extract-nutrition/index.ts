@@ -800,7 +800,7 @@ Extract the size value separately from the unit.`;
       // Use detected retailer if AI didn't extract one
       retailer: parsed.retailer || detectedRetailer,
       confidence: {
-        ...(parsed.confidence || {}),
+        ...parsed.confidence,
         ...(detectedRetailer && !parsed.retailer ? { retailer: "high" as const } : {}),
       },
     };
