@@ -308,8 +308,8 @@ export function WeeklyMealPlanner() {
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
             <ul className="list-disc list-inside space-y-1">
-              {allWarnings.slice(0, 3).map((w, i) => (
-                <li key={i}>{w.message}</li>
+              {allWarnings.slice(0, 3).map((w) => (
+                <li key={w.message}>{w.message}</li>
               ))}
               {allWarnings.length > 3 && (
                 <li className="text-muted-foreground">+ {allWarnings.length - 3} more warnings</li>

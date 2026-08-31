@@ -26,6 +26,8 @@ const PERIOD_OPTIONS = [
   { value: "300", label: "25 Years" },
 ];
 
+const PROJECTION_SLOT_IDS = ["short", "medium", "long"] as const;
+
 interface ProjectionCardProps {
   currentValue: number;
   monthlyContribution: number;
@@ -44,7 +46,8 @@ export function ProjectionCard({
   const [periods, setPeriods] = useState<[string, string, string]>(["3", "6", "12"]);
 
   const projections = useMemo(() => {
-    return periods.map((p) => ({
+    return periods.map((p, index) => ({
+      slotId: PROJECTION_SLOT_IDS[index],
       months: Number.parseInt(p),
       data: calculateProjectionScenarios(currentValue, monthlyContribution, expectedAnnualReturn, Number.parseInt(p)),
     }));
@@ -113,12 +116,12 @@ export function ProjectionCard({
 
         {/* Projection Grid */}
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {projections.map(({ months, data }, index) => {
+          {projections.map(({ months, data, slotId }, index) => {
             const contributionGrowth = monthlyContribution * months;
             const growthOnly = data.expected - currentValue - contributionGrowth;
             
             return (
-              <div key={index} className="text-center p-2 sm:p-3 rounded-lg bg-muted/50">
+              <div key={slotId} className="text-center p-2 sm:p-3 rounded-lg bg-muted/50">
                 <Select value={periods[index]} onValueChange={(v) => updatePeriod(index, v)}>
                   <SelectTrigger className="h-7 text-xs border-dashed mx-auto mb-1 w-full">
                     <SelectValue />

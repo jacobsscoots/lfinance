@@ -74,8 +74,8 @@ export function OutgoingsBreakdownChart({
                 paddingAngle={2}
                 dataKey="value"
               >
-                {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                {data.map((entry) => (
+                  <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Pie>
               <Tooltip
@@ -99,8 +99,8 @@ export function OutgoingsBreakdownChart({
         </div>
         {/* Legend */}
         <div className="flex justify-center gap-4 mt-2">
-          {data.map((entry, index) => (
-            <div key={index} className="flex items-center gap-1 text-xs">
+          {data.map((entry) => (
+            <div key={entry.name} className="flex items-center gap-1 text-xs">
               <div 
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: entry.color }}

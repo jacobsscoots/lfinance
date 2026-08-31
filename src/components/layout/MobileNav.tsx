@@ -96,8 +96,8 @@ export function MobileNav() {
               <span className="text-lg font-semibold text-sidebar-foreground">Menu</span>
             </div>
             <nav className="flex-1 px-4 py-4 space-y-4 overflow-y-auto min-h-0">
-              {navGroups.map((group, gi) => (
-                <div key={gi}>
+              {navGroups.map((group) => (
+                <div key={group.label ?? group.items[0].href}>
                   {group.label && (
                     <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
                       {group.label}

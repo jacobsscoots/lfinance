@@ -58,8 +58,8 @@ export function AccountsOverview({ accounts, isLoading }: Readonly<AccountsOverv
           <Skeleton className="h-6 w-28" />
         </CardHeader>
         <CardContent className="space-y-3">
-          {[...new Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-8 w-full" />
+          {["account-1", "account-2", "account-3"].map((skeletonKey) => (
+            <Skeleton key={skeletonKey} className="h-8 w-full" />
           ))}
         </CardContent>
       </Card>

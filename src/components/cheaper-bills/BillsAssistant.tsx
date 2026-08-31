@@ -18,6 +18,7 @@ import { useEnergyTariffs } from "@/hooks/useEnergyTariffs";
 import { useRecommendationFeedback, RECOMMENDATION_LABELS } from "@/hooks/useRecommendationFeedback";
 
 interface Message {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
 }
@@ -36,7 +37,7 @@ export function BillsAssistant() {
     const messageToSend = question || input;
     if (!messageToSend.trim() && !question) return;
 
-    const userMessage: Message = { role: 'user', content: messageToSend };
+    const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: messageToSend };
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
@@ -56,6 +57,7 @@ export function BillsAssistant() {
       if (error) throw error;
 
       const assistantMessage: Message = { 
+        id: crypto.randomUUID(),
         role: 'assistant', 
         content: data.response 
       };
@@ -63,6 +65,7 @@ export function BillsAssistant() {
     } catch (error) {
       console.error('AI error:', error);
       setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: "Sorry, I couldn't analyze your data right now. Please try again.",
       }]);
@@ -139,9 +142,9 @@ export function BillsAssistant() {
         {messages.length > 0 && (
           <ScrollArea className="max-h-[400px] pr-4">
             <div className="space-y-3">
-              {messages.map((msg, i) => (
+              {messages.map((msg) => (
                 <div
-                  key={i}
+                  key={msg.id}
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div

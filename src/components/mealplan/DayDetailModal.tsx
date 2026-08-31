@@ -176,8 +176,8 @@ export function DayDetailModal({
                     (treated as 0, may affect accuracy)
                   </li>
                 )}
-                {warnings.map((w, i) => (
-                  <li key={i}>{w.message}</li>
+                {warnings.map((w) => (
+                  <li key={w.message}>{w.message}</li>
                 ))}
               </ul>
             </AlertDescription>
@@ -388,8 +388,8 @@ export function DayDetailModal({
                       <div className="pt-2 border-t border-dashed">
                         <div className="text-muted-foreground mb-1">Solver Warnings:</div>
                         <ul className="list-disc list-inside text-amber-600 dark:text-amber-400">
-                          {solverDebug.warnings.map((w, i) => (
-                            <li key={i}>{w}</li>
+                          {solverDebug.warnings.map((w) => (
+                            <li key={w}>{w}</li>
                           ))}
                         </ul>
                       </div>

@@ -170,9 +170,9 @@ export function DebtAlertsCard({ debts, payments, settings }: Readonly<DebtAlert
             No alerts — you're on track! 🎉
           </p>
         ) : (
-          sortedAlerts.slice(0, 5).map((alert, idx) => (
+          sortedAlerts.slice(0, 5).map((alert) => (
             <div
-              key={idx}
+              key={`${alert.type}-${alert.debtId ?? alert.title}-${alert.title}`}
               className={`flex items-start gap-3 p-3 rounded-lg ${getAlertClass(alert.type)}`}
             >
               <div className="mt-0.5">{alert.icon}</div>

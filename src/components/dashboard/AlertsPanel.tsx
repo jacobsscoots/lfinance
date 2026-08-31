@@ -73,8 +73,8 @@ export function AlertsPanel({ alerts, isLoading }: Readonly<AlertsPanelProps>) {
           <Skeleton className="h-6 w-32" />
         </CardHeader>
         <CardContent className="space-y-3">
-          {[...new Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
+          {["alert-1", "alert-2", "alert-3"].map((skeletonKey) => (
+            <Skeleton key={skeletonKey} className="h-20 w-full" />
           ))}
         </CardContent>
       </Card>

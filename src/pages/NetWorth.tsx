@@ -95,8 +95,8 @@ export default function NetWorth() {
               {data.bankAccounts.length === 0 && data.investmentAccounts.length === 0 && (
                 <p className="text-sm text-muted-foreground">No assets tracked yet</p>
               )}
-              {data.bankAccounts.map((a, i) => (
-                <div key={`bank-${i}`} className="flex items-center justify-between py-2 border-b last:border-0">
+              {data.bankAccounts.map((a) => (
+                <div key={`bank-${a.name}-${a.type}`} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div className="flex items-center gap-2">
                     <Landmark className="h-4 w-4 text-muted-foreground" />
                     <div>
@@ -107,8 +107,8 @@ export default function NetWorth() {
                   <span className="text-sm font-medium text-success">{formatCurrency(a.balance)}</span>
                 </div>
               ))}
-              {data.investmentAccounts.map((a, i) => (
-                <div key={`inv-${i}`} className="flex items-center justify-between py-2 border-b last:border-0">
+              {data.investmentAccounts.map((a) => (
+                <div key={`inv-${a.name}-${a.provider ?? "investment"}`} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div className="flex items-center gap-2">
                     <PieChart className="h-4 w-4 text-muted-foreground" />
                     <div>
@@ -137,8 +137,8 @@ export default function NetWorth() {
               {data.debtAccounts.length === 0 && (
                 <p className="text-sm text-muted-foreground">No outstanding debts 🎉</p>
               )}
-              {data.debtAccounts.map((d, i) => (
-                <div key={`debt-${i}`} className="flex items-center justify-between py-2 border-b last:border-0">
+              {data.debtAccounts.map((d) => (
+                <div key={`debt-${d.name}-${d.type}`} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div className="flex items-center gap-2">
                     <Wallet2 className="h-4 w-4 text-muted-foreground" />
                     <div>

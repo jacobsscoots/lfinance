@@ -141,8 +141,8 @@ export function CsvImportDialog({
                   <AlertDescription>
                     <ScrollArea className="max-h-20">
                       <ul className="list-disc list-inside text-sm">
-                        {parseResult.warnings.map((warning, i) => (
-                          <li key={i}>{warning}</li>
+                        {parseResult.warnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
                         ))}
                       </ul>
                     </ScrollArea>
@@ -157,8 +157,8 @@ export function CsvImportDialog({
                   <AlertDescription>
                     <ScrollArea className="h-24">
                       <ul className="list-disc list-inside text-sm">
-                        {parseResult.errors.slice(0, 5).map((error, i) => (
-                          <li key={i}>{error}</li>
+                        {parseResult.errors.slice(0, 5).map((error) => (
+                          <li key={error}>{error}</li>
                         ))}
                         {parseResult.errors.length > 5 && (
                           <li className="text-muted-foreground">+{parseResult.errors.length - 5} more errors</li>
@@ -187,9 +187,9 @@ export function CsvImportDialog({
                   </div>
                   <ScrollArea className="h-40">
                     <div className="p-2 space-y-2">
-                      {parseResult.contributions.slice(0, 5).map((c, i) => (
+                      {parseResult.contributions.slice(0, 5).map((c) => (
                         <div
-                          key={i}
+                          key={`${c.date}-${c.type}-${c.amount}`}
                           className="flex items-center justify-between text-sm p-2 bg-muted/30 rounded"
                         >
                           <div className="flex items-center gap-2">

@@ -405,8 +405,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                 )}
                 {aiFailInfo.suggestions && aiFailInfo.suggestions.length > 0 && (
                   <ul className="text-[10px] text-destructive/70 space-y-0.5 list-disc pl-3">
-                    {aiFailInfo.suggestions.slice(0, 3).map((s, i) => (
-                      <li key={i}>{s}</li>
+                    {aiFailInfo.suggestions.slice(0, 3).map((s) => (
+                      <li key={s}>{s}</li>
                     ))}
                   </ul>
                 )}
@@ -423,8 +423,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                 )}
                 {aiFailInfo.suggestions && aiFailInfo.suggestions.length > 0 && (
                   <ul className="text-[10px] text-amber-600/70 dark:text-amber-400/70 space-y-0.5 list-disc pl-3">
-                    {aiFailInfo.suggestions.slice(0, 3).map((s, i) => (
-                      <li key={i}>{s}</li>
+                    {aiFailInfo.suggestions.slice(0, 3).map((s) => (
+                      <li key={s}>{s}</li>
                     ))}
                   </ul>
                 )}

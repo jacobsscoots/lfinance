@@ -684,7 +684,7 @@ export function ExcelImportDialog({
             </TableHeader>
             <TableBody>
               {data.rows.map((row, idx) => (
-                <TableRow key={idx} className={row.valid ? "" : "opacity-50"}>
+                <TableRow key={row.importKey || JSON.stringify(row.raw)} className={row.valid ? "" : "opacity-50"}>
                   <TableCell>
                     {row.valid ? (
                       <CheckCircle2 className="h-4 w-4 text-green-500" />

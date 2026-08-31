@@ -129,8 +129,8 @@ export function EnergyProfileCard() {
         {/* Tariff eligibility warnings */}
         {warnings.length > 0 && formData.heating_type && (
           <div className="space-y-2">
-            {warnings.map((w, i) => (
-              <div key={i} className="flex items-start gap-2 text-xs p-2.5 rounded-md bg-warning/10 text-warning border border-warning/20">
+            {warnings.map((w) => (
+              <div key={w} className="flex items-start gap-2 text-xs p-2.5 rounded-md bg-warning/10 text-warning border border-warning/20">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                 <span>{w}</span>
               </div>

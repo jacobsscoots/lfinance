@@ -28,9 +28,9 @@ export function CalendarGrid({ days, selectedDate, onSelectDate }: Readonly<Cale
     <div className="border rounded-lg overflow-hidden">
       {/* Week day headers */}
       <div className="grid grid-cols-7 bg-muted/50">
-        {weekDays.map((day, index) => (
+        {weekDays.map((day) => (
           <div
-            key={index}
+            key={day}
             className="py-2 text-center text-xs sm:text-sm font-medium text-muted-foreground border-b"
           >
             {day}
@@ -40,9 +40,9 @@ export function CalendarGrid({ days, selectedDate, onSelectDate }: Readonly<Cale
 
       {/* Calendar days */}
       <div className="grid grid-cols-7">
-        {days.map((day, index) => (
+        {days.map((day) => (
           <CalendarCell
-            key={index}
+            key={format(day.date, "yyyy-MM-dd")}
             day={day}
             isSelected={selectedDate ? isSameDay(day.date, selectedDate) : false}
             onClick={() => onSelectDate?.(day.date)}
