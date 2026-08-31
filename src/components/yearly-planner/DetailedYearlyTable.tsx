@@ -215,6 +215,31 @@ export function DetailedYearlyTable({
     return ovr !== undefined ? ovr : original;
   };
 
+  const renderAmountCells = (
+    amounts: number[],
+    overrideKey: string,
+    activeClass: string,
+    emptyClass: string,
+    extraClass?: string,
+    displayFn?: (value: number) => string,
+  ) => months.map((month) => {
+    const amount = amounts[month.month] ?? 0;
+    const overridden = hasOvr(overrideKey, month.month);
+    return (
+      <EditableCell
+        key={`${month.year}-${month.month}`}
+        value={amount}
+        overrideValue={getOvr(overrideKey, month.month)}
+        hasOverride={overridden}
+        className={cn(cellClass, extraClass, amount > 0 || overridden ? activeClass : emptyClass)}
+        displayFn={displayFn}
+        isEditable={canEdit}
+        onSave={(value) => saveCell(overrideKey, month.month, value)}
+        onReset={() => resetCell(overrideKey, month.month)}
+      />
+    );
+  });
+
   // Priority keywords for bill sorting
   const getBillPriority = (name: string): number => {
     const n = name.toLowerCase();
@@ -433,21 +458,7 @@ export function DetailedYearlyTable({
                 <td className={cn(labelClass, "font-normal text-success/80 pl-6 bg-success/3 text-[11px]")}>
                   {source}
                 </td>
-                {months.map((m) => {
-                  const amt = amounts[m.month] ?? 0;
-                  return (
-                    <EditableCell
-                      key={`${m.year}-${m.month}`}
-                      value={amt}
-                      overrideValue={getOvr(`income:${source}`, m.month)}
-                      hasOverride={hasOvr(`income:${source}`, m.month)}
-                      className={cn(cellClass, "text-[11px]", amt > 0 || hasOvr(`income:${source}`, m.month) ? "text-success/70" : "text-muted-foreground/30")}
-                      isEditable={canEdit}
-                      onSave={(a) => saveCell(`income:${source}`, m.month, a)}
-                      onReset={() => resetCell(`income:${source}`, m.month)}
-                    />
-                  );
-                })}
+                {renderAmountCells(amounts, `income:${source}`, "text-success/70", "text-muted-foreground/30", "text-[11px]")}
                 <td className={cn(cellClass, "text-[11px] font-medium bg-muted/50 text-success/70")}>
                   {fmt(amounts.reduce((s, v, i) => s + effective(`income:${source}`, i, v), 0))}
                 </td>
@@ -513,21 +524,7 @@ export function DetailedYearlyTable({
                         )}
                       </span>
                     </td>
-                    {months.map((m) => {
-                      const amt = row.amounts[m.month] ?? 0;
-                      return (
-                        <EditableCell
-                          key={`${m.year}-${m.month}`}
-                          value={amt}
-                          overrideValue={getOvr(`bill:${row.id}`, m.month)}
-                          hasOverride={hasOvr(`bill:${row.id}`, m.month)}
-                          className={cn(cellClass, amt > 0 || hasOvr(`bill:${row.id}`, m.month) ? "text-foreground" : "text-muted-foreground/40")}
-                          isEditable={canEdit}
-                          onSave={(a) => saveCell(`bill:${row.id}`, m.month, a)}
-                          onReset={() => resetCell(`bill:${row.id}`, m.month)}
-                        />
-                      );
-                    })}
+                    {renderAmountCells(row.amounts, `bill:${row.id}`, "text-foreground", "text-muted-foreground/40")}
                     <td className={cn(cellClass, "font-semibold bg-muted/50")}>
                       {fmt(row.amounts.reduce((s, v, i) => s + effective(`bill:${row.id}`, i, v), 0))}
                     </td>
@@ -603,20 +600,7 @@ export function DetailedYearlyTable({
                 <td className={cn(labelClass, "font-normal text-warning")}>
                   {row.label}
                 </td>
-                {months.map((m) => {
-                  const amt = row.amounts[m.month] ?? 0;
-                  return (
-                  <EditableCell
-                    key={`${m.year}-${m.month}`}
-                    value={amt}
-                    overrideValue={getOvr(`adj:${row.label}`, m.month)}
-                    hasOverride={hasOvr(`adj:${row.label}`, m.month)}
-                    className={cn(cellClass, amt > 0 || hasOvr(`adj:${row.label}`, m.month) ? "text-warning" : "text-muted-foreground/40")}
-                    isEditable={canEdit}                    onSave={(a) => saveCell(`adj:${row.label}`, m.month, a)}
-                    onReset={() => resetCell(`adj:${row.label}`, m.month)}
-                  />
-                  );
-                })}
+                {renderAmountCells(row.amounts, `adj:${row.label}`, "text-warning", "text-muted-foreground/40")}
                 <td className={cn(cellClass, "font-semibold bg-muted/50 text-warning")}>
                   {fmt(row.amounts.reduce((s, v, i) => s + effective(`adj:${row.label}`, i, v), 0))}
                 </td>
@@ -629,21 +613,7 @@ export function DetailedYearlyTable({
                 <td className={cn(labelClass, "font-normal text-success")}>
                   + {row.label}
                 </td>
-                {months.map((m) => {
-                  const amt = row.amounts[m.month] ?? 0;
-                  return (
-                  <EditableCell
-                    key={`${m.year}-${m.month}`}
-                    value={amt}
-                    overrideValue={getOvr(`adj:${row.label}`, m.month)}
-                    hasOverride={hasOvr(`adj:${row.label}`, m.month)}
-                    className={cn(cellClass, amt > 0 || hasOvr(`adj:${row.label}`, m.month) ? "text-success" : "text-muted-foreground/40")}
-                    displayFn={(n) => `+${fmt(n)}`}
-                    isEditable={canEdit}                    onSave={(a) => saveCell(`adj:${row.label}`, m.month, a)}
-                    onReset={() => resetCell(`adj:${row.label}`, m.month)}
-                  />
-                  );
-                })}
+                {renderAmountCells(row.amounts, `adj:${row.label}`, "text-success", "text-muted-foreground/40", undefined, (n) => `+${fmt(n)}`)}
                 <td className={cn(cellClass, "font-semibold bg-muted/50 text-success")}>
                   {row.amounts.reduce((s, v, i) => s + effective(`adj:${row.label}`, i, v), 0) > 0
                     ? `+${fmt(row.amounts.reduce((s, v, i) => s + effective(`adj:${row.label}`, i, v), 0))}`
