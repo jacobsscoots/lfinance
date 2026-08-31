@@ -259,4 +259,3 @@ export const RETAILER_OPTIONS = [
   "Other",
 ] as const;
 
-export type Retailer = string;
