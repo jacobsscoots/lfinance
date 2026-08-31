@@ -199,7 +199,7 @@ export default function Accounts() {
         )}
 
         {/* Accounts Grid */}
-        {isLoading ? (
+        {isLoading && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <Card key={i}>
@@ -213,7 +213,8 @@ export default function Accounts() {
               </Card>
             ))}
           </div>
-        ) : displayedAccounts.length === 0 ? (
+        )}
+        {!isLoading && displayedAccounts.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <CreditCard className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -227,7 +228,8 @@ export default function Accounts() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
+        )}
+        {!isLoading && displayedAccounts.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {displayedAccounts.map((account) => (
               <AccountCard

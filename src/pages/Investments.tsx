@@ -398,13 +398,14 @@ export default function Investments() {
         </Card>
 
         {/* Holdings */}
-        {isLoading ? (
+        {isLoading && (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               Loading investments...
             </CardContent>
           </Card>
-        ) : investments.length === 0 ? (
+        )}
+        {!isLoading && investments.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Wallet className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -418,7 +419,8 @@ export default function Investments() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
+        )}
+        {!isLoading && investments.length > 0 && (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Holdings</h2>
             <div className="grid gap-4">
