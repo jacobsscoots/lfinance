@@ -259,8 +259,8 @@ export function TransactionCsvImport({ open, onOpenChange }: Readonly<Transactio
               <div className="bg-amber-500/10 rounded-lg p-3 max-h-32 overflow-y-auto">
                 <p className="text-sm font-medium text-amber-600 mb-1">Warnings:</p>
                 <ul className="text-xs text-amber-600 space-y-1">
-                  {parseResult.warnings.slice(0, 10).map((w, i) => (
-                    <li key={i}>{w}</li>
+                  {parseResult.warnings.slice(0, 10).map((w) => (
+                    <li key={w}>{w}</li>
                   ))}
                   {parseResult.warnings.length > 10 && (
                     <li>...and {parseResult.warnings.length - 10} more</li>

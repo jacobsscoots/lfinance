@@ -43,8 +43,8 @@ export function BudgetHealthCard({ metrics, isLoading }: Readonly<BudgetHealthCa
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-4 gap-4">
-            {[...new Array(4)].map((_, i) => (
-              <div key={i} className="text-center space-y-2">
+            {["health-1", "health-2", "health-3", "health-4"].map((skeletonKey) => (
+              <div key={skeletonKey} className="text-center space-y-2">
                 <Skeleton className="h-8 w-8 mx-auto rounded-full" />
                 <Skeleton className="h-6 w-16 mx-auto" />
                 <Skeleton className="h-4 w-12 mx-auto" />

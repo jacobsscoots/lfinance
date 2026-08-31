@@ -343,8 +343,8 @@ export function MealItemDialog({
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    {autoPortionResult.warnings.map((w, i) => (
-                      <div key={i} className="text-sm">{w}</div>
+                    {autoPortionResult.warnings.map((w) => (
+                      <div key={w} className="text-sm">{w}</div>
                     ))}
                   </AlertDescription>
                 </Alert>

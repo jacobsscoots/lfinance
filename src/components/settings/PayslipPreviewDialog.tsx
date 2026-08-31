@@ -253,8 +253,8 @@ export function PayslipPreviewDialog({
                   </>
                 )}
 
-                {otherDeductions.length > 0 && otherDeductions.map((d, i) => (
-                  <div key={i} className="contents">
+                {otherDeductions.length > 0 && otherDeductions.map((d) => (
+                  <div key={`${d.name}-${d.amount}`} className="contents">
                     <div className="text-muted-foreground">{d.name}</div>
                     <div className="font-medium text-right text-red-600">
                       -{formatCurrency(d.amount)}

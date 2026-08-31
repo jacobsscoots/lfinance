@@ -255,8 +255,8 @@ export function BirthdayImportDialog({ open, onOpenChange, onImport, isImporting
             <div className="space-y-2">
               <p className="text-sm font-medium">{preview.length} event(s) found:</p>
               <div className="max-h-48 overflow-y-auto space-y-1 text-sm">
-                {preview.map((r, i) => (
-                  <div key={i} className="flex justify-between p-2 rounded bg-muted/50">
+                {preview.map((r) => (
+                  <div key={`${r.person_name}-${r.occasion}-${r.event_day ?? ""}-${r.event_month}`} className="flex justify-between p-2 rounded bg-muted/50">
                     <span>{r.person_name} ({r.occasion})</span>
                     <span className="text-muted-foreground">
                       {r.event_day ? `${r.event_day}/` : ""}{r.event_month}

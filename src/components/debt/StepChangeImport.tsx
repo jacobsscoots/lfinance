@@ -323,7 +323,7 @@ export function StepChangeImport({ open, onOpenChange, debts }: Readonly<StepCha
                 </TableHeader>
                 <TableBody>
                   {importRows.map((row, idx) => (
-                    <TableRow key={idx} className={!row.selected ? "opacity-50" : ""}>
+                    <TableRow key={`${row.creditor.creditorName}-${row.creditor.originalCreditor}`} className={!row.selected ? "opacity-50" : ""}>
                       <TableCell>
                         <Checkbox
                           checked={row.selected}
@@ -415,8 +415,8 @@ export function StepChangeImport({ open, onOpenChange, debts }: Readonly<StepCha
                 <AlertDescription>
                   <p className="font-medium mb-1">Some items failed:</p>
                   <ul className="text-xs space-y-1">
-                    {importResults.errors.map((err, i) => (
-                      <li key={i}>{err}</li>
+                    {importResults.errors.map((err) => (
+                      <li key={err}>{err}</li>
                     ))}
                   </ul>
                 </AlertDescription>

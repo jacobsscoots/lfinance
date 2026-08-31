@@ -128,8 +128,8 @@ export function UpcomingBillsExpanded({
           <Skeleton className="h-6 w-32" />
         </CardHeader>
         <CardContent className="space-y-4">
-          {[...new Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
+          {["bill-1", "bill-2", "bill-3", "bill-4"].map((skeletonKey) => (
+            <Skeleton key={skeletonKey} className="h-12 w-full" />
           ))}
         </CardContent>
       </Card>
