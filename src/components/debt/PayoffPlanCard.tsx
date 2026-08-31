@@ -133,7 +133,7 @@ export function PayoffPlanCard({ debts }: Readonly<PayoffPlanCardProps>) {
               <h4 className="font-medium">Payoff Order</h4>
               <div className="space-y-2">
                 {plan.schedule
-                  .sort((a, b) => {
+                  .toSorted((a, b) => {
                     if (!a.payoffDate) return 1;
                     if (!b.payoffDate) return -1;
                     return a.payoffDate.getTime() - b.payoffDate.getTime();

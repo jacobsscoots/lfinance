@@ -122,7 +122,7 @@ export function calculateDailyValues(
     
     // Check if we have a manual valuation for this date
     const manualValue = manualMap.get(dateStr);
-    const value = manualValue !== undefined ? manualValue : currentValue;
+    const value = manualValue ?? currentValue;
     const source = manualValue !== undefined ? 'manual' : 'estimated';
     
     // If manual value exists, update our running value

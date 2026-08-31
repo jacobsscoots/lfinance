@@ -125,7 +125,7 @@ async function callAI(opts: {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`AI Gateway error: ${response.status}`, errorText);
-    throw { status: response.status, message: errorText };
+    throw Object.assign(new Error(errorText), { status: response.status });
   }
 
   return response.json();
@@ -531,13 +531,13 @@ async function handleMealPlanner(
         candidates.push({ grams: new Map(g), totals: { ...t }, error: e });
         if (candidates.length === MAX_CANDIDATES) {
           candidates.sort((a, b) => a.error - b.error);
-          worstCandidateError = candidates[candidates.length - 1].error;
+          worstCandidateError = candidates.at(-1)!.error;
         }
       } else if (e < worstCandidateError) {
         // Replace worst candidate
         candidates[candidates.length - 1] = { grams: new Map(g), totals: { ...t }, error: e };
         candidates.sort((a, b) => a.error - b.error);
-        worstCandidateError = candidates[candidates.length - 1].error;
+        worstCandidateError = candidates.at(-1)!.error;
       }
     }
 
@@ -1237,6 +1237,6 @@ serve(async (req) => {
 function secureRandom(): number {
   const values = new Uint32Array(1);
   globalThis.crypto.getRandomValues(values);
-  return values[0] / 0x1_0000_0000;
+  return values[0] / 0x100000000;
 }
 

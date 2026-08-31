@@ -379,8 +379,7 @@ export function distributeToTargets(
 
   // Get editable, unlocked items
   const editableItems = items.filter(i => 
-    i.product && 
-    i.product.product_type === "editable" && 
+    i.product?.product_type === "editable" && 
     !i.is_locked &&
     !i.product.ignore_macros
   );

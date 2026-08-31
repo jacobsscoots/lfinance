@@ -52,6 +52,7 @@ export function AuthForm() {
         toast.error(error.message);
       }
     } catch (err) {
+      console.error("Google sign-in failed", err);
       toast.error('Failed to sign in with Google');
     } finally {
       setGoogleLoading(false);

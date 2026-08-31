@@ -43,14 +43,12 @@ export function TransactionCsvImport({ open, onOpenChange }: Readonly<Transactio
   } | null>(null);
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview'>('upload');
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setCsvContent(content);
+    const content = await file.text();
+    setCsvContent(content);
       
       // Parse headers
       const lines = content.trim().split('\n');
@@ -67,8 +65,6 @@ export function TransactionCsvImport({ open, onOpenChange }: Readonly<Transactio
         
         setStep('mapping');
       }
-    };
-    reader.readAsText(file);
   }, []);
 
   const handlePreview = () => {

@@ -53,23 +53,27 @@ function getNextOccurrence(bill: Bill, currentDate: Date): Date {
       return addWeeks(currentDate, 1);
     case "fortnightly":
       return addWeeks(currentDate, 2);
-    case "monthly":
+    case "monthly": {
       // For monthly, move to the same day next month
       const nextMonth = addMonths(currentDate, 1);
       return getDueDateForMonth(bill, nextMonth.getFullYear(), nextMonth.getMonth());
+    }
     case "bimonthly": {
       const bimonthlyMonth = addMonths(currentDate, 2);
       return getDueDateForMonth(bill, bimonthlyMonth.getFullYear(), bimonthlyMonth.getMonth());
     }
-    case "quarterly":
+    case "quarterly": {
       const quarterMonth = addMonths(currentDate, 3);
       return getDueDateForMonth(bill, quarterMonth.getFullYear(), quarterMonth.getMonth());
-    case "biannual":
+    }
+    case "biannual": {
       const biannualMonth = addMonths(currentDate, 6);
       return getDueDateForMonth(bill, biannualMonth.getFullYear(), biannualMonth.getMonth());
-    case "yearly":
+    }
+    case "yearly": {
       const yearMonth = addMonths(currentDate, 12);
       return getDueDateForMonth(bill, yearMonth.getFullYear(), yearMonth.getMonth());
+    }
     default:
       return addMonths(currentDate, 1);
   }

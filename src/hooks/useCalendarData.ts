@@ -96,13 +96,6 @@ export function useCalendarData(cycleStart: Date, cycleEnd: Date) {
         linkedTransactions = (txns || []) as typeof linkedTransactions;
       }
 
-      // Build a set of "billId-date" from linked transactions for quick lookup
-      const linkedTxnMap = new Map<string, string>();
-      linkedTransactions.forEach(txn => {
-        // A linked transaction marks the bill as paid around that date
-        linkedTxnMap.set(`${txn.bill_id}-${txn.transaction_date}`, txn.id);
-      });
-
       // Create a map for quick lookup: "billId-dueDate" -> occurrence
       const occurrenceMap = new Map<string, (typeof storedOccurrences)[0]>();
       (storedOccurrences || []).forEach(occ => {

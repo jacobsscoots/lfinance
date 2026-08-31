@@ -24,6 +24,8 @@ interface LivePriceData {
   dailyChange: { amount: number; percentage: number } | null;
 }
 
+type ValuationSource = 'manual' | 'estimated' | 'live';
+
 export default function Investments() {
   const [investmentDialogOpen, setInvestmentDialogOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
@@ -124,7 +126,7 @@ export default function Investments() {
           // No units — use estimated value with live daily % change
           const today = new Date();
           const startDate = new Date(inv.start_date);
-          const invValuations = allValuations.filter(v => v.investment_account_id === inv.id).map(v => ({ valuation_date: v.valuation_date, value: v.value, source: v.source as 'manual' | 'estimated' | 'live' }));
+          const invValuations = allValuations.filter(v => v.investment_account_id === inv.id).map(v => ({ valuation_date: v.valuation_date, value: v.value, source: v.source as ValuationSource }));
           const dailyValues = calculateDailyValues(formattedTx, invValuations, startDate, today, inv.expected_annual_return);
           const estimatedValue = dailyValues.length > 0 ? dailyValues[dailyValues.length - 1].value : contributed;
           totalValue += estimatedValue;

@@ -598,7 +598,7 @@ serve(async (req) => {
           last_scan_date: new Date().toISOString(),
           last_recommendation: best.recommend ? 'switch' : 'dont_switch',
           last_recommendation_reason: best.reason,
-          estimated_savings_annual: best.savings > 0 ? best.savings : 0,
+          estimated_savings_annual: Math.max(best.savings, 0),
         })
         .eq('id', serviceId);
 

@@ -9,7 +9,7 @@ interface NextContractCardProps {
 }
 
 export function NextContractCard({ service }: Readonly<NextContractCardProps>) {
-  if (!service || !service.contract_end_date) {
+  if (!service?.contract_end_date) {
     return (
       <Card>
         <CardHeader className="pb-2">

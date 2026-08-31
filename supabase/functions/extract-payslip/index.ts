@@ -304,9 +304,7 @@ Return null for any field you cannot reliably extract.`,
           if (available.length === 1) {
             matchedTransactionId = available[0].id;
             matchStatus = "auto_matched";
-          } else if (available.length > 1) {
-            matchStatus = "pending";
-          } else {
+          } else if (available.length === 0) {
             matchStatus = "no_match";
           }
         }

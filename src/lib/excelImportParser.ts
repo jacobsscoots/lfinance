@@ -157,8 +157,7 @@ function extractSectionTables(grid: string[][]): ExtractedTable[] {
     currentRows = [];
   };
 
-  for (let r = 0; r < grid.length; r++) {
-    const row = grid[r];
+  for (const row of grid) {
 
     if (isBlankRow(row)) continue;
 
@@ -404,11 +403,11 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
     const ssXml = await ssFile.async("string");
     const doc = new DOMParser().parseFromString(ssXml, "application/xml");
     const siElements = doc.getElementsByTagNameNS("*", "si");
-    for (let i = 0; i < siElements.length; i++) {
-      const tElements = siElements[i].getElementsByTagNameNS("*", "t");
+    for (const siElement of Array.from(siElements)) {
+      const tElements = siElement.getElementsByTagNameNS("*", "t");
       let text = "";
-      for (let j = 0; j < tElements.length; j++) {
-        text += tElements[j].textContent ?? "";
+      for (const tElement of Array.from(tElements)) {
+        text += tElement.textContent ?? "";
       }
       sharedStrings.push(text);
     }
@@ -439,8 +438,7 @@ async function fallbackParseSheets(data: ArrayBuffer): Promise<FallbackSheet[]> 
       if (!cellMap.has(rowNum)) cellMap.set(rowNum, new Map());
       const rowMap = cellMap.get(rowNum)!;
 
-      for (let c = 0; c < cellElements.length; c++) {
-        const cellEl = cellElements[c];
+      for (const cellEl of Array.from(cellElements)) {
         const ref = cellEl.getAttribute("r") || "";
         const type = cellEl.getAttribute("t") || "";
         const vEl = cellEl.getElementsByTagNameNS("*", "v")[0];

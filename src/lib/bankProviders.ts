@@ -100,7 +100,7 @@ export function getConnectionStatusColor(
 ): { color: string; bgColor: string; label: string } {
   // Check if sync is stale (more than 24 hours old)
   const isStale = lastSyncedAt
-    ? new Date().getTime() - new Date(lastSyncedAt).getTime() > 24 * 60 * 60 * 1000
+    ? Date.now() - new Date(lastSyncedAt).getTime() > 24 * 60 * 60 * 1000
     : false;
 
   switch (status) {

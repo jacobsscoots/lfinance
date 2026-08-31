@@ -1224,8 +1224,7 @@ function runGradientSolve(
         fineTunePass++;
         let passChanged = false;
 
-        for (let j = 0; j < adjustableItems.length; j++) {
-          const item = adjustableItems[j];
+        for (const item of adjustableItems) {
           const currentGrams = portions.get(item.id) ?? 0;
           const step = Math.max(item.portionStepGrams, 1);
 
@@ -2126,5 +2125,5 @@ function deterministicUnit(seed: string): number {
     hash ^= seed.codePointAt(i) ?? 0;
     hash = Math.imul(hash, 16777619);
   }
-  return (hash >>> 0) / 0x1_0000_0000;
+  return (hash >>> 0) / 0x100000000;
 }
