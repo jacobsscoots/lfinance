@@ -144,7 +144,7 @@ export default function Transactions() {
             </Card>
 
             {/* Transaction List */}
-            {isLoading ? (
+            {isLoading && (
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
@@ -157,7 +157,8 @@ export default function Transactions() {
                   </div>
                 ))}
               </div>
-            ) : transactions.length === 0 ? (
+            )}
+            {!isLoading && transactions.length === 0 && (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -173,7 +174,8 @@ export default function Transactions() {
                   </Button>
                 </CardContent>
               </Card>
-            ) : (
+            )}
+            {!isLoading && transactions.length > 0 && (
               <TransactionList
                 transactions={transactions}
                 onEdit={handleEdit}
@@ -222,7 +224,7 @@ export default function Transactions() {
 
             {/* Transaction List */}
             <div className="min-w-0">
-              {isLoading ? (
+              {isLoading && (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
@@ -235,7 +237,8 @@ export default function Transactions() {
                     </div>
                   ))}
                 </div>
-              ) : transactions.length === 0 ? (
+              )}
+              {!isLoading && transactions.length === 0 && (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -251,7 +254,8 @@ export default function Transactions() {
                     </Button>
                   </CardContent>
                 </Card>
-              ) : (
+              )}
+              {!isLoading && transactions.length > 0 && (
                 <TransactionList
                   transactions={transactions}
                   onEdit={handleEdit}

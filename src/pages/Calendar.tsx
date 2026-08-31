@@ -174,7 +174,7 @@ export default function Calendar() {
               </Button>
             </div>
 
-            {isLoading ? (
+            {isLoading && (
               <div className="border rounded-lg p-4">
                 <div className="grid grid-cols-7 gap-1">
                   {Array.from({ length: 35 }).map((_, i) => (
@@ -182,13 +182,15 @@ export default function Calendar() {
                   ))}
                 </div>
               </div>
-            ) : data?.days.length ? (
+            )}
+            {!isLoading && Boolean(data?.days.length) && (
               <CalendarGrid
-                days={data.days}
+                days={data?.days ?? []}
                 selectedDate={selectedDate}
                 onSelectDate={handleDateSelect}
               />
-            ) : (
+            )}
+            {!isLoading && !data?.days.length && (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <CalendarDays className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -239,7 +241,7 @@ export default function Calendar() {
                 </Button>
               </div>
 
-              {isLoading ? (
+              {isLoading && (
                 <div className="border rounded-lg p-4">
                   <div className="grid grid-cols-7 gap-2">
                     {Array.from({ length: 35 }).map((_, i) => (
@@ -247,13 +249,15 @@ export default function Calendar() {
                     ))}
                   </div>
                 </div>
-              ) : data?.days.length ? (
+              )}
+              {!isLoading && Boolean(data?.days.length) && (
                 <CalendarGrid
-                  days={data.days}
+                  days={data?.days ?? []}
                   selectedDate={selectedDate}
                   onSelectDate={setSelectedDate}
                 />
-              ) : (
+              )}
+              {!isLoading && !data?.days.length && (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <CalendarDays className="h-12 w-12 text-muted-foreground/50 mb-4" />

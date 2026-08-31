@@ -20,6 +20,17 @@ interface Alert {
   debtId?: string;
 }
 
+function getDueLabel(daysUntilDue: number): string {
+  if (daysUntilDue === 0) return "today";
+  return `in ${daysUntilDue} day${daysUntilDue === 1 ? "" : "s"}`;
+}
+
+function getAlertClass(type: Alert["type"]): string {
+  if (type === "danger") return "bg-destructive/10 text-destructive";
+  if (type === "warning") return "bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  return "bg-muted text-muted-foreground";
+}
+
 export function DebtAlertsCard({ debts, payments, settings }: Readonly<DebtAlertsCardProps>) {
   const alerts: Alert[] = [];
   const today = new Date();
@@ -43,7 +54,7 @@ export function DebtAlertsCard({ debts, payments, settings }: Readonly<DebtAlert
         alerts.push({
           type: 'warning',
           icon: <Calendar className="h-4 w-4" />,
-          title: `${debt.creditor_name} due ${daysUntilDue === 0 ? 'today' : `in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`}`,
+          title: `${debt.creditor_name} due ${getDueLabel(daysUntilDue)}`,
           description: debt.min_payment ? `Min payment: £${debt.min_payment}` : 'Check minimum payment',
           debtId: debt.id,
         });
@@ -162,13 +173,7 @@ export function DebtAlertsCard({ debts, payments, settings }: Readonly<DebtAlert
           sortedAlerts.slice(0, 5).map((alert, idx) => (
             <div
               key={idx}
-              className={`flex items-start gap-3 p-3 rounded-lg ${
-                alert.type === 'danger' 
-                  ? 'bg-destructive/10 text-destructive' 
-                  : alert.type === 'warning'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'bg-muted text-muted-foreground'
-              }`}
+              className={`flex items-start gap-3 p-3 rounded-lg ${getAlertClass(alert.type)}`}
             >
               <div className="mt-0.5">{alert.icon}</div>
               <div className="flex-1 min-w-0">

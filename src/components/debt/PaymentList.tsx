@@ -19,6 +19,16 @@ interface PaymentListProps {
 type CategoryFilter = 'all' | 'normal' | 'extra' | 'fee' | 'refund' | 'adjustment';
 type MatchedFilter = 'all' | 'matched' | 'unmatched';
 
+function getPaymentAmountClass(category: string): string {
+  if (category === "fee") return "text-destructive";
+  if (category === "refund") return "text-amber-600";
+  return "text-foreground";
+}
+
+function getPaymentAmountSign(category: string): string {
+  return category === "fee" || category === "refund" ? "+" : "-";
+}
+
 export function PaymentList({ payments, debts, links, isLoading }: Readonly<PaymentListProps>) {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [debtFilter, setDebtFilter] = useState<string>('all');
@@ -189,12 +199,8 @@ export function PaymentList({ payments, debts, links, isLoading }: Readonly<Paym
                     </div>
 
                     <div className="text-right shrink-0">
-                      <p className={`font-semibold ${
-                        payment.category === 'fee' ? 'text-destructive' : 
-                        payment.category === 'refund' ? 'text-amber-600' : 
-                        'text-foreground'
-                      }`}>
-                        {payment.category === 'fee' ? '+' : payment.category === 'refund' ? '+' : '-'}
+                      <p className={`font-semibold ${getPaymentAmountClass(payment.category)}`}>
+                        {getPaymentAmountSign(payment.category)}
                         {formatCurrency(Number(payment.amount))}
                       </p>
                       {Boolean(payment.principal_amount || payment.interest_amount) && (

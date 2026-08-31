@@ -58,6 +58,18 @@ interface FlatItem {
   gmailReceipt?: any;
 }
 
+function getTransactionIconBackgroundClass(isApple: boolean, isIncome: boolean): string {
+  if (isApple) return "bg-muted";
+  if (isIncome) return "bg-success/10";
+  return "bg-destructive/10";
+}
+
+function getTransactionIcon(isApple: boolean, isIncome: boolean) {
+  if (isApple) return <Apple className="h-5 w-5 text-foreground" />;
+  if (isIncome) return <ArrowDownLeft className="h-5 w-5 text-success" />;
+  return <ArrowUpRight className="h-5 w-5 text-destructive" />;
+}
+
 export function TransactionList({ transactions, onEdit, onDelete }: Readonly<TransactionListProps>) {
   const { user } = useAuth();
   const { tags } = useTransactionTags();
@@ -252,16 +264,10 @@ function TransactionRow({ transaction, onEdit, onDelete, gmailReceipt, allTags, 
           <div
             className={cn(
               "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
-              isApple ? "bg-muted" : isIncome ? "bg-success/10" : "bg-destructive/10"
+              getTransactionIconBackgroundClass(isApple, isIncome)
             )}
           >
-            {isApple ? (
-              <Apple className="h-5 w-5 text-foreground" />
-            ) : isIncome ? (
-              <ArrowDownLeft className="h-5 w-5 text-success" />
-            ) : (
-              <ArrowUpRight className="h-5 w-5 text-destructive" />
-            )}
+            {getTransactionIcon(isApple, isIncome)}
           </div>
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center gap-2">

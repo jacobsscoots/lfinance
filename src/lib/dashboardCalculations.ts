@@ -1,6 +1,12 @@
 import { differenceInDays, format, isBefore, isSameDay, addDays, startOfDay } from "date-fns";
 import type { PayCycle } from "./payCycle";
 
+function formatRelativeDay(daysUntil: number): string {
+  if (daysUntil === 0) return "today";
+  if (daysUntil === 1) return "tomorrow";
+  return `in ${daysUntil} days`;
+}
+
 // ==================== Types ====================
 
 export interface DailySpending {
@@ -280,7 +286,7 @@ export function generateAlerts(
     alerts.push({
       id: `bill-${bill.name}`,
       type: "info",
-      title: `${bill.name} due ${daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`}`,
+      title: `${bill.name} due ${formatRelativeDay(daysUntil)}`,
       message: `£${bill.amount.toFixed(2)} payment coming up.`,
     });
   });
@@ -305,7 +311,7 @@ export function generateAlerts(
       const daysUntil = differenceInDays(startOfDay(targetDate), todayBday);
 
       if (daysUntil >= 0 && daysUntil <= 7) {
-        const when = daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`;
+        const when = formatRelativeDay(daysUntil);
         const budgetNote = ev.budget > 0 ? ` (£${ev.budget} budgeted)` : "";
         alerts.push({
           id: `birthday-${ev.person_name}`,

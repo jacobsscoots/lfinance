@@ -37,15 +37,18 @@ export function MealBreakdownList({ mealType, items, status, mealMacros }: Reado
         )}
       </div>
 
-      {status === "skipped" ? (
+      {status === "skipped" && (
         <p className="text-xs text-muted-foreground italic pl-4">No meal planned</p>
-      ) : status === "eating_out" ? (
+      )}
+      {status === "eating_out" && (
         <p className="text-xs text-muted-foreground pl-4">
           Estimated {Math.round(totalCalories)} kcal from eating out
         </p>
-      ) : items.length === 0 ? (
+      )}
+      {status !== "skipped" && status !== "eating_out" && items.length === 0 && (
         <p className="text-xs text-muted-foreground italic pl-4">No items added</p>
-      ) : (
+      )}
+      {status !== "skipped" && status !== "eating_out" && items.length > 0 && (
         <div className="space-y-1 pl-4">
           {items.map((item, index) => {
             const itemMacros = calculateItemMacros(item);

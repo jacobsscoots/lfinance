@@ -49,6 +49,18 @@ interface CreditorImportRow {
   selected: boolean;
 }
 
+function getActionBadgeVariant(action: string): "default" | "secondary" | "outline" {
+  if (action === "update") return "default";
+  if (action === "create") return "secondary";
+  return "outline";
+}
+
+function getActionLabel(action: string): string {
+  if (action === "update") return "Update";
+  if (action === "create") return "New";
+  return "Skip";
+}
+
 export function StepChangeImport({ open, onOpenChange, debts }: Readonly<StepChangeImportProps>) {
   const { createDebt, updateDebtBalance } = useDebts();
   const { createPayment } = useDebtPayments();
@@ -341,21 +353,11 @@ export function StepChangeImport({ open, onOpenChange, debts }: Readonly<StepCha
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={
-                            row.action === "update"
-                              ? "default"
-                              : row.action === "create"
-                              ? "secondary"
-                              : "outline"
-                          }
+                          variant={getActionBadgeVariant(row.action)}
                           className="cursor-pointer"
                           onClick={() => handleToggleAction(idx)}
                         >
-                          {row.action === "update"
-                            ? "Update"
-                            : row.action === "create"
-                            ? "New"
-                            : "Skip"}
+                          {getActionLabel(row.action)}
                         </Badge>
                         {row.matchedDebt && row.action === "update" && (
                           <p className="text-xs text-muted-foreground mt-1">
