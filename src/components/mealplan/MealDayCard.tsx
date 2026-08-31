@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MealPlan, MealType, MealStatus, useMealPlanItems } from "@/hooks/useMealPlanItems";
+import { MealPlan, MealPlanItem, MealType, MealStatus, useMealPlanItems } from "@/hooks/useMealPlanItems";
 import { Product } from "@/hooks/useProducts";
 import { NutritionSettings } from "@/hooks/useNutritionSettings";
 import { DayMacros, MealMacros } from "@/lib/mealCalculations";
@@ -46,6 +46,12 @@ const STATUS_ICONS: Record<MealStatus, React.ReactNode> = {
   skipped: <XCircle className="h-3 w-3 text-muted-foreground" />,
   eating_out: <ExternalLink className="h-3 w-3 text-primary" />,
 };
+
+function getMealItemAmountLabel(item: MealPlanItem): string {
+  if (item.custom_name) return `${Math.round((item as any).custom_calories || 0)} kcal`;
+  if (item.quantity_grams === 0) return "—";
+  return `${item.quantity_grams}g`;
+}
 
 export function MealDayCard({ plan, dayMacros, products, settings, weekStart, isBlackout = false, blackoutReason, weeklyOverride, previousWeekOverride, weekDates, mealPlans = [] }: Readonly<MealDayCardProps>) {
   const [addItemOpen, setAddItemOpen] = useState(false);
@@ -388,7 +394,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
           
           {/* Banner priority: FAIL (red) > Best Effort (amber) > Uncalculated (amber) > Normal macros */}
           <div className="mt-2">
-          {aiFailInfo?.failed ? (
+          {aiFailInfo?.failed && (
               <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 space-y-1.5">
                 <div className="flex items-center justify-center gap-1">
                   <AlertTriangle className="h-3 w-3 flex-shrink-0" />
@@ -405,7 +411,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                   </ul>
                 )}
               </div>
-            ) : aiFailInfo?.bestEffort ? (
+            )}
+            {!aiFailInfo?.failed && aiFailInfo?.bestEffort && (
               <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1.5 space-y-1.5">
                 <div className="flex items-center justify-center gap-1">
                   <AlertTriangle className="h-3 w-3 flex-shrink-0" />
@@ -422,11 +429,13 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                   </ul>
                 )}
               </div>
-            ) : hasUncalculatedItems && isTargetMode ? (
+            )}
+            {!aiFailInfo?.failed && !aiFailInfo?.bestEffort && hasUncalculatedItems && isTargetMode && (
               <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1.5 text-center">
                 <span className="font-medium">Add items → click Generate</span>
               </div>
-            ) : (
+            )}
+            {!aiFailInfo?.failed && !aiFailInfo?.bestEffort && !(hasUncalculatedItems && isTargetMode) && (
               <DayMacroSummary
                 totals={dayMacros.totals}
                 targets={targets}
@@ -495,9 +504,10 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                   </DropdownMenu>
                 </div>
 
-                {status === "skipped" ? (
+                {status === "skipped" && (
                   <div className="text-xs text-muted-foreground italic py-1">Skipped</div>
-                ) : status === "eating_out" ? (
+                )}
+                {status === "eating_out" && (
                   <div className="text-xs text-primary py-1 space-y-0.5">
                     <div className="font-medium truncate">
                       {(plan as any)[`eating_out_${mealType}_label`] || "Eating out"}
@@ -509,7 +519,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                       {(mealMacros?.fat || 0) > 0 && ` · ${Math.round(mealMacros!.fat)}F`}
                     </div>
                   </div>
-                ) : mealItems.length === 0 ? (
+                )}
+                {status !== "skipped" && status !== "eating_out" && mealItems.length === 0 && (
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -519,7 +530,8 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                     <Plus className="h-4 w-4 sm:h-3 sm:w-3 mr-1" />
                     Add food
                   </Button>
-                ) : (
+                )}
+                {status !== "skipped" && status !== "eating_out" && mealItems.length > 0 && (
                   <div className="space-y-1">
                     {mealItems.map(item => (
                       <div
@@ -528,11 +540,12 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                       >
                         <div className="flex items-center gap-1 truncate">
                           {item.is_locked && <Lock className="h-3 w-3 text-primary" />}
-                          {!item.product_id && item.custom_name ? (
+                          {!item.product_id && item.custom_name && (
                             <Badge variant="outline" className="text-[10px] px-1 py-0">Manual</Badge>
-                          ) : item.product?.product_type === "fixed" ? (
+                          )}
+                          {(item.product_id || !item.custom_name) && item.product?.product_type === "fixed" && (
                             <Badge variant="outline" className="text-[10px] px-1 py-0">Fixed</Badge>
-                          ) : null}
+                          )}
                           <span className="truncate">{item.custom_name || item.product?.name}</span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -555,10 +568,7 @@ export function MealDayCard({ plan, dayMacros, products, settings, weekStart, is
                               "text-muted-foreground tabular-nums",
                               !item.custom_name && item.quantity_grams === 0 && "text-amber-600"
                             )}>
-                              {item.custom_name 
-                                ? `${Math.round((item as any).custom_calories || 0)} kcal`
-                                : item.quantity_grams === 0 ? "—" : `${item.quantity_grams}g`
-                              }
+                              {getMealItemAmountLabel(item)}
                             </span>
                           )}
                           <DropdownMenu>

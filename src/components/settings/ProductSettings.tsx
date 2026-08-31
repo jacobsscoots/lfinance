@@ -68,6 +68,19 @@ const productSchema = z.object({
 
 type ProductFormValues = z.infer<typeof productSchema>;
 
+function getRetailerDescription(retailer: string | null | undefined): string {
+  if (retailer === "Tesco") return "Benefits on Tap (4%) applied automatically at basket level";
+  if (retailer === "Iceland") return "EasySaver Card (7%) applied automatically at basket level";
+  if (retailer === "MyProtein") return "RewardGateway (10%) applied automatically at basket level";
+  return "Used for grouping in grocery shop list";
+}
+
+function getEditableModeDescription(mode: string): string {
+  if (mode === "LOCKED") return "Portion will never be changed by the solver";
+  if (mode === "BOUNDED") return "Portion will stay within min/max bounds";
+  return "Portion can be freely adjusted to hit targets";
+}
+
 interface ProductFormDialogProps {
   product?: Product;
   open: boolean;
@@ -644,13 +657,7 @@ function ProductFormDialog({ product, open, onOpenChange }: Readonly<ProductForm
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        {field.value === "Tesco" 
-                          ? "Benefits on Tap (4%) applied automatically at basket level"
-                          : field.value === "Iceland"
-                          ? "EasySaver Card (7%) applied automatically at basket level"
-                          : field.value === "MyProtein"
-                          ? "RewardGateway (10%) applied automatically at basket level"
-                          : "Used for grouping in grocery shop list"}
+                        {getRetailerDescription(field.value)}
                       </FormDescription>
                     </FormItem>
                   )}
@@ -982,11 +989,7 @@ function ProductFormDialog({ product, open, onOpenChange }: Readonly<ProductForm
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        {field.value === "LOCKED" 
-                          ? "Portion will never be changed by the solver" 
-                          : field.value === "BOUNDED"
-                          ? "Portion will stay within min/max bounds"
-                          : "Portion can be freely adjusted to hit targets"}
+                        {getEditableModeDescription(field.value)}
                       </FormDescription>
                     </FormItem>
                   )}

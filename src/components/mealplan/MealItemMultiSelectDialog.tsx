@@ -30,6 +30,19 @@ const MEAL_LABELS: Record<MealType, string> = {
   snack: "Snacks",
 };
 
+function getSelectedProductsLabel(count: number): string {
+  if (count === 0) return "Select products...";
+  const suffix = count > 1 ? "s" : "";
+  return `${count} product${suffix} selected`;
+}
+
+function getAddItemsLabel(isSubmitting: boolean, isTargetMode: boolean, count: number): string {
+  if (isSubmitting) return "Adding...";
+  const suffix = count !== 1 ? "s" : "";
+  const targetSuffix = isTargetMode ? " (0g)" : "";
+  return `Add ${count} Item${suffix}${targetSuffix}`;
+}
+
 export function MealItemMultiSelectDialog({
   open,
   onOpenChange,
@@ -160,9 +173,7 @@ export function MealItemMultiSelectDialog({
                   aria-expanded={popoverOpen}
                   className="w-full justify-between"
                 >
-                  {selectedCount > 0
-                    ? `${selectedCount} product${selectedCount > 1 ? "s" : ""} selected`
-                    : "Select products..."}
+                  {getSelectedProductsLabel(selectedCount)}
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -179,11 +190,12 @@ export function MealItemMultiSelectDialog({
                         const isSelected = selectedProductIds.has(product.id);
                         const alreadyExists = existingProductIds.has(product.id);
 
-                        const disabledReason = !isAllowedMeal
-                          ? `Not for ${MEAL_LABELS[mealType]}`
-                          : !isAllowedDay && planDate
-                          ? `${((product as any).day_eligibility as string[])?.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} only`
-                          : null;
+                        let disabledReason: string | null = null;
+                        if (!isAllowedMeal) {
+                          disabledReason = `Not for ${MEAL_LABELS[mealType]}`;
+                        } else if (!isAllowedDay && planDate) {
+                          disabledReason = `${((product as any).day_eligibility as string[])?.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} only`;
+                        }
 
                         return (
                           <CommandItem
@@ -254,11 +266,7 @@ export function MealItemMultiSelectDialog({
               onClick={handleSubmit}
               disabled={selectedCount === 0 || isSubmitting}
             >
-              {isSubmitting
-                ? "Adding..."
-                : isTargetMode
-                  ? `Add ${selectedCount} Item${selectedCount !== 1 ? "s" : ""} (0g)`
-                  : `Add ${selectedCount} Item${selectedCount !== 1 ? "s" : ""}`}
+              {getAddItemsLabel(isSubmitting, isTargetMode, selectedCount)}
             </Button>
           </div>
         </div>
