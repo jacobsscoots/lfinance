@@ -136,46 +136,48 @@ export function ReceiptPreviewDialog({
               role={!hasReceipt ? "button" : undefined}
               tabIndex={!hasReceipt ? 0 : undefined}
             >
-              {isLoadingUrl ? (
+              {isLoadingUrl && (
                 <div className="flex flex-col items-center gap-2 text-muted-foreground p-6">
                   <Loader2 className="h-8 w-8 animate-spin" />
                   <span className="text-sm">Loading receipt...</span>
                 </div>
-              ) : hasReceipt && signedUrl ? (
-                isPdf ? (
-                  <div className="flex flex-col items-center gap-4 p-8">
-                    <div className="w-20 h-24 bg-destructive/10 rounded-lg flex items-center justify-center">
-                      <FileText className="h-12 w-12 text-destructive" />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-medium">PDF Receipt</p>
-                      <p className="text-sm text-muted-foreground mt-1">Click to open in new tab</p>
-                    </div>
-                    <Button variant="outline" onClick={handleDownload}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Open PDF
-                    </Button>
+              )}
+              {!isLoadingUrl && hasReceipt && signedUrl && isPdf && (
+                <div className="flex flex-col items-center gap-4 p-8">
+                  <div className="w-20 h-24 bg-destructive/10 rounded-lg flex items-center justify-center">
+                    <FileText className="h-12 w-12 text-destructive" />
                   </div>
-                ) : imageError ? (
-                  <div className="flex flex-col items-center gap-3 text-muted-foreground p-6">
-                    <ImageIcon className="h-12 w-12" />
-                    <span className="text-sm">Unable to load image</span>
-                    <Button variant="outline" size="sm" onClick={handleDownload}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
+                  <div className="text-center">
+                    <p className="font-medium">PDF Receipt</p>
+                    <p className="text-sm text-muted-foreground mt-1">Click to open in new tab</p>
                   </div>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center p-4 overflow-hidden">
-                    <img
-                      src={signedUrl}
-                      alt="Receipt"
-                      className="max-h-[50vh] max-w-full object-contain rounded shadow-sm"
-                      onError={() => setImageError(true)}
-                    />
-                  </div>
-                )
-              ) : (
+                  <Button variant="outline" onClick={handleDownload}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Open PDF
+                  </Button>
+                </div>
+              )}
+              {!isLoadingUrl && hasReceipt && signedUrl && !isPdf && imageError && (
+                <div className="flex flex-col items-center gap-3 text-muted-foreground p-6">
+                  <ImageIcon className="h-12 w-12" />
+                  <span className="text-sm">Unable to load image</span>
+                  <Button variant="outline" size="sm" onClick={handleDownload}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                </div>
+              )}
+              {!isLoadingUrl && hasReceipt && signedUrl && !isPdf && !imageError && (
+                <div className="w-full h-full flex items-center justify-center p-4 overflow-hidden">
+                  <img
+                    src={signedUrl}
+                    alt="Receipt"
+                    className="max-h-[50vh] max-w-full object-contain rounded shadow-sm"
+                    onError={() => setImageError(true)}
+                  />
+                </div>
+              )}
+              {!isLoadingUrl && !(hasReceipt && signedUrl) && (
                 <div className="flex flex-col items-center gap-3 text-muted-foreground p-8">
                   <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                     <Upload className="h-8 w-8" />

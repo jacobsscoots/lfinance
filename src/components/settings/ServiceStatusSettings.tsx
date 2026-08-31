@@ -43,6 +43,24 @@ function StatusBadge({ status }: Readonly<{ status: ServiceStatus }>) {
 
 const COOLDOWN_SECONDS = 60;
 
+function getGmailStatus(status: string | undefined, isConnected: boolean): ServiceStatus {
+  if (status === "error") return "error";
+  if (isConnected) return "connected";
+  return "disconnected";
+}
+
+function getBrightStatus(isExpired: boolean, isConnected: boolean): ServiceStatus {
+  if (isExpired) return "expired";
+  if (isConnected) return "connected";
+  return "disconnected";
+}
+
+function getRefreshAllLabel(isRefreshing: boolean, isCoolingDown: boolean, seconds: number): string {
+  if (isRefreshing) return "Refreshing…";
+  if (isCoolingDown) return `Wait ${seconds}s`;
+  return "Refresh All";
+}
+
 export function ServiceStatusSettings() {
   const { connections, isLoading: bankLoading, autoSync, isAutoSyncing } = useBankConnections();
   const { connection: gmail, isConnected: gmailConnected, connect: connectGmail, sync: syncGmail, isConnecting: gmailConnecting, isSyncing: gmailSyncing } = useGmailConnection();
@@ -134,7 +152,7 @@ export function ServiceStatusSettings() {
       name: "Gmail Receipts",
       description: "Auto-scan emails for receipts and match to transactions",
       icon: <Mail className="h-5 w-5" />,
-      status: gmail?.status === "error" ? "error" : gmailConnected ? "connected" : "disconnected",
+      status: getGmailStatus(gmail?.status, gmailConnected),
       details: gmail ? gmail.email : undefined,
       lastSync: gmail?.last_synced_at,
       action: gmailConnected
@@ -145,7 +163,7 @@ export function ServiceStatusSettings() {
       name: "Smart Meter",
       description: "Bright / Hildebrand smart meter data for energy tracking",
       icon: <Zap className="h-5 w-5" />,
-      status: brightExpired ? "expired" : brightConnected ? "connected" : "disconnected",
+      status: getBrightStatus(brightExpired, brightConnected),
       lastSync: bright?.last_synced_at,
       action: brightConnected ? { label: "Sync", onClick: () => syncBright(undefined), loading: brightSyncing } : undefined,
     },
@@ -186,11 +204,7 @@ export function ServiceStatusSettings() {
               className="shrink-0"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshingAll ? "animate-spin" : ""}`} />
-              {isRefreshingAll
-                ? "Refreshing…"
-                : isCoolingDown
-                ? `Wait ${cooldownRemaining}s`
-                : "Refresh All"}
+              {getRefreshAllLabel(isRefreshingAll, isCoolingDown, cooldownRemaining)}
             </Button>
           </div>
         </CardContent>

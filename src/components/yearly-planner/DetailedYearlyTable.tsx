@@ -47,6 +47,29 @@ function fmtShort(n: number) {
   return `£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+function getEditableCellTitle(hasOverride: boolean, isEditable: boolean): string {
+  if (hasOverride) return "Overridden — right-click to reset";
+  if (isEditable) return "Click to edit";
+  return "";
+}
+
+function getRunningSurplusClass(value: number): string {
+  if (value < 0) return "text-destructive bg-destructive/10";
+  if (value < 100) return "text-warning bg-warning/10";
+  return "text-success bg-success/10";
+}
+
+function formatRunningSurplus(value: number): string {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}${fmtShort(value)}`;
+}
+
+function formatLastRunningSurplus(months: MonthData[]): string {
+  const last = months[months.length - 1];
+  if (!last) return "—";
+  return formatRunningSurplus(last.runningSurplus);
+}
+
 // ── Editable Cell ──
 interface EditableCellProps {
   value: number;
@@ -138,7 +161,7 @@ function EditableCell({
           onReset();
         }
       }}
-      title={hasOverride ? "Overridden — right-click to reset" : isEditable ? "Click to edit" : ""}
+      title={getEditableCellTitle(hasOverride, isEditable)}
     >
       {prefix}{displayAmount > 0 ? displayFn(displayAmount) : "—"}
       {hasOverride && <span className="text-[8px] text-primary ml-0.5">✎</span>}
@@ -364,11 +387,12 @@ export function DetailedYearlyTable({
                   title="Click for account breakdown"
                 >
                   {MONTH_FULL[m.month].substring(0, 3)}
-                  {m.isPast ? (
+                  {m.isPast && (
                     <span className="block text-[9px] text-muted-foreground">Actual</span>
-                  ) : m.isEstimated ? (
+                  )}
+                  {!m.isPast && m.isEstimated && (
                     <span className="block text-[9px] text-primary/70">Est.</span>
-                  ) : null}
+                  )}
                 </th>
               ))}
               <th className={cn(headerClass, "bg-muted/50")}>Total</th>
@@ -670,15 +694,13 @@ export function DetailedYearlyTable({
               {effectiveWithSurplus.map((m) => (
                 <td key={m.month} className={cn(
                   cellClass, "font-bold",
-                  m.runningSurplus < 0 ? "text-destructive bg-destructive/10" :
-                  m.runningSurplus < 100 ? "text-warning bg-warning/10" :
-                  "text-success bg-success/10"
+                  getRunningSurplusClass(m.runningSurplus)
                 )}>
                   {m.runningSurplus >= 0 ? "+" : "-"}{fmtShort(m.runningSurplus)}
                 </td>
               ))}
               <td className={cn(cellClass, "font-bold bg-muted/50")}>
-                {(() => { const last = effectiveWithSurplus[effectiveWithSurplus.length - 1]; return last ? `${last.runningSurplus >= 0 ? "+" : "-"}${fmtShort(last.runningSurplus)}` : "—"; })()}
+                {formatLastRunningSurplus(effectiveWithSurplus)}
               </td>
             </tr>
 
