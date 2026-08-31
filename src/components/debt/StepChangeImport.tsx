@@ -69,7 +69,7 @@ export function StepChangeImport({ open, onOpenChange, debts }: Readonly<StepCha
   const [step, setStep] = useState<"upload" | "review" | "importing" | "done">("upload");
   const [parseResult, setParseResult] = useState<StepChangeParseResult | null>(null);
   const [importRows, setImportRows] = useState<CreditorImportRow[]>([]);
-  const [importing, setImporting] = useState(false);
+  const [, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<{
     created: number;
     updated: number;

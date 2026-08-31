@@ -199,11 +199,6 @@ export function usePayCycleData(referenceDate: Date = new Date()): PayCycleDataR
     a => !a.is_hidden && a.provider === 'ob-monzo' && a.account_type === 'current'
   );
 
-  // Get credit card account IDs to exclude from discretionary calc
-  const creditAccountIds = new Set(
-    allAccounts.filter(a => a.account_type === 'credit').map(a => a.id)
-  );
-
   // Split actual spending into bill-linked vs discretionary
   // Only count transactions from the Monzo current account for discretionary budget tracking
   const spendingAccountIds = monzoCurrentAccount 

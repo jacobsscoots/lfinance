@@ -1384,7 +1384,7 @@ function runExhaustiveSearch(
   });
 
   // Estimate total combos; if too large, widen step sizes
-  let totalEstimate = portionOptions.reduce((prod, opts) => prod * opts.length, 1);
+  const totalEstimate = portionOptions.reduce((prod, opts) => prod * opts.length, 1);
   if (totalEstimate > maxCombinations * 2) {
     // Thin out options to stay within budget
     const thinFactor = Math.ceil(Math.pow(totalEstimate / maxCombinations, 1 / adjustableItems.length));
@@ -1401,7 +1401,6 @@ function runExhaustiveSearch(
         portionOptions[i] = thinned;
       }
     }
-    totalEstimate = portionOptions.reduce((prod, opts) => prod * opts.length, 1);
   }
 
   // Precompute cal/100g density for each adjustable item (for calorie pruning)
@@ -1842,7 +1841,6 @@ function runSingleSolve(
   
   // Track best valid candidate
   const candidates: CandidatePlan[] = [];
-  let bestScore = Infinity;
   let stagnationCount = 0;
   const STAGNATION_LIMIT = 50;
   
@@ -1904,7 +1902,6 @@ function runSingleSolve(
       scaleSeasonings(items, portions);
       
       stagnationCount = 0;
-      bestScore = bestAdjustment.error;
       
       // Debug logging
       if (debugMode) {

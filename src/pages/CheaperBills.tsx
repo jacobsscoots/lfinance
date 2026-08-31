@@ -36,9 +36,9 @@ export default function CheaperBills() {
   const [compareServiceType, setCompareServiceType] = useState<string | undefined>();
   const [compareCost, setCompareCost] = useState(0);
 
-  const { services, isLoading, createService, updateService, deleteService, isCreating } = useTrackedServices();
-  const { readings, createReading, isCreating: isCreatingReading, totalKwh, totalCost } = useEnergyReadings();
-  const { electricityTariff, gasTariff, createTariff, isCreating: isCreatingTariff } = useEnergyTariffs();
+  const { services, createService, updateService, deleteService, isCreating } = useTrackedServices();
+  const { readings, createReading, isCreating: isCreatingReading, totalKwh } = useEnergyReadings();
+  const { electricityTariff, createTariff, isCreating: isCreatingTariff } = useEnergyTariffs();
   const { scanAllServices, scanService, isScanning, scanProgress } = useBillsScanner();
   const { settings } = useCheaperBillsSettings();
   const { results: comparisonResults, bestOffers } = useComparisonResults();

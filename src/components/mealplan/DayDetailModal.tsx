@@ -97,14 +97,6 @@ export function DayDetailModal({
   if (fatDiff > MACRO_TOLERANCE) failedMacros.push(`Fat: ${Math.round(uiTotals.fat - targets.fat) >= 0 ? '+' : ''}${Math.round(uiTotals.fat - targets.fat)}g`);
   if (calDiff > CAL_TOLERANCE) failedMacros.push(`Calories: ${Math.round(uiTotals.calories - targets.calories) >= 0 ? '+' : ''}${Math.round(uiTotals.calories - targets.calories)}`);
 
-  // Portioning settings info (not used in UI but kept for future)
-  const portioningSettings = {
-    rounding: settings?.portion_rounding || 5,
-    min: settings?.min_grams_per_item || 10,
-    max: settings?.max_grams_per_item || 500,
-    tolerance: settings?.target_tolerance_percent || 2,
-  };
-
   // DEV ONLY: log comparison with solver totals when modal opens and load debug data
   useEffect(() => {
     if (!open) return;

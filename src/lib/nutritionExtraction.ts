@@ -118,7 +118,7 @@ export function parseNutritionText(text: string): ExtractedNutrition {
     .replaceAll(/\s+/g, " ");
 
   // Extract each field
-  for (const [key, { patterns, field }] of Object.entries(FIELD_PATTERNS)) {
+  for (const { patterns, field } of Object.values(FIELD_PATTERNS)) {
     for (const pattern of patterns) {
       const match = normalizedText.match(pattern);
       if (match?.[1]) {

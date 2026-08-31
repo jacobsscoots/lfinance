@@ -37,8 +37,6 @@ export default function DebtTracker() {
   const { snapshots } = useDebtSnapshots();
   const { settings } = useDebtSettings();
 
-  const isLoading = debtsLoading || paymentsLoading || transactionsLoading;
-
   const handleLogPayment = (debtId?: string) => {
     setSelectedDebtId(debtId);
     setPaymentDialogOpen(true);

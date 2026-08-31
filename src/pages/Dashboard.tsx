@@ -16,7 +16,6 @@ import { OutgoingsBreakdown } from "@/components/dashboard/OutgoingsBreakdown";
 
 export default function Dashboard() {
   const {
-    cycle,
     cycleLabel,
     metrics,
     billsNext7Days,

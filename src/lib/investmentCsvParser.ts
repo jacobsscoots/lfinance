@@ -199,7 +199,6 @@ function parseChipStatement(lines: string[]): ParseResult {
   
   // Look for Accounts overview section to get Net payments (deposits)
   let inAccountsOverview = false;
-  let accountsHeaderIndex = -1;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -209,7 +208,6 @@ function parseChipStatement(lines: string[]): ParseResult {
     if (parts.some(p => p.includes('Account ID')) && 
         parts.some(p => p.includes('Net payments'))) {
       inAccountsOverview = true;
-      accountsHeaderIndex = i;
       continue;
     }
     

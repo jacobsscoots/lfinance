@@ -56,7 +56,7 @@ export interface GmailReceiptConfig {
 }
 
 export function useGmailReceipts() {
-  const [status, setStatus] = useState<GmailConnectionStatus>({
+  const [status] = useState<GmailConnectionStatus>({
     isConnected: false,
     syncStatus: "idle",
   });

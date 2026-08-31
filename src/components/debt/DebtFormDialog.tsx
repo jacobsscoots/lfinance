@@ -42,11 +42,6 @@ export function DebtFormDialog({ open, onOpenChange, debt }: Readonly<DebtFormDi
   const { allAccounts } = useAccounts();
   const isEditing = !!debt;
 
-  // Filter to credit-type accounts for linking
-  const creditAccounts = allAccounts.filter(a => 
-    a.account_type === 'credit' || a.account_type === 'loan'
-  );
-
   const form = useForm<DebtFormValues>({
     resolver: zodResolver(debtFormSchema),
     defaultValues: {

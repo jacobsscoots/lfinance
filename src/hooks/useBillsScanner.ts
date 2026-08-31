@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 export interface ScanResult {
@@ -27,7 +26,6 @@ export interface ScanResult {
 }
 
 export function useBillsScanner() {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<string | null>(null);

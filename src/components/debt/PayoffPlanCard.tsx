@@ -139,7 +139,6 @@ export function PayoffPlanCard({ debts }: Readonly<PayoffPlanCardProps>) {
                     return a.payoffDate.getTime() - b.payoffDate.getTime();
                   })
                   .map((item, index) => {
-                    const debt = openDebts.find(d => d.id === item.debtId);
                     return (
                       <div 
                         key={item.debtId}

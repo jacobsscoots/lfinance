@@ -62,7 +62,7 @@ function getRefreshAllLabel(isRefreshing: boolean, isCoolingDown: boolean, secon
 }
 
 export function ServiceStatusSettings() {
-  const { connections, isLoading: bankLoading, autoSync, isAutoSyncing } = useBankConnections();
+  const { connections, autoSync, isAutoSyncing } = useBankConnections();
   const { connection: gmail, isConnected: gmailConnected, connect: connectGmail, sync: syncGmail, isConnecting: gmailConnecting, isSyncing: gmailSyncing } = useGmailConnection();
   const { connection: bright, isConnected: brightConnected, isExpired: brightExpired, sync: syncBright, isSyncing: brightSyncing } = useBrightConnection();
   const { services: trackedServices } = useTrackedServices();

@@ -117,7 +117,7 @@ export function ExcelImportDialog({
   const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState("");
   const [sheetName, setSheetName] = useState<string | null>(null);
-  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [, setAvailableSheets] = useState<string[]>([]);
   const [layoutDetected, setLayoutDetected] = useState<LayoutType>("UNKNOWN");
   const [sections, setSections] = useState<AssignedSections>({
     bills: null,

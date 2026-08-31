@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBills } from "@/hooks/useBills";
-import { usePaydaySettings } from "@/hooks/usePaydaySettings";
 import { useGroceryForecast } from "@/hooks/useGroceryForecast";
 import { useBirthdayEvents } from "@/hooks/useBirthdayEvents";
 import { useToiletryForecasts } from "@/hooks/useToiletryForecasts";
@@ -46,7 +45,6 @@ export interface MonthData {
 export function useYearlyPlannerData(year: number) {
   const { user } = useAuth();
   const { bills } = useBills();
-  const { effectiveSettings } = usePaydaySettings();
   const { monthlySpend: groceryMonthlyForecast } = useGroceryForecast();
   const { events: birthdayEvents } = useBirthdayEvents();
   const { totalMonthlyCost: toiletryMonthlyForecast } = useToiletryForecasts();

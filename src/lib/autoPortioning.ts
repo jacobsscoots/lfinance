@@ -566,7 +566,6 @@ function solveSimultaneous(
     // Remaining targets after protein sources
     const remainingCarbs = Math.max(0, targets.carbs - proteinContrib.carbs);
     const remainingFat = Math.max(0, targets.fat - proteinContrib.fat);
-    const remainingCals = Math.max(0, targets.calories - proteinContrib.calories);
     
     // Step 3: Size carb items to hit carb target with sensible minimums
     // Rice/pasta/grains should have minimum 80g to be a realistic serving
@@ -1525,7 +1524,7 @@ export function calculateDayPortions(
       if (fatShortage <= 1) break;
       
       const currentGrams = allItemGrams.get(source.item.itemId) || 0;
-      const { minGrams, maxGrams } = getItemConstraints(source.item, source.mealType);
+      const { maxGrams } = getItemConstraints(source.item, source.mealType);
       
       // Calculate grams needed to close the fat gap
       const gramsToAdd = (fatShortage / source.item.fatPer100g) * 100;

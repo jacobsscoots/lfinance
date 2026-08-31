@@ -32,9 +32,6 @@ export function SpendPaceChart({ data, isOverPace, isLoading }: Readonly<SpendPa
     displayDate: new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
   }));
   
-  // Find today's position
-  const todayIndex = chartData.findIndex(d => d.cumulative > 0 && chartData[chartData.length - 1].cumulative === d.cumulative) || chartData.length - 1;
-  
   return (
     <Card>
       <CardHeader className="pb-2">

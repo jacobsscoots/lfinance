@@ -52,7 +52,6 @@ export function calculateDebtSummary(
   
   // Find next due date
   const today = new Date();
-  const currentDay = today.getDate();
   
   let nextDueDate: Date | null = null;
   let nextDueDebt: Debt | null = null;
@@ -329,7 +328,6 @@ export function generatePayoffPlan(
       const extraPayment = Math.min(remainingBudget, debt.balance);
       if (extraPayment > 0) {
         debt.balance -= extraPayment;
-        remainingBudget -= extraPayment;
         
         // Add to existing allocation or create new
         const existingAlloc = allocations.find(a => a.debtId === debt.id);

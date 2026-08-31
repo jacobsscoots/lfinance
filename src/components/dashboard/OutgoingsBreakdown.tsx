@@ -28,7 +28,6 @@ export function OutgoingsBreakdown({ items, totalSpent, isLoading }: Readonly<Ou
 
   const includedItems = items.filter(i => !i.isTransferExcluded && !i.isDuplicate);
   const excludedItems = items.filter(i => i.isTransferExcluded || i.isDuplicate);
-  const includedTotal = includedItems.reduce((s, i) => s + i.amount, 0);
   const excludedTotal = excludedItems.reduce((s, i) => s + i.amount, 0);
 
   const displayItems = expanded ? includedItems : includedItems.slice(0, 10);
