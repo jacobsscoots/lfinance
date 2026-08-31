@@ -50,7 +50,7 @@ export function WeeklyMealPlanner() {
     midWeek.setDate(midWeek.getDate() + 3); // Move to Wednesday
     return getWeekStartMonday(midWeek);
   }, [weekRange.start]);
-  const { weeklyTargets, isLoading: weeklyTargetsLoading } = useWeeklyNutritionTargets(weekStartMonday);
+  const { weeklyTargets } = useWeeklyNutritionTargets(weekStartMonday);
 
   // Build the weekly override for macro calculations
   const weeklyOverride: WeeklyTargetsOverride | null = useMemo(() => {

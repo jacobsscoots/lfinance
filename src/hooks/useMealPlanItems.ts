@@ -694,7 +694,6 @@ export function useMealPlanItems(weekStart: Date) {
       
       // Auto-clamp: pass actual quantity for locked items; for non-locked, pass
       // the current DB value so the solver can clamp it to valid constraints
-      const isEffectivelyLocked = item.is_locked || product.product_type === 'fixed';
       
       return productToSolverItem(
         {

@@ -21,20 +21,6 @@ function getCalorieDiffClass(calories: number): string {
 export function WeeklySummaryCard({ dayMacros, weeklyAverages, settings }: Readonly<WeeklySummaryCardProps>) {
   const isTargetMode = settings?.mode === "target_based";
 
-  const getProgressColor = (current: number, target: number) => {
-    const ratio = current / target;
-    if (ratio < 0.8) return "bg-amber-500";
-    if (ratio > 1.1) return "bg-destructive";
-    return "bg-primary";
-  };
-
-  const getMacroStatus = (current: number, target: number) => {
-    const diff = current - target;
-    if (Math.abs(diff) < 10) return { status: "on-track", label: "On Track" };
-    if (diff > 0) return { status: "over", label: `+${Math.round(diff)}` };
-    return { status: "under", label: `${Math.round(diff)}` };
-  };
-
   return (
     <div className="space-y-4">
       {/* Weekly Averages */}

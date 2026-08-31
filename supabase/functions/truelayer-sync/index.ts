@@ -508,17 +508,6 @@ serve(async (req) => {
       }
     }
 
-    // Detect the real bank provider from synced accounts
-    const detectedProvider = connectionProvider;
-
-    // For provider detection, re-check from TrueLayer response
-    let finalProvider = connectionProvider;
-    if (accountsResponse.ok) {
-      const { results: accounts } = await accountsResponse.json().catch(() => ({ results: [] }));
-      // Already consumed, use syncedAccounts data instead
-    }
-    // Use the provider we already detected during account sync
-    const providerFromAccounts = connectionProvider;
 
     // Update connection status
     await serviceSupabase

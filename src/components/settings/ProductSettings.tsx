@@ -186,8 +186,6 @@ function ProductFormDialog({ product, open, onOpenChange }: Readonly<ProductForm
 
   const productType = form.watch("product_type");
   const servingBasis = form.watch("serving_basis");
-  const energyKj = form.watch("energy_kj_per_100g");
-  const energyKcal = form.watch("calories_per_100g");
 
   // Auto-convert energy values
   const handleKjChange = useCallback((value: number | null) => {

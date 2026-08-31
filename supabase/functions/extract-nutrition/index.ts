@@ -622,13 +622,6 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
     }
   }
 
-  const hostname = (() => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      return "";
-    }
-  })();
 
   // Fallback to direct fetch if Firecrawl didn't work
   if (!html && !markdown && !rawHtml) {

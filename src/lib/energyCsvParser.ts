@@ -106,7 +106,6 @@ export function parseEnergyCsv(csvContent: string): ParseResult {
   const gasCol = findColumnIndex(headers, 'gas', 'gas_kwh');
   const kwhCol = findColumnIndex(headers, 'kwh', 'consumption', 'usage');
   const costCol = findColumnIndex(headers, 'cost', 'price', 'amount', '£');
-  const fuelTypeCol = findColumnIndex(headers, 'fuel', 'type', 'fuel_type');
 
   if (dateCol === -1) {
     errors.push('Could not find date column');

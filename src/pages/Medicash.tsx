@@ -23,7 +23,6 @@ export default function Medicash() {
     totalMaxThisYear,
     totalRemainingThisYear,
     seedCategories,
-    isSeeding,
     createClaim,
     isCreatingClaim,
     deleteClaim,

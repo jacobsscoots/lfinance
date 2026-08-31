@@ -36,8 +36,6 @@ export interface SavedPriceCheck {
 }
 
 export function useToiletryPriceChecks(itemId?: string) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   // Fetch saved price checks for an item
   const { data: savedChecks = [], isLoading: isLoadingSaved } = useQuery({

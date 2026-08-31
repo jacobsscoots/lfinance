@@ -42,11 +42,6 @@ export function TransactionList({
     return links.some(l => l.transaction_id === txId);
   };
 
-  const getLinkedPaymentId = (txId: string) => {
-    const link = links.find(l => l.transaction_id === txId);
-    return link?.payment_id;
-  };
-
   const getSuggestedMatches = (tx: DebtTransaction) => {
     // Find payments that could match this transaction
     return payments.filter(p => {

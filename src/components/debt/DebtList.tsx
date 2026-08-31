@@ -165,7 +165,6 @@ export function DebtList({ debts, payments, isLoading, onAddDebt, onLogPayment }
         <div className="space-y-3">
           {filteredDebts.map(debt => {
             const progress = calculateDebtProgress(debt);
-            const debtPayments = payments.filter(p => p.debt_id === debt.id);
             
             return (
               <Card key={debt.id} className="hover:shadow-md transition-shadow">

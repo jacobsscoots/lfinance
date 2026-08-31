@@ -150,7 +150,6 @@ export function NutritionTargetSettings() {
 
   const mode = form.watch("mode");
   const weekendEnabled = form.watch("weekend_targets_enabled");
-  const formula = calcForm.watch("formula");
 
   // Calculate results when calculator inputs change
   useEffect(() => {

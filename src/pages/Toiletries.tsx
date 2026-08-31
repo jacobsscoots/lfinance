@@ -37,7 +37,7 @@ export default function Toiletries() {
   
   const { purchases, createPurchase } = useToiletryPurchases();
   const { logs: allUsageLogs } = useToiletryUsageLogs();
-  const { profiles, getProfileForRetailer } = useRetailerProfiles();
+  const { profiles } = useRetailerProfiles();
   
   // Compute per-item usage rates from logs
   const usageRates = useMemo(() => {

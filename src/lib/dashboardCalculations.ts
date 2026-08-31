@@ -294,8 +294,6 @@ export function generateAlerts(
   // Upcoming birthday / occasion alerts (within 7 days)
   if (birthdayEvents?.length) {
     const todayBday = startOfDay(new Date());
-    const currentMonth = todayBday.getMonth() + 1;
-    const currentDay = todayBday.getDate();
 
     for (const ev of birthdayEvents) {
       // Skip events where both card and money are done

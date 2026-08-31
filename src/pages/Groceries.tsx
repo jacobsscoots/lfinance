@@ -44,7 +44,7 @@ export default function Groceries() {
     restockToiletry,
     logWeight,
   } = useToiletries();
-  const { purchases, createPurchase } = useToiletryPurchases();
+  const { createPurchase } = useToiletryPurchases();
   const { logs: allUsageLogs } = useToiletryUsageLogs();
   const { profiles } = useRetailerProfiles();
 

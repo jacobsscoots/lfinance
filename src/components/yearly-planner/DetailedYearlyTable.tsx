@@ -255,9 +255,6 @@ export function DetailedYearlyTable({
 
   // Build per-bill, per-month amounts
   const billRows: BillRow[] = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
 
     return activeBills.map(bill => {
       const amounts: number[] = [];
