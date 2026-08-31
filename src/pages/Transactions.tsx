@@ -64,6 +64,53 @@ export default function Transactions() {
 
   const hasActiveFilters = filters.categoryId || filters.type || filters.accountId || filters.search;
 
+  const renderTransactionListContent = () => {
+    if (isLoading) {
+      return (
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="h-5 w-16" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (transactions.length === 0) {
+      return (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-medium mb-2">No transactions found</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
+              {filters.search || filters.categoryId || filters.type
+                ? "Try adjusting your filters to find transactions."
+                : "Add your first transaction to start tracking your finances."}
+            </p>
+            <Button onClick={handleAddNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Transaction
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <TransactionList
+        transactions={transactions}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+    );
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
@@ -144,42 +191,7 @@ export default function Transactions() {
             </Card>
 
             {/* Transaction List */}
-            {isLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
-                    <Skeleton className="h-10 w-10 rounded-full" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-3 w-24" />
-                    </div>
-                    <Skeleton className="h-5 w-16" />
-                  </div>
-                ))}
-              </div>
-            ) : transactions.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No transactions found</h3>
-                  <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
-                    {filters.search || filters.categoryId || filters.type
-                      ? "Try adjusting your filters to find transactions."
-                      : "Add your first transaction to start tracking your finances."}
-                  </p>
-                  <Button onClick={handleAddNew}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Transaction
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <TransactionList
-                transactions={transactions}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            )}
+            {renderTransactionListContent()}
           </div>
         ) : (
           /* Desktop: Side-by-side layout */
@@ -222,42 +234,7 @@ export default function Transactions() {
 
             {/* Transaction List */}
             <div className="min-w-0">
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                      <Skeleton className="h-5 w-16" />
-                    </div>
-                  ))}
-                </div>
-              ) : transactions.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No transactions found</h3>
-                    <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
-                      {filters.search || filters.categoryId || filters.type
-                        ? "Try adjusting your filters to find transactions."
-                        : "Add your first transaction to start tracking your finances."}
-                    </p>
-                    <Button onClick={handleAddNew}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Transaction
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <TransactionList
-                  transactions={transactions}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                />
-              )}
+              {renderTransactionListContent()}
             </div>
           </div>
         )}

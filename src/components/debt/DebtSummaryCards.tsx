@@ -11,6 +11,13 @@ interface DebtSummaryCardsProps {
   monthlyBudget: number | null;
 }
 
+function formatDaysUntilDue(daysUntilDue: number | null): string {
+  if (daysUntilDue === null) return "N/A";
+  if (daysUntilDue === 0) return "Today";
+  if (daysUntilDue === 1) return "1 day";
+  return `${daysUntilDue} days`;
+}
+
 export function DebtSummaryCards({ debts, payments, monthlyBudget }: Readonly<DebtSummaryCardsProps>) {
   const summary = calculateDebtSummary(debts, payments, monthlyBudget);
 
@@ -86,11 +93,7 @@ export function DebtSummaryCards({ debts, payments, monthlyBudget }: Readonly<De
             <div>
               <p className="text-sm font-medium text-muted-foreground">Next Due</p>
               <p className="text-2xl font-bold text-foreground">
-                {daysUntilDue !== null ? (
-                  daysUntilDue === 0 ? 'Today' :
-                  daysUntilDue === 1 ? '1 day' :
-                  `${daysUntilDue} days`
-                ) : 'N/A'}
+                {formatDaysUntilDue(daysUntilDue)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {summary.nextDueDebt?.creditor_name || 'No upcoming payments'}

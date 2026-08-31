@@ -187,13 +187,15 @@ export function LinkTransactionDialog({
   };
 
   // Determine default tab
-  const defaultTab = transaction.bill_id && bills.some(b => b.id === transaction.bill_id && b.is_subscription)
-    ? "subscription"
-    : transaction.bill_id
-    ? "bill"
-    : transaction.investment_account_id
-    ? "investment"
-    : "bill";
+  let defaultTab = "bill";
+  if (transaction.investment_account_id) {
+    defaultTab = "investment";
+  }
+  if (transaction.bill_id) {
+    defaultTab = bills.some(b => b.id === transaction.bill_id && b.is_subscription)
+      ? "subscription"
+      : "bill";
+  }
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>

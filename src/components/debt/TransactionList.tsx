@@ -20,6 +20,13 @@ interface TransactionListProps {
 
 type MatchStatus = 'all' | 'matched' | 'needs-review' | 'unmatched';
 
+function getMatchStatusLabel(status: MatchStatus): string {
+  if (status === "all") return "All";
+  if (status === "matched") return "Matched";
+  if (status === "needs-review") return "Review";
+  return "Unmatched";
+}
+
 export function TransactionList({ 
   transactions, 
   payments, 
@@ -150,9 +157,7 @@ export function TransactionList({
               size="sm"
               onClick={() => setMatchStatus(status)}
             >
-              {status === 'all' ? 'All' : 
-               status === 'matched' ? 'Matched' :
-               status === 'needs-review' ? 'Review' : 'Unmatched'}
+              {getMatchStatusLabel(status)}
             </Button>
           ))}
         </div>

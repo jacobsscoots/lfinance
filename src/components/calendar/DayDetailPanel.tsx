@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 
+function getBillStatusBackgroundClass(bill: CalendarBill): string {
+  if (bill.isPaid) return "bg-success/10";
+  if (bill.status === "skipped") return "bg-muted";
+  if (bill.status === "overdue") return "bg-destructive/10";
+  return "bg-warning/10";
+}
+
 interface DayDetailPanelProps {
   date: Date;
   bills: CalendarBill[];
@@ -91,15 +98,7 @@ export function DayDetailPanel({ date, bills, onMarkPaid, onSkip, onReset }: Rea
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                        bill.isPaid 
-                          ? "bg-success/10" 
-                          : bill.status === "skipped"
-                          ? "bg-muted"
-                          : bill.status === "overdue"
-                          ? "bg-destructive/10"
-                          : "bg-warning/10"
-                      }`}
+                      className={`h-8 w-8 rounded-full flex items-center justify-center ${getBillStatusBackgroundClass(bill)}`}
                     >
                       {getStatusIcon(bill)}
                     </div>

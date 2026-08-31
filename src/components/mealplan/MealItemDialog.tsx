@@ -225,11 +225,12 @@ export function MealItemDialog({
                     const allowedMeal = isProductAllowedForMeal(product, mealType);
                     const allowedDay = planDate ? isProductAllowedForDay(product, planDate) : true;
                     const allowed = allowedMeal && allowedDay;
-                    const disabledLabel = !allowedMeal
-                      ? `Not for ${mealLabels[mealType]}`
-                      : !allowedDay && planDate
-                      ? `${((product as any).day_eligibility as string[])?.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(", ")} only`
-                      : null;
+                    let disabledLabel: string | null = null;
+                    if (!allowedMeal) {
+                      disabledLabel = `Not for ${mealLabels[mealType]}`;
+                    } else if (!allowedDay && planDate) {
+                      disabledLabel = `${((product as any).day_eligibility as string[])?.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(", ")} only`;
+                    }
                     return (
                       <SelectItem 
                         key={product.id} 
@@ -297,7 +298,7 @@ export function MealItemDialog({
                     </div>
                   )}
                 </div>
-                {selectedProduct.product_type === "fixed" && selectedProduct.fixed_portion_grams ? (
+                {selectedProduct.product_type === "fixed" && Boolean(selectedProduct.fixed_portion_grams) && (
                   <div className="flex items-center gap-2">
                     <Input 
                       type="number" 
@@ -310,7 +311,8 @@ export function MealItemDialog({
                       Fixed portion
                     </Badge>
                   </div>
-                ) : isTargetMode ? (
+                )}
+                {!(selectedProduct.product_type === "fixed" && selectedProduct.fixed_portion_grams) && isTargetMode && (
                   <div className="space-y-2">
                     <Input
                       type="number"
@@ -324,7 +326,8 @@ export function MealItemDialog({
                       Leave at 0 and click "Generate Portions" after adding all items to auto-calculate exact grams.
                     </p>
                   </div>
-                ) : (
+                )}
+                {!(selectedProduct.product_type === "fixed" && selectedProduct.fixed_portion_grams) && !isTargetMode && (
                   <Input
                     type="number"
                     value={quantity}

@@ -20,22 +20,24 @@ function formatCurrency(n: number) {
 export function MonthColumn({ data, onAddOverride, onDeleteOverride }: Readonly<MonthColumnProps>) {
   const netColor = data.net >= 0 ? "text-success" : "text-destructive";
   const surplusColor = data.runningSurplus >= 0 ? "text-success" : "text-destructive";
-  const surplusBg = data.runningSurplus < 0 
-    ? "bg-destructive/10 border-destructive/30" 
-    : data.runningSurplus < 100 
-      ? "bg-warning/10 border-warning/30" 
-      : "bg-success/10 border-success/30";
+  let surplusBg = "bg-success/10 border-success/30";
+  if (data.runningSurplus < 0) {
+    surplusBg = "bg-destructive/10 border-destructive/30";
+  } else if (data.runningSurplus < 100) {
+    surplusBg = "bg-warning/10 border-warning/30";
+  }
 
   return (
     <Card className={cn("min-w-[140px]", data.isPast && "opacity-80")}>
       <CardHeader className="pb-2 px-3 pt-3">
         <CardTitle className="text-sm font-semibold flex items-center justify-between">
           {MONTH_NAMES[data.month]}
-          {data.isPast ? (
+          {data.isPast && (
             <Badge variant="secondary" className="text-[10px] px-1">Actual</Badge>
-          ) : data.isEstimated ? (
+          )}
+          {!data.isPast && data.isEstimated && (
             <Badge variant="outline" className="text-[10px] px-1 border-primary/50 text-primary">Est.</Badge>
-          ) : null}
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-3 space-y-2 text-xs">
