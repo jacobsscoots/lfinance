@@ -703,8 +703,12 @@ async function extractFromUrl(url: string, apiKey: string, productType: string =
   }
 
   // Use AI to extract from content (markdown preferred)
-  const contentType =
-    markdown && markdown.length > 200 ? "markdown" : html ? "HTML" : "raw HTML";
+  let contentType = "raw HTML";
+  if (markdown && markdown.length > 200) {
+    contentType = "markdown";
+  } else if (html) {
+    contentType = "HTML";
+  }
   
   const groceryPrompt = `You are a product data extraction assistant. Extract product and nutrition information from this ${contentType} content.
 

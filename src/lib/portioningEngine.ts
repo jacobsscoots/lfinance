@@ -2089,6 +2089,9 @@ export function productToSolverItem(
     ? 'LOCKED' as const
     : ((product.editable_mode as SolverItem['editableMode']) ?? 'FREE');
   
+  const nonSeasoningInitialGrams =
+    initialGrams > 0 ? initialGrams : (product.fixed_portion_grams ?? effectiveInitialGrams);
+
   return {
     id: product.id,
     name: product.name,
@@ -2114,7 +2117,7 @@ export function productToSolverItem(
     // Seasonings start at 0 — scaleSeasonings() will set the correct proportional amount.
     currentGrams: isSeasoning
       ? Math.min(initialGrams || 0, DEFAULT_SEASONING_MAX_GRAMS)
-      : Math.min(Math.max(initialGrams > 0 ? initialGrams : (product.fixed_portion_grams ?? effectiveInitialGrams), minPortion), maxPortion),
+      : Math.min(Math.max(nonSeasoningInitialGrams, minPortion), maxPortion),
     countMacros: !isSeasoning,
   };
 }

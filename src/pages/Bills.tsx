@@ -160,7 +160,7 @@ export default function Bills() {
         </Card>
 
         {/* Bills / Subscriptions Tabs */}
-        {isLoading ? (
+        {isLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-4 p-4 rounded-lg border">
@@ -171,7 +171,8 @@ export default function Bills() {
               </div>
             ))}
           </div>
-        ) : bills.length === 0 ? (
+        )}
+        {!isLoading && bills.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -185,7 +186,8 @@ export default function Bills() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
+        )}
+        {!isLoading && bills.length > 0 && (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "bills" | "subscriptions")}>
             <TabsList className="mb-4">
               <TabsTrigger value="bills" className="gap-2">

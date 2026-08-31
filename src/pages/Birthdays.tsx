@@ -156,13 +156,14 @@ export default function Birthdays() {
           </TabsList>
 
           <TabsContent value={activeTab} className="space-y-3 mt-4">
-            {isLoading ? (
+            {isLoading && (
               <div className="space-y-3">
                 {[1, 2, 3].map(i => (
                   <Skeleton key={i} className="h-16 w-full rounded-lg" />
                 ))}
               </div>
-            ) : filtered.length === 0 ? (
+            )}
+            {!isLoading && filtered.length === 0 && (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Gift className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -176,7 +177,8 @@ export default function Birthdays() {
                   </Button>
                 </CardContent>
               </Card>
-            ) : (
+            )}
+            {!isLoading && filtered.length > 0 && (
               filtered.map(event => (
                 <BirthdayEventCard
                   key={event.id}

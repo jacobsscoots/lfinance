@@ -580,7 +580,14 @@ async function handleMealPlanner(
       }
 
       // Try MULTIPLE step sizes simultaneously
-      const stepSizes = err < 50 ? [1, 2] : err < 200 ? [1, 2, 5] : [1, 5, 10, 20];
+      let stepSizes: number[];
+      if (err < 50) {
+        stepSizes = [1, 2];
+      } else if (err < 200) {
+        stepSizes = [1, 2, 5];
+      } else {
+        stepSizes = [1, 5, 10, 20];
+      }
 
       let bestFoodIdx = -1;
       let bestNewG = 0;

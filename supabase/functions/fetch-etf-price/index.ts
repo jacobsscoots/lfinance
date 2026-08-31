@@ -147,11 +147,15 @@ Deno.serve(async (req) => {
       console.error('Upsert error:', upsertError);
     }
 
-    const dailyChange = prevCloseGBP && totalUnits > 0
-      ? { amount: (priceGBP - prevCloseGBP) * totalUnits, percentage: ((priceGBP - prevCloseGBP) / prevCloseGBP) * 100 }
-      : prevCloseGBP
-      ? { amount: priceGBP - prevCloseGBP, percentage: ((priceGBP - prevCloseGBP) / prevCloseGBP) * 100 }
-      : null;
+    let dailyChange: { amount: number; percentage: number } | null = null;
+    if (prevCloseGBP) {
+      const priceDifference = priceGBP - prevCloseGBP;
+      const amount = totalUnits > 0 ? priceDifference * totalUnits : priceDifference;
+      dailyChange = {
+        amount,
+        percentage: (priceDifference / prevCloseGBP) * 100,
+      };
+    }
 
     return new Response(JSON.stringify({
       ticker,
