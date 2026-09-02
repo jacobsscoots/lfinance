@@ -52,8 +52,7 @@ jobs:
       - name: Package source snapshot
         shell: bash
         run: |
-          tar --exclude=.git --exclude=node_modules --exclude=repo-source.tar.gz \
-            -czf repo-source.tar.gz .
+          git archive --format=zip --output="$RUNNER_TEMP/repo-source.zip" HEAD
 
       - name: Upload workbench snapshot
         uses: actions/upload-artifact@v4
@@ -62,5 +61,5 @@ jobs:
           path: |
             sonar-live-issues.json
             sonar-live-maintainability.json
-            repo-source.tar.gz
+            ${{ runner.temp }}/repo-source.zip
           retention-days: 1
