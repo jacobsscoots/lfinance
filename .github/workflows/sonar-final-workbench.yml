@@ -1,0 +1,66 @@
+name: Temporary Sonar final-pass workbench
+
+on:
+  push:
+    branches:
+      - fix/sonar-maintainability-final
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Fetch live Sonar unresolved issues
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 \
+            'https://sonarcloud.io/api/issues/search?componentKeys=jacobsscoots_lfinance&resolved=false&ps=500' \
+            --output sonar-live-issues.json
+          python - <<'PY'
+          import json
+          from collections import Counter
+
+          with open('sonar-live-issues.json', encoding='utf-8') as handle:
+              payload = json.load(handle)
+
+          issues = payload.get('issues', [])
+          maintainability = []
+          for issue in issues:
+              impacts = issue.get('impacts') or []
+              if issue.get('type') == 'CODE_SMELL' or any(
+                  impact.get('softwareQuality') == 'MAINTAINABILITY'
+                  for impact in impacts
+              ):
+                  maintainability.append(issue)
+
+          print(f"Sonar total unresolved: {payload.get('total', len(issues))}")
+          print(f"Maintainability unresolved: {len(maintainability)}")
+          print('Rules:')
+          for rule, count in Counter(issue.get('rule') for issue in maintainability).most_common():
+              print(f"  {rule}: {count}")
+
+          with open('sonar-live-maintainability.json', 'w', encoding='utf-8') as handle:
+              json.dump(maintainability, handle, indent=2)
+          PY
+
+      - name: Package source snapshot
+        shell: bash
+        run: |
+          tar --exclude=.git --exclude=node_modules --exclude=repo-source.tar.gz \
+            -czf repo-source.tar.gz .
+
+      - name: Upload workbench snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-final-workbench
+          path: |
+            sonar-live-issues.json
+            sonar-live-maintainability.json
+            repo-source.tar.gz
+          retention-days: 1
